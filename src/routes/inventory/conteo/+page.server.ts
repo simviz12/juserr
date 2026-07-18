@@ -40,38 +40,36 @@ export const actions: Actions = {
         }
 
         try {
-            return await db.transaction(async (tx) => {
-                let modificados = 0;
+            let modificados = 0;
 
-                for (const op of operaciones) {
-                    // Obtener stock actual
-                    const [prod] = await tx.select({ stockActual: productos.stockActual }).from(productos).where(eq(productos.id, op.productoId));
-                    if (!prod) continue;
+            for (const op of operaciones) {
+                // Obtener stock actual
+                const [prod] = await db.select({ stockActual: productos.stockActual }).from(productos).where(eq(productos.id, op.productoId));
+                if (!prod) continue;
 
-                    const stockActual = prod.stockActual || 0;
-                    const diferencia = op.conteo - stockActual;
+                const stockActual = prod.stockActual || 0;
+                const diferencia = op.conteo - stockActual;
 
-                    // Solo registrar si hubo un cambio real
-                    if (Math.abs(diferencia) > 0.001) {
-                        const tipo = diferencia > 0 ? 'entrada' : 'salida';
+                // Solo registrar si hubo un cambio real
+                if (Math.abs(diferencia) > 0.001) {
+                    const tipo = diferencia > 0 ? 'entrada' : 'salida';
+                    
+                    await db.insert(movimientosInventario).values({
+                        productoId: op.productoId,
+                        usuarioId: locals.user.id,
+                        tipo: tipo,
+                        cantidad: Math.abs(diferencia)
+                    });
+
+                    await db.update(productos)
+                        .set({ stockActual: op.conteo })
+                        .where(eq(productos.id, op.productoId));
                         
-                        await tx.insert(movimientosInventario).values({
-                            productoId: op.productoId,
-                            usuarioId: locals.user.id,
-                            tipo: tipo,
-                            cantidad: Math.abs(diferencia)
-                        });
-
-                        await tx.update(productos)
-                            .set({ stockActual: op.conteo })
-                            .where(eq(productos.id, op.productoId));
-                            
-                        modificados++;
-                    }
+                    modificados++;
                 }
+            }
 
-                return { success: true, message: `Conteo físico completado. Se ajustaron saldos de ${modificados} productos.` };
-            });
+            return { success: true, message: `Conteo físico completado. Se ajustaron saldos de ${modificados} productos.` };
         } catch (err) {
             console.error(err);
             return fail(500, { error: 'Error interno al procesar el conteo físico.' });
