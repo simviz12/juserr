@@ -46,7 +46,27 @@ export const load: PageServerLoad = async () => {
         };
     });
 
-    return { sabores: stockSabores };
+    const historialHorneadas = await db.select({
+        id: pizzaRuedas.id,
+        saborId: pizzaRuedas.saborId,
+        cantidad: pizzaRuedas.cantidad,
+        fecha: pizzaRuedas.fecha
+    })
+    .from(pizzaRuedas)
+    .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)))
+    .orderBy(sql`${pizzaRuedas.fecha} DESC`);
+
+    const historialLogs = historialHorneadas.map(h => {
+        const sabor = sabores.find(s => s.id === h.saborId);
+        return {
+            id: h.id,
+            sabor: sabor ? sabor.nombre : 'Desconocido',
+            cantidad: h.cantidad,
+            fecha: h.fecha
+        };
+    });
+
+    return { sabores: stockSabores, historial: historialLogs };
 };
 
 export const actions: Actions = {

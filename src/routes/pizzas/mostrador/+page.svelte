@@ -88,4 +88,51 @@
       </div>
     {/if}
   </form>
+
+  <div class="mt-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-slate-800">Historial de Hoy (Horneadas)</h2>
+      <span class="text-sm font-medium text-slate-500">{data.historial?.length || 0} registros</span>
+    </div>
+    {#if !data.historial || data.historial.length === 0}
+      <div class="p-8 text-center text-slate-500">
+        No hay porciones horneadas registradas hoy.
+      </div>
+    {:else}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+              <th class="p-4 font-medium">Hora</th>
+              <th class="p-4 font-medium">Sabor</th>
+              <th class="p-4 font-medium text-center">Porciones Añadidas</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {#each data.historial as log}
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-4 text-sm text-slate-600">
+                  {new Date(log.fecha).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})}
+                </td>
+                <td class="p-4 font-medium text-slate-800">
+                  {log.sabor}
+                </td>
+                <td class="p-4 text-center">
+                  {#if log.cantidad > 0}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                      +{log.cantidad}
+                    </span>
+                  {:else}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                      {log.cantidad}
+                    </span>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  </div>
 </div>
