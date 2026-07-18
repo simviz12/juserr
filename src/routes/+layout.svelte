@@ -51,7 +51,7 @@
           <span class="font-bold text-white">{data.user.nombre}</span>
           <span class="text-xs uppercase tracking-wider text-orange-400">{data.user.rol}</span>
         </div>
-        <form action="/login?/logout" method="POST" use:enhance>
+        <form action="/logout" method="POST" use:enhance>
           <button type="submit" class="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-xl transition-colors font-medium text-sm">
             <span>🚪</span> Cerrar sesión
           </button>
@@ -116,7 +116,7 @@
               {data.user.rol}
             </span>
           </div>
-          <form action="/login?/logout" method="POST" use:enhance>
+          <form action="/logout" method="POST" use:enhance>
             <button type="submit" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition-colors font-medium text-sm">
               Salir
             </button>
