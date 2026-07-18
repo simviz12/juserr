@@ -34,7 +34,7 @@
           <thead>
             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
               <th class="p-4 font-medium w-1/3">Sabor</th>
-              <th class="p-4 font-medium text-center text-blue-600 bg-blue-50/50">Nuevas Ruedas (+8 porc.)</th>
+              <th class="p-4 font-medium text-center text-blue-600 bg-blue-50/50">Nuevas Porciones Horneadas</th>
               <th class="p-4 font-medium text-center text-orange-600 bg-orange-50/50">Quedan (Físico Actual)</th>
             </tr>
           </thead>
@@ -54,7 +54,7 @@
                       type="number" 
                       name="nuevas_{sabor.id}" 
                       min="0" 
-                      step="0.5"
+                      step="1"
                       placeholder="0" 
                       class="w-24 px-4 py-2 text-center font-bold text-blue-700 bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm placeholder:text-slate-300"
                     />
