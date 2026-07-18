@@ -53,7 +53,6 @@
                     <input 
                       type="number" 
                       name="nuevas_{sabor.id}" 
-                      min="0" 
                       step="1"
                       placeholder="0" 
                       class="w-24 px-4 py-2 text-center font-bold text-blue-700 bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm placeholder:text-slate-300"

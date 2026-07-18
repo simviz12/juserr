@@ -83,7 +83,7 @@ export const actions: Actions = {
 
             for (const op of operaciones) {
                 // 1. Registrar nuevas porciones creadas
-                if (op.nuevasRuedas > 0) {
+                if (op.nuevasRuedas !== 0) {
                     await db.insert(pizzaRuedas).values({
                         saborId: op.saborId,
                         cantidad: op.nuevasRuedas // Guardamos directamente las porciones
