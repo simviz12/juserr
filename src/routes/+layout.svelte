@@ -85,7 +85,7 @@
           <span class="font-bold text-white">{data.user.nombre}</span>
           <span class="text-xs uppercase tracking-wider text-orange-400">{data.user.rol}</span>
         </div>
-        <form action="/login?/logout" method="POST" use:enhance>
+        <form action="/logout" method="POST" use:enhance>
           <button type="submit" class="w-full py-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors font-bold flex justify-center gap-2 items-center">
             <span>🚪</span> Cerrar sesión
           </button>
