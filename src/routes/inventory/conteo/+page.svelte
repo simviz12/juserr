@@ -51,11 +51,9 @@
               <td class="p-4">
                 <div class="flex justify-center">
                   <input 
-                    type="number" 
+                    type="text" 
                     name="conteo_{item.id}" 
-                    min="0" 
-                    step="0.01"
-                    placeholder="Dejar vacío si no cambió"
+                    placeholder="Ej. 1/2 o 3 1/4"
                     class="w-48 px-4 py-2 text-center font-bold text-orange-700 bg-white border border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none shadow-sm placeholder:text-slate-300 placeholder:font-normal"
                   />
                 </div>

@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { productos, movimientosInventario } from '$lib/server/schema';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
+import { parseFraction } from '$lib/utils/fractions';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -23,11 +24,14 @@ export const actions: Actions = {
             const productoId = Number(idStr);
             const conteoStr = formData.get(`conteo_${productoId}`);
             
-            if (conteoStr && conteoStr !== '') {
-                operaciones.push({
-                    productoId,
-                    conteo: parseFloat(conteoStr)
-                });
+            if (conteoStr && conteoStr.toString().trim() !== '') {
+                const parsed = parseFraction(conteoStr.toString());
+                if (!isNaN(parsed)) {
+                    operaciones.push({
+                        productoId,
+                        conteo: parsed
+                    });
+                }
             }
         }
 
