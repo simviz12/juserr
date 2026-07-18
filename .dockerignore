@@ -1,0 +1,14 @@
+node_modules
+build
+.svelte-kit
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.prettierignore
+.vscode
+README.md
+implementation_plan.md
+task.md
+walkthrough.md
