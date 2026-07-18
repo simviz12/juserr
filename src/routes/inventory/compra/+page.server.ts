@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { productos, movimientosInventario, gastos } from '$lib/server/schema';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
+import { parseFraction } from '$lib/utils/fractions';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -18,15 +19,7 @@ export const actions: Actions = {
         const cantidadStr = formData.get('cantidad')?.toString().trim() || '0';
         const costoStr = formData.get('costo')?.toString();
         
-        let cantidad = 0;
-        if (cantidadStr.includes('/')) {
-            const parts = cantidadStr.split('/');
-            if (parts.length === 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1])) && Number(parts[1]) !== 0) {
-                cantidad = Number(parts[0]) / Number(parts[1]);
-            }
-        } else {
-            cantidad = parseFloat(cantidadStr);
-        }
+        let cantidad = parseFraction(cantidadStr);
 
         const costo = parseFloat(costoStr || '0');
 
