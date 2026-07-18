@@ -35,6 +35,10 @@ export const handle: Handle = async ({ event, resolve }) => {
         const user = event.locals.user;
         const p = event.url.pathname;
         
+        if (p === '/logout') {
+            return resolve(event);
+        }
+        
         if (user.rol === 'empleado' || user.rol === 'cajero') {
             const allowedForCajero = [
                 '/pizzas/mostrador',
