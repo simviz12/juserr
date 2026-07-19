@@ -43,9 +43,16 @@
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4">
                   <span class="block font-bold text-slate-800">{sabor.nombre}</span>
-                  <span class="text-xs font-medium text-slate-500">
-                    Sistema indica: {sabor.disponibles} disp. (${sabor.precioPorcion} c/u)
-                  </span>
+                  <div class="flex flex-col gap-0.5 mt-1">
+                    <span class="text-xs font-medium text-slate-500">
+                      Disponibles: <strong class="text-slate-700">{sabor.disponibles}</strong> (${sabor.precioPorcion} c/u)
+                    </span>
+                    {#if sabor.vendidas > 0}
+                      <span class="text-xs font-bold text-emerald-600">
+                        Vendidas hoy: {sabor.vendidas} porciones
+                      </span>
+                    {/if}
+                  </div>
                 </td>
                 
                 <td class="p-4 bg-blue-50/20">
