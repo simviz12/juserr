@@ -2,12 +2,19 @@ export function getTodayRange() {
     return getRange('diario');
 }
 
-export function getRange(type: 'diario' | 'semanal' | 'mensual') {
-    const now = new Date();
+export function getRange(type: 'diario' | 'semanal' | 'mensual', specificDateStr?: string) {
+    const now = specificDateStr ? new Date(specificDateStr + 'T00:00:00') : new Date();
     const offset = -5; // Hora de Colombia
     
-    // Calculamos la hora local en Colombia
-    const localTime = new Date(now.getTime() + offset * 3600 * 1000);
+    // Si pasamos fecha específica, asumimos que es inicio de ese día en Colombia
+    // Si no, usamos el ajuste normal de hora y "business day"
+    let localTime;
+    if (specificDateStr) {
+        localTime = new Date(now.getTime() - offset * 3600 * 1000);
+        localTime.setUTCHours(12, 0, 0, 0); // Mitad del día local para evitar cortes
+    } else {
+        localTime = new Date(now.getTime() + offset * 3600 * 1000);
+    }
     
     // Ajuste de jornada (Business Day): Si son antes de las 4 AM, sigue siendo el día anterior
     const businessTime = new Date(localTime.getTime() - 4 * 3600 * 1000);

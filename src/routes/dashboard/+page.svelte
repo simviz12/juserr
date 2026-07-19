@@ -70,13 +70,25 @@
     
     <div class="flex flex-col items-end gap-3">
       <div class="bg-slate-100 p-1 rounded-xl inline-flex text-sm font-medium">
-        <a href="?rango=diario" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'diario' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Diario</a>
-        <a href="?rango=semanal" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'semanal' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Semanal</a>
-        <a href="?rango=mensual" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'mensual' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Mensual</a>
+        <a href="?rango=diario{data.fechaSeleccionada ? `&fecha=${data.fechaSeleccionada}` : ''}" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'diario' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Diario</a>
+        <a href="?rango=semanal{data.fechaSeleccionada ? `&fecha=${data.fechaSeleccionada}` : ''}" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'semanal' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Semanal</a>
+        <a href="?rango=mensual{data.fechaSeleccionada ? `&fecha=${data.fechaSeleccionada}` : ''}" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'mensual' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Mensual</a>
       </div>
-      <div class="text-right">
-        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Fecha Actual</p>
-        <p class="text-sm font-bold text-slate-700">{new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <div class="flex flex-col text-right">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">Cambiar Fecha</p>
+        <form data-sveltekit-noscroll data-sveltekit-keepfocus>
+          <input type="hidden" name="rango" value="{data.rangoActual}">
+          <input 
+            type="date" 
+            name="fecha" 
+            class="px-3 py-1.5 text-sm border border-slate-200 rounded-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 text-slate-700 font-medium cursor-pointer"
+            value="{data.fechaSeleccionada}"
+            onchange="this.form.submit()"
+          >
+        </form>
+        {#if !data.fechaSeleccionada}
+          <p class="text-xs text-slate-400 mt-1">Viendo resultados de hoy</p>
+        {/if}
       </div>
     </div>
   </div>

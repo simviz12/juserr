@@ -3,6 +3,7 @@ import { turnos, gastos, cierresDia } from '$lib/server/schema';
 import { sql, and, gte, lt } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
+import { getRange } from '$lib/utils/date';
 
 export const actions: Actions = {
     default: async ({ request, locals }) => {
@@ -20,9 +21,7 @@ export const actions: Actions = {
             return fail(400, { error: 'Fecha inválida.' });
         }
 
-        const start = new Date(dateObj);
-        const end = new Date(dateObj);
-        end.setDate(end.getDate() + 1);
+        const { start, end } = getRange('diario', fechaStr);
 
         try {
             return await db.transaction(async (tx) => {

@@ -13,8 +13,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
     const rangoStr = url.searchParams.get('rango') || 'diario';
     const rango = ['diario', 'semanal', 'mensual'].includes(rangoStr) ? rangoStr as 'diario' | 'semanal' | 'mensual' : 'diario';
+    const fechaStr = url.searchParams.get('fecha') || undefined;
     
-    const { start: hoy, end: manana } = getRange(rango);
+    const { start: hoy, end: manana } = getRange(rango, fechaStr);
 
     // Ventas (Turnos) de hoy
     const [turnosHoy] = await db.select({ total: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))` })
@@ -49,6 +50,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
     return {
         rangoActual: rango,
+        fechaSeleccionada: fechaStr || '',
         ventasHoy: totalVentas,
         gastosHoy: totalGastos,
         cajaEsperada: totalVentas, // Los turnos ya restaron los gastos de mostrador
