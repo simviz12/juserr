@@ -103,6 +103,7 @@ export const cierresDia = pgTable('cierres_dia', {
   id: serial('id').primaryKey(),
   fecha: timestamp('fecha').defaultNow(),
   totalEfectivo: numeric('total_efectivo', { precision: 10, scale: 2 }).notNull(),
+  totalTransferencias: numeric('total_transferencias', { precision: 10, scale: 2 }).default('0'),
   totalTurnos: numeric('total_turnos', { precision: 10, scale: 2 }).default('0'),
   totalGastos: numeric('total_gastos', { precision: 10, scale: 2 }).default('0'),
 });

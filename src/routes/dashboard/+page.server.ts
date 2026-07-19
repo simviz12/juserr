@@ -17,17 +17,25 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     
     const { start: hoy, end: manana } = getRange(rango, fechaStr);
 
-    // Ventas (Turnos) de hoy
-    const [turnosHoy] = await db.select({ total: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))` })
+    // Turnos de hoy (Efectivo y Transferencias declaradas)
+    const [turnosHoy] = await db.select({ 
+            efectivo: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))`,
+            transferencias: sql<number>`SUM(CAST(${turnos.transferencias} AS NUMERIC))`
+        })
         .from(turnos)
         .where(and(gte(turnos.fecha, hoy), lt(turnos.fecha, manana)));
-    const totalVentas = Number(turnosHoy?.total || 0);
+        
+    const totalEfectivo = Number(turnosHoy?.efectivo || 0);
+    const totalTransferencias = Number(turnosHoy?.transferencias || 0);
 
     // Gastos de hoy
     const [gastosData] = await db.select({ total: sql<number>`SUM(CAST(${gastos.monto} AS NUMERIC))` })
         .from(gastos)
         .where(and(gte(gastos.fecha, hoy), lt(gastos.fecha, manana)));
     const totalGastos = Number(gastosData?.total || 0);
+
+    // Las "Ventas Totales" declaradas son el Efectivo final + Transferencias + Gastos que salieron de caja
+    const totalVentas = totalEfectivo + totalTransferencias + totalGastos;
 
     // Inventario Bajo (stockActual < 5)
     const inventarioBajo = await db.select()
@@ -53,7 +61,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         fechaSeleccionada: fechaStr || '',
         ventasHoy: totalVentas,
         gastosHoy: totalGastos,
-        cajaEsperada: totalVentas, // Los turnos ya restaron los gastos de mostrador
+        cajaEsperada: totalEfectivo,
+        transferenciasHoy: totalTransferencias,
         inventarioBajo,
         masVendidos
     };

@@ -25,14 +25,16 @@ export const actions: Actions = {
 
         try {
             return await db.transaction(async (tx) => {
-                // 1. Obtener suma de turnos en ese rango de fecha
+                // 1. Obtener suma de turnos en ese rango de fecha (efectivo y transferencias)
                 const [sumaTurnos] = await tx.select({
-                    total: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))`
+                    efectivo: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))`,
+                    transferencias: sql<number>`SUM(CAST(${turnos.transferencias} AS NUMERIC))`
                 })
                 .from(turnos)
                 .where(and(gte(turnos.fecha, start), lt(turnos.fecha, end)));
 
-                const totalTurnos = Number(sumaTurnos?.total || 0);
+                const totalTurnos = Number(sumaTurnos?.efectivo || 0);
+                const totalTransferencias = Number(sumaTurnos?.transferencias || 0);
 
                 // 2. Obtener suma de gastos en ese rango de fecha
                 const [sumaGastos] = await tx.select({
@@ -43,24 +45,21 @@ export const actions: Actions = {
 
                 const totalGastos = Number(sumaGastos?.total || 0);
 
-                // 3. Efectivo Total de Caja del Día = Total en Turnos
-                // Nota: Los turnos ya reportan el efectivo final que hay en caja después de sacar gastos.
-                // Si la regla de negocio es: Efectivo Total = suma de las cajas finales de cada turno.
-                const totalEfectivo = totalTurnos;
-
-                if (totalTurnos === 0 && totalGastos === 0) {
+                if (totalTurnos === 0 && totalGastos === 0 && totalTransferencias === 0) {
                     throw new Error('NO_MOVIMIENTOS');
                 }
 
                 // 4. Guardar Cierre Diario
                 await tx.insert(cierresDia).values({
                     fecha: dateObj,
-                    totalEfectivo: totalEfectivo.toString(),
+                    totalEfectivo: totalTurnos.toString(),
+                    totalTransferencias: totalTransferencias.toString(),
                     totalTurnos: totalTurnos.toString(),
                     totalGastos: totalGastos.toString()
                 });
 
-                return { success: true, message: `Cierre del día ${fechaStr} guardado con éxito. Total consolidado: $${totalEfectivo}` };
+                const granTotal = totalTurnos + totalTransferencias;
+                return { success: true, message: `Cierre del día ${fechaStr} guardado. Físico: $${totalTurnos} | Nequi: $${totalTransferencias} | Total Consolidado: $${granTotal}` };
             });
         } catch (err: any) {
             console.error(err);

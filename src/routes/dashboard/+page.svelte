@@ -93,36 +93,68 @@
     </div>
   </div>
 
-  <!-- KPI Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <!-- Ventas -->
-    <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col justify-between hover:shadow-md transition-shadow">
-      <div class="flex justify-between items-start mb-4">
-        <h3 class="text-slate-500 font-medium">Ventas {data.rangoActual === 'semanal' ? 'de la Semana' : data.rangoActual === 'mensual' ? 'del Mes' : 'de Hoy'}</h3>
-        <span class="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">💰</span>
+  <!-- Cards (Top Row) -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <!-- Ventas -->
+      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-slate-500 font-medium text-sm">Ventas Declaradas</h2>
+          <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+            <span class="text-emerald-600 text-lg">💰</span>
+          </div>
+        </div>
+        <div class="flex items-end justify-between">
+          <p class="text-3xl font-black text-slate-800 tracking-tight">
+            ${data.ventasHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
       </div>
-      <p class="text-4xl font-black text-slate-800">${data.ventasHoy.toFixed(2)}</p>
-    </div>
-    
-    <!-- Gastos -->
-    <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col justify-between hover:shadow-md transition-shadow">
-      <div class="flex justify-between items-start mb-4">
-        <h3 class="text-slate-500 font-medium">Gastos {data.rangoActual === 'semanal' ? 'de la Semana' : data.rangoActual === 'mensual' ? 'del Mes' : 'de Hoy'}</h3>
-        <span class="p-3 bg-red-100 text-red-600 rounded-2xl">📉</span>
-      </div>
-      <p class="text-4xl font-black text-slate-800">${data.gastosHoy.toFixed(2)}</p>
-    </div>
 
-    <!-- Caja -->
-    <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col justify-between hover:shadow-md transition-shadow bg-gradient-to-br from-white/60 to-orange-50/50">
-      <div class="flex justify-between items-start mb-4">
-        <h3 class="text-orange-700 font-medium">Efectivo {data.rangoActual === 'semanal' ? 'Semanal' : data.rangoActual === 'mensual' ? 'Mensual' : 'Caja Hoy'}</h3>
-        <span class="p-3 bg-orange-100 text-orange-600 rounded-2xl">💵</span>
+      <!-- Efectivo Caja -->
+      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-slate-500 font-medium text-sm">Efectivo Físico</h2>
+          <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+            <span class="text-green-600 text-lg">💵</span>
+          </div>
+        </div>
+        <div class="flex flex-col">
+          <p class="text-3xl font-black text-orange-600 tracking-tight">
+            ${data.cajaEsperada.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
       </div>
-      <p class="text-4xl font-black text-orange-600">${data.cajaEsperada.toFixed(2)}</p>
-      <p class="text-xs text-orange-500/70 mt-2">* Basado en los cierres de turno declarados</p>
+
+      <!-- Transferencias -->
+      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-slate-500 font-medium text-sm">Transferencias</h2>
+          <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+            <span class="text-blue-600 text-lg">📱</span>
+          </div>
+        </div>
+        <div class="flex flex-col">
+          <p class="text-3xl font-black text-blue-600 tracking-tight">
+            ${data.transferenciasHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+      </div>
+
+      <!-- Gastos -->
+      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-slate-500 font-medium text-sm">Gastos Reportados</h2>
+          <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+            <span class="text-red-600 text-lg">📉</span>
+          </div>
+        </div>
+        <div class="flex items-end justify-between">
+          <p class="text-3xl font-black text-slate-800 tracking-tight">
+            ${data.gastosHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+      </div>
     </div>
-  </div>
 
   <!-- Charts & Lists Row -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
