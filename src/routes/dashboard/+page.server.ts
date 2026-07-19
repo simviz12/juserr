@@ -17,35 +17,31 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     
     const { start: hoy, end: manana } = getRange(rango, fechaStr);
 
-    // Turnos de hoy (Efectivo y Transferencias declaradas)
-    const [turnosHoy] = await db.select({ 
+    // Ejecutar todas las consultas en paralelo para mejorar radicalmente el tiempo de carga
+    const [
+        turnosResult, 
+        gastosResult, 
+        inventarioBajoResult, 
+        masVendidosResult
+    ] = await Promise.all([
+        db.select({ 
             efectivo: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))`,
             transferencias: sql<number>`SUM(CAST(${turnos.transferencias} AS NUMERIC))`
         })
         .from(turnos)
-        .where(and(gte(turnos.fecha, hoy), lt(turnos.fecha, manana)));
-        
-    const totalEfectivo = Number(turnosHoy?.efectivo || 0);
-    const totalTransferencias = Number(turnosHoy?.transferencias || 0);
+        .where(and(gte(turnos.fecha, hoy), lt(turnos.fecha, manana))),
 
-    // Gastos de hoy
-    const [gastosData] = await db.select({ total: sql<number>`SUM(CAST(${gastos.monto} AS NUMERIC))` })
+        db.select({ total: sql<number>`SUM(CAST(${gastos.monto} AS NUMERIC))` })
         .from(gastos)
-        .where(and(gte(gastos.fecha, hoy), lt(gastos.fecha, manana)));
-    const totalGastos = Number(gastosData?.total || 0);
+        .where(and(gte(gastos.fecha, hoy), lt(gastos.fecha, manana))),
 
-    // Las "Ventas Totales" declaradas son el Efectivo final + Transferencias + Gastos que salieron de caja
-    const totalVentas = totalEfectivo + totalTransferencias + totalGastos;
-
-    // Inventario Bajo (stockActual < 5)
-    const inventarioBajo = await db.select()
+        db.select()
         .from(productos)
         .where(lt(productos.stockActual, 5))
         .orderBy(productos.stockActual)
-        .limit(5);
+        .limit(5),
 
-    // Productos más vendidos hoy (Pizzas)
-    const masVendidos = await db.select({
+        db.select({
             sabor: pizzaSabores.nombre,
             cantidad: sql<number>`SUM(${pizzaVentas.cantidadVendida})`
         })
@@ -54,7 +50,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         .where(and(gte(pizzaVentas.fecha, hoy), lt(pizzaVentas.fecha, manana)))
         .groupBy(pizzaSabores.nombre)
         .orderBy(desc(sql`SUM(${pizzaVentas.cantidadVendida})`))
-        .limit(4);
+        .limit(4)
+    ]);
+
+    const turnosHoy = turnosResult[0];
+    const totalEfectivo = Number(turnosHoy?.efectivo || 0);
+    const totalTransferencias = Number(turnosHoy?.transferencias || 0);
+
+    const gastosData = gastosResult[0];
+    const totalGastos = Number(gastosData?.total || 0);
+
+    // Las "Ventas Totales" declaradas son el Efectivo final + Transferencias + Gastos que salieron de caja
+    const totalVentas = totalEfectivo + totalTransferencias + totalGastos;
+
+    const inventarioBajo = inventarioBajoResult;
+    const masVendidos = masVendidosResult;
 
     return {
         rangoActual: rango,

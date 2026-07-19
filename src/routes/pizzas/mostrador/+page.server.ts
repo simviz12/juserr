@@ -9,23 +9,39 @@ import { getTodayRange } from '$lib/utils/date';
 export const load: PageServerLoad = async () => {
     const { start, end } = getTodayRange();
 
-    const sabores = await db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true)).orderBy(pizzaSabores.nombre);
-
-    const ruedasHoy = await db.select({
-        saborId: pizzaRuedas.saborId,
-        totalHorneadas: sql<number>`SUM(${pizzaRuedas.cantidad})`
-    })
-    .from(pizzaRuedas)
-    .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)))
-    .groupBy(pizzaRuedas.saborId);
-
-    const ventasHoy = await db.select({
-        saborId: pizzaVentas.saborId,
-        totalVendidas: sql<number>`SUM(${pizzaVentas.cantidadVendida})`
-    })
-    .from(pizzaVentas)
-    .where(and(gte(pizzaVentas.fecha, start), lt(pizzaVentas.fecha, end)))
-    .groupBy(pizzaVentas.saborId);
+    const [
+        sabores,
+        ruedasHoy,
+        ventasHoy,
+        historialHorneadas
+    ] = await Promise.all([
+        db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true)).orderBy(pizzaSabores.nombre),
+        
+        db.select({
+            saborId: pizzaRuedas.saborId,
+            totalHorneadas: sql<number>`SUM(${pizzaRuedas.cantidad})`
+        })
+        .from(pizzaRuedas)
+        .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)))
+        .groupBy(pizzaRuedas.saborId),
+        
+        db.select({
+            saborId: pizzaVentas.saborId,
+            totalVendidas: sql<number>`SUM(${pizzaVentas.cantidadVendida})`
+        })
+        .from(pizzaVentas)
+        .where(and(gte(pizzaVentas.fecha, start), lt(pizzaVentas.fecha, end)))
+        .groupBy(pizzaVentas.saborId),
+        
+        db.select({
+            id: pizzaRuedas.id,
+            saborId: pizzaRuedas.saborId,
+            cantidad: pizzaRuedas.cantidad,
+            fecha: pizzaRuedas.fecha,
+        })
+        .from(pizzaRuedas)
+        .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)))
+    ]);
 
     const stockSabores = sabores.map(sabor => {
         const horneadas = Number(ruedasHoy.find(r => r.saborId === sabor.id)?.totalHorneadas || 0);
@@ -39,15 +55,6 @@ export const load: PageServerLoad = async () => {
             disponibles: Math.max(0, disponibles)
         };
     });
-
-    const historialHorneadas = await db.select({
-        id: pizzaRuedas.id,
-        saborId: pizzaRuedas.saborId,
-        cantidad: pizzaRuedas.cantidad,
-        fecha: pizzaRuedas.fecha,
-    })
-    .from(pizzaRuedas)
-    .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)));
 
     const historialVentas = await db.select({
         id: pizzaVentas.id,
