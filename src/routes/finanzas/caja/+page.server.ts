@@ -50,8 +50,7 @@ export const actions: Actions = {
                 const totalEfectivo = totalTurnos;
 
                 if (totalTurnos === 0 && totalGastos === 0) {
-                    tx.rollback();
-                    return fail(400, { error: 'No hay movimientos (turnos ni gastos) registrados en esta fecha.' });
+                    throw new Error('NO_MOVIMIENTOS');
                 }
 
                 // 4. Guardar Cierre Diario
@@ -64,8 +63,11 @@ export const actions: Actions = {
 
                 return { success: true, message: `Cierre del día ${fechaStr} guardado con éxito. Total consolidado: $${totalEfectivo}` };
             });
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
+            if (err.message === 'NO_MOVIMIENTOS') {
+                return fail(400, { error: 'No hay movimientos (turnos ni gastos) registrados en esta fecha.' });
+            }
             return fail(500, { error: 'Error al procesar el cierre de caja diario.' });
         }
     }
