@@ -9,12 +9,14 @@ export function getRange(type: 'diario' | 'semanal' | 'mensual') {
     // Calculamos la hora local en Colombia
     const localTime = new Date(now.getTime() + offset * 3600 * 1000);
     
-    const startLocal = new Date(localTime);
-    startLocal.setUTCHours(0, 0, 0, 0);
+    // Ajuste de jornada (Business Day): Si son antes de las 4 AM, sigue siendo el día anterior
+    const businessTime = new Date(localTime.getTime() - 4 * 3600 * 1000);
+    
+    const startLocal = new Date(businessTime);
+    startLocal.setUTCHours(4, 0, 0, 0); // El día de negocio empieza a las 4 AM
 
     if (type === 'semanal') {
         const day = startLocal.getUTCDay();
-        // Adjust when day is sunday
         const diff = startLocal.getUTCDate() - day + (day === 0 ? -6 : 1);
         startLocal.setUTCDate(diff);
     } else if (type === 'mensual') {
