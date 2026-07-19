@@ -83,7 +83,7 @@
             name="fecha" 
             class="px-3 py-1.5 text-sm border border-slate-200 rounded-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 text-slate-700 font-medium cursor-pointer"
             value="{data.fechaSeleccionada}"
-            onchange="this.form.submit()"
+            onchange={(e) => (e.target as HTMLInputElement).form?.submit()}
           >
         </form>
         {#if !data.fechaSeleccionada}
