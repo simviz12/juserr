@@ -4,15 +4,17 @@ import { sql, gte, lt, and, desc, eq } from 'drizzle-orm';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+import { getRange } from '$lib/utils/date';
+
+export const load: PageServerLoad = async ({ locals, url }) => {
     if (!locals.user || locals.user.rol !== 'jefe') {
         throw redirect(302, '/');
     }
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const manana = new Date(hoy);
-    manana.setDate(manana.getDate() + 1);
+    const rangoStr = url.searchParams.get('rango') || 'diario';
+    const rango = ['diario', 'semanal', 'mensual'].includes(rangoStr) ? rangoStr as 'diario' | 'semanal' | 'mensual' : 'diario';
+    
+    const { start: hoy, end: manana } = getRange(rango);
 
     // Ventas (Turnos) de hoy
     const [turnosHoy] = await db.select({ total: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))` })
@@ -46,6 +48,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         .limit(4);
 
     return {
+        rangoActual: rango,
         ventasHoy: totalVentas,
         gastosHoy: totalGastos,
         cajaEsperada: totalVentas, // Los turnos ya restaron los gastos de mostrador

@@ -54,14 +54,30 @@
 
 <div class="max-w-7xl mx-auto space-y-8">
   <!-- Header -->
-  <div class="flex justify-between items-end">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
     <div>
-      <h1 class="text-3xl font-bold text-slate-800">Resumen Diario</h1>
-      <p class="text-slate-500">Un vistazo rápido al rendimiento de hoy.</p>
+      <h1 class="text-3xl font-bold text-slate-800">
+        {#if data.rangoActual === 'semanal'}
+          Resumen Semanal
+        {:else if data.rangoActual === 'mensual'}
+          Resumen Mensual
+        {:else}
+          Resumen Diario
+        {/if}
+      </h1>
+      <p class="text-slate-500">Un vistazo rápido al rendimiento del negocio.</p>
     </div>
-    <div class="text-right">
-      <p class="text-sm text-slate-400 font-medium">Fecha Actual</p>
-      <p class="text-lg font-bold text-slate-700">{new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    
+    <div class="flex flex-col items-end gap-3">
+      <div class="bg-slate-100 p-1 rounded-xl inline-flex text-sm font-medium">
+        <a href="?rango=diario" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'diario' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Diario</a>
+        <a href="?rango=semanal" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'semanal' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Semanal</a>
+        <a href="?rango=mensual" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'mensual' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Mensual</a>
+      </div>
+      <div class="text-right">
+        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Fecha Actual</p>
+        <p class="text-sm font-bold text-slate-700">{new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      </div>
     </div>
   </div>
 
@@ -70,7 +86,7 @@
     <!-- Ventas -->
     <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col justify-between hover:shadow-md transition-shadow">
       <div class="flex justify-between items-start mb-4">
-        <h3 class="text-slate-500 font-medium">Ventas de Hoy</h3>
+        <h3 class="text-slate-500 font-medium">Ventas {data.rangoActual === 'semanal' ? 'de la Semana' : data.rangoActual === 'mensual' ? 'del Mes' : 'de Hoy'}</h3>
         <span class="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">💰</span>
       </div>
       <p class="text-4xl font-black text-slate-800">${data.ventasHoy.toFixed(2)}</p>
@@ -79,7 +95,7 @@
     <!-- Gastos -->
     <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col justify-between hover:shadow-md transition-shadow">
       <div class="flex justify-between items-start mb-4">
-        <h3 class="text-slate-500 font-medium">Gastos Registrados</h3>
+        <h3 class="text-slate-500 font-medium">Gastos {data.rangoActual === 'semanal' ? 'de la Semana' : data.rangoActual === 'mensual' ? 'del Mes' : 'de Hoy'}</h3>
         <span class="p-3 bg-red-100 text-red-600 rounded-2xl">📉</span>
       </div>
       <p class="text-4xl font-black text-slate-800">${data.gastosHoy.toFixed(2)}</p>
@@ -88,7 +104,7 @@
     <!-- Caja -->
     <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col justify-between hover:shadow-md transition-shadow bg-gradient-to-br from-white/60 to-orange-50/50">
       <div class="flex justify-between items-start mb-4">
-        <h3 class="text-orange-700 font-medium">Efectivo Esperado (Caja)</h3>
+        <h3 class="text-orange-700 font-medium">Efectivo {data.rangoActual === 'semanal' ? 'Semanal' : data.rangoActual === 'mensual' ? 'Mensual' : 'Caja Hoy'}</h3>
         <span class="p-3 bg-orange-100 text-orange-600 rounded-2xl">💵</span>
       </div>
       <p class="text-4xl font-black text-orange-600">${data.cajaEsperada.toFixed(2)}</p>
