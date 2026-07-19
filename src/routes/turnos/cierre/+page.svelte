@@ -1,7 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { fade, slide } from 'svelte/transition';
-  let { form } = $props();
+  let { data, form } = $props();
 
   let gastos = $state<{ id: number; descripcion: string; monto: string }[]>([]);
   let nextGastoId = 1;
@@ -15,12 +15,26 @@
   }
 
   let totalGastos = $derived(gastos.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0));
+  let granTotalEsperado = $derived(data.ventas.granTotal);
 </script>
 
 <div class="max-w-3xl mx-auto">
-  <div class="mb-6">
-    <h1 class="text-2xl font-bold text-slate-800">Cierre de Turno y Gastos</h1>
-    <p class="text-slate-500 text-sm mt-1">Registra el efectivo final en caja y declara los gastos realizados en tu turno.</p>
+  <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Cierre de Turno y Gastos</h1>
+      <p class="text-slate-500 text-sm mt-1">Registra el efectivo final en caja y declara los gastos realizados en tu turno.</p>
+    </div>
+    
+    <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 min-w-[280px] shadow-sm flex items-center justify-between">
+      <div>
+        <p class="text-xs font-bold text-indigo-800 uppercase tracking-wider">Total de Ventas Hoy</p>
+        <p class="text-3xl font-black text-indigo-600">${granTotalEsperado.toLocaleString('es-CO')}</p>
+        <div class="text-xs text-indigo-700 mt-1 space-y-0.5">
+          <p>🍕 Pizzas: <span class="font-bold">${data.ventas.dineroPizzas.toLocaleString('es-CO')}</span></p>
+          <p>🥤 Bebidas: <span class="font-bold">${data.ventas.dineroBebidas.toLocaleString('es-CO')}</span></p>
+        </div>
+      </div>
+    </div>
   </div>
 
   {#if form?.success}
@@ -59,10 +73,28 @@
               type="number" 
               id="monto" 
               name="monto" 
-              step="0.01" 
-              min="0" 
               required 
-              class="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-xl font-bold shadow-sm"
+              min="0"
+              step="100"
+              placeholder="Ej. 150000"
+              class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all font-medium text-slate-800"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label for="transferencias" class="block text-sm font-medium text-slate-700 mb-1">Total Transferencias (Nequi, etc.)</label>
+          <div class="relative">
+            <span class="absolute left-4 top-3 text-slate-400 font-bold">$</span>
+            <input 
+              type="number" 
+              id="transferencias" 
+              name="transferencias" 
+              required 
+              min="0"
+              step="100"
+              placeholder="Ej. 50000"
+              class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all font-medium text-slate-800"
             />
           </div>
         </div>

@@ -4,10 +4,39 @@ import { eq, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
+import { getTodayRange } from '$lib/utils/date';
+import { and, gte, lt, eq, sql } from 'drizzle-orm';
+
 export const load: PageServerLoad = async () => {
+    const { start, end } = getTodayRange();
+    
     // Cargamos todas las bebidas
     const list = await db.select().from(bebidas).orderBy(bebidas.nombre);
-    return { bebidas: list };
+    
+    // Cargamos las ventas de hoy
+    const ventasHoy = await db.select({
+        bebidaId: movimientosBebidas.bebidaId,
+        totalVendidas: sql<number>`SUM(${movimientosBebidas.cantidad})`
+    })
+    .from(movimientosBebidas)
+    .where(
+        and(
+            eq(movimientosBebidas.tipo, 'venta'),
+            gte(movimientosBebidas.fecha, start),
+            lt(movimientosBebidas.fecha, end)
+        )
+    )
+    .groupBy(movimientosBebidas.bebidaId);
+
+    const bebidasConVentas = list.map(bebida => {
+        const vendidas = Number(ventasHoy.find(v => v.bebidaId === bebida.id)?.totalVendidas || 0);
+        return {
+            ...bebida,
+            vendidas
+        };
+    });
+
+    return { bebidas: bebidasConVentas };
 };
 
 export const actions: Actions = {
