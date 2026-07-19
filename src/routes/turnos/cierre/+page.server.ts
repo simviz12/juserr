@@ -11,7 +11,7 @@ export const load: PageServerLoad = async () => {
     // 1. Calcular total de pizzas vendidas hoy
     const ventasPizzas = await db.select({
         saborId: pizzaVentas.saborId,
-        totalVendidas: sql<number>`SUM(${pizzaVentas.cantidad})`
+        totalVendidas: sql<number>`SUM(${pizzaVentas.cantidadVendida})`
     })
     .from(pizzaVentas)
     .where(
@@ -57,7 +57,7 @@ export const load: PageServerLoad = async () => {
         const bebida = todasLasBebidas.find(b => b.id === venta.bebidaId);
         if (bebida) {
             totalBebidas += Number(venta.totalVendidas);
-            dineroBebidas += Number(venta.totalVendidas) * parseFloat(bebida.precioVenta || '0');
+            dineroBebidas += Number(venta.totalVendidas) * parseFloat(bebida.precio || '0');
         }
     });
 

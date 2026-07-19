@@ -4,7 +4,7 @@
   let { data, form } = $props();
 
   let totalBebidasVendidas = $derived(data.bebidas.reduce((acc, bebida) => acc + (bebida.vendidas || 0), 0));
-  let dineroCajaEsperado = $derived(data.bebidas.reduce((acc, bebida) => acc + ((bebida.vendidas || 0) * parseFloat(bebida.precioVenta || '0')), 0));
+  let dineroCajaEsperado = $derived(data.bebidas.reduce((acc, bebida) => acc + ((bebida.vendidas || 0) * parseFloat(bebida.precio || '0')), 0));
 </script>
 
 <div class="max-w-4xl mx-auto">
