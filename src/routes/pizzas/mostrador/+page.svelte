@@ -2,12 +2,28 @@
   import { enhance } from '$app/forms';
   import { fade } from 'svelte/transition';
   let { data, form } = $props();
+
+  let totalPorcionesVendidas = $derived(data.sabores.reduce((acc, sabor) => acc + (sabor.vendidas || 0), 0));
+  let dineroCajaEsperado = $derived(data.sabores.reduce((acc, sabor) => acc + ((sabor.vendidas || 0) * parseFloat(sabor.precioPorcion || '0')), 0));
 </script>
 
 <div class="max-w-5xl mx-auto">
-  <div class="mb-6">
-    <h1 class="text-2xl font-bold text-slate-800">Auditoría de Mostrador (Boleo)</h1>
-    <p class="text-slate-500 text-sm mt-1">Ingresa las nuevas pizzas horneadas y cuenta las que quedan físicamente en la bandeja para calcular las ventas automáticamente.</p>
+  <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Auditoría de Mostrador (Boleo)</h1>
+      <p class="text-slate-500 text-sm mt-1">Ingresa las nuevas pizzas horneadas y cuenta las que quedan físicamente en la bandeja para calcular las ventas automáticamente.</p>
+    </div>
+    
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 min-w-[250px] shadow-sm flex items-center justify-between">
+      <div>
+        <p class="text-xs font-bold text-emerald-800 uppercase tracking-wider">Debe haber en caja</p>
+        <p class="text-2xl font-black text-emerald-600">${dineroCajaEsperado.toLocaleString('es-CO')}</p>
+      </div>
+      <div class="text-right">
+        <p class="text-xs font-bold text-emerald-800 uppercase tracking-wider">Vendidas</p>
+        <p class="text-xl font-black text-emerald-600">{totalPorcionesVendidas} <span class="text-sm font-medium">porciones</span></p>
+      </div>
+    </div>
   </div>
 
   {#if form?.success}
