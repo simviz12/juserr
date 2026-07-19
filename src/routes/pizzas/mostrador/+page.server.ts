@@ -50,19 +50,37 @@ export const load: PageServerLoad = async () => {
         id: pizzaRuedas.id,
         saborId: pizzaRuedas.saborId,
         cantidad: pizzaRuedas.cantidad,
-        fecha: pizzaRuedas.fecha
+        fecha: pizzaRuedas.fecha,
     })
     .from(pizzaRuedas)
-    .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)))
-    .orderBy(sql`${pizzaRuedas.fecha} DESC`);
+    .where(and(gte(pizzaRuedas.fecha, start), lt(pizzaRuedas.fecha, end)));
 
-    const historialLogs = historialHorneadas.map(h => {
-        const sabor = sabores.find(s => s.id === h.saborId);
+    const historialVentas = await db.select({
+        id: pizzaVentas.id,
+        saborId: pizzaVentas.saborId,
+        cantidad: pizzaVentas.cantidadVendida,
+        fecha: pizzaVentas.fecha,
+    })
+    .from(pizzaVentas)
+    .where(and(gte(pizzaVentas.fecha, start), lt(pizzaVentas.fecha, end)));
+
+    const allLogs = [
+        ...historialHorneadas.map(h => ({ ...h, tipo: 'horneada' })),
+        ...historialVentas.map(v => ({ ...v, tipo: 'venta' }))
+    ].sort((a, b) => {
+        const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
+        const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
+        return dateB - dateA;
+    });
+
+    const historialLogs = allLogs.map(log => {
+        const sabor = sabores.find(s => s.id === log.saborId);
         return {
-            id: h.id,
+            id: log.id,
             sabor: sabor ? sabor.nombre : 'Desconocido',
-            cantidad: h.cantidad,
-            fecha: h.fecha
+            cantidad: log.cantidad,
+            fecha: log.fecha,
+            tipo: log.tipo
         };
     });
 

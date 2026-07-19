@@ -105,7 +105,8 @@
             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
               <th class="p-4 font-medium">Hora</th>
               <th class="p-4 font-medium">Sabor</th>
-              <th class="p-4 font-medium text-center">Porciones Añadidas</th>
+              <th class="p-4 font-medium">Acción</th>
+              <th class="p-4 font-medium text-center">Cantidad</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -117,14 +118,21 @@
                 <td class="p-4 font-medium text-slate-800">
                   {log.sabor}
                 </td>
+                <td class="p-4 text-sm font-medium">
+                  {#if log.tipo === 'horneada'}
+                    <span class="text-blue-600">Horneadas añadidas/restadas</span>
+                  {:else}
+                    <span class="text-orange-600">Vendidas</span>
+                  {/if}
+                </td>
                 <td class="p-4 text-center">
-                  {#if log.cantidad > 0}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                      +{log.cantidad}
+                  {#if log.tipo === 'horneada'}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {log.cantidad >= 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}">
+                      {log.cantidad > 0 ? '+' : ''}{log.cantidad}
                     </span>
                   {:else}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                      {log.cantidad}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                      -{log.cantidad}
                     </span>
                   {/if}
                 </td>
