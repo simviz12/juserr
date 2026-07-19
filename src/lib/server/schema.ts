@@ -86,6 +86,7 @@ export const pizzaVentas = pgTable('pizza_ventas', {
 export const turnos = pgTable('turnos', {
   id: serial('id').primaryKey(),
   monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
+  transferencias: numeric('transferencias', { precision: 10, scale: 2 }).default('0'),
   descripcion: text('descripcion'),
   fecha: timestamp('fecha').defaultNow(),
 });
@@ -111,6 +112,8 @@ export const cortesSemanales = pgTable('cortes_semanales', {
   fechaCorte: timestamp('fecha_corte').defaultNow(),
   totalCalculado: numeric('total_calculado', { precision: 10, scale: 2 }).notNull(),
   totalReal: numeric('total_real', { precision: 10, scale: 2 }),
+  efectivoReal: numeric('efectivo_real', { precision: 10, scale: 2 }),
+  transferenciasReales: numeric('transferencias_reales', { precision: 10, scale: 2 }),
   diferencia: numeric('diferencia', { precision: 10, scale: 2 }),
   rangoInicio: timestamp('rango_inicio'),
   rangoFin: timestamp('rango_fin'),
