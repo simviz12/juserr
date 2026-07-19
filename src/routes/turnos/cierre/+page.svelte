@@ -14,8 +14,14 @@
     gastos = gastos.filter(g => g.id !== id);
   }
 
+  let montoFisico = $state('');
+  let montoTransferencias = $state('');
+
   let totalGastos = $derived(gastos.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0));
   let granTotalEsperado = $derived(data.ventas.granTotal);
+  
+  let totalDeclarado = $derived((parseFloat(montoFisico) || 0) + (parseFloat(montoTransferencias) || 0) + totalGastos);
+  let diferencia = $derived(totalDeclarado - granTotalEsperado);
 </script>
 
 <div class="max-w-3xl mx-auto">
@@ -73,6 +79,7 @@
               type="number" 
               id="monto" 
               name="monto" 
+              bind:value={montoFisico}
               required 
               min="0"
               step="100"
@@ -90,6 +97,7 @@
               type="number" 
               id="transferencias" 
               name="transferencias" 
+              bind:value={montoTransferencias}
               required 
               min="0"
               step="100"
@@ -176,6 +184,55 @@
         </div>
       {/if}
     </div>
+
+    <!-- Cuadre de Caja -->
+    {#if montoFisico !== '' || montoTransferencias !== '' || gastos.length > 0}
+      <div transition:slide class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <span>⚖️</span> Cuadre de Caja
+        </h2>
+        
+        <div class="flex justify-between items-center py-2">
+          <span class="text-slate-600 font-medium">Total Declarado (Efectivo + Nequi + Gastos):</span>
+          <span class="text-lg font-bold text-slate-800">${totalDeclarado.toLocaleString('es-CO')}</span>
+        </div>
+        
+        <div class="flex justify-between items-center py-2 border-t border-slate-100">
+          <span class="text-slate-600 font-medium">Total Ventas Sistema:</span>
+          <span class="text-lg font-bold text-slate-800">${granTotalEsperado.toLocaleString('es-CO')}</span>
+        </div>
+
+        <div class="flex justify-between items-center py-3 mt-2 border-t-2 border-slate-200">
+          <span class="text-slate-800 font-bold">Diferencia:</span>
+          <span class="text-xl font-black {diferencia > 0 ? 'text-green-600' : diferencia < 0 ? 'text-red-600' : 'text-slate-800'}">
+            {diferencia > 0 ? '+' : ''}{diferencia.toLocaleString('es-CO')}
+          </span>
+        </div>
+
+        {#if diferencia > 0}
+          <div transition:fade class="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
+            <span class="text-green-600 text-xl">💡</span>
+            <p class="text-sm font-medium text-green-800">
+              Hay un <span class="font-bold">sobrante de ${diferencia.toLocaleString('es-CO')}</span> en caja. Esto suele ser por ventas de <strong>vasos de gaseosa</strong> u otros ingresos menores no registrados.
+            </p>
+          </div>
+        {:else if diferencia < 0}
+          <div transition:fade class="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+            <span class="text-red-600 text-xl">⚠️</span>
+            <p class="text-sm font-medium text-red-800">
+              Hay un <span class="font-bold">faltante de ${Math.abs(diferencia).toLocaleString('es-CO')}</span> en caja. Revisa si olvidaste registrar algún gasto o si se entregó mal algún cambio.
+            </p>
+          </div>
+        {:else}
+          <div transition:fade class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
+            <span class="text-slate-600 text-xl">✅</span>
+            <p class="text-sm font-medium text-slate-800">
+              ¡La caja está cuadrada perfectamente!
+            </p>
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Botón de Envío -->
     <div class="pt-4">
