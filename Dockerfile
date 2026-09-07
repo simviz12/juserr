@@ -1,39 +1,38 @@
-FROM node:22-alpine AS builder
+# syntax=docker/dockerfile:1
 
+# ---------- Build stage ----------
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Instalar pnpm globalmente
+# Enable pnpm via corepack
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copiar archivos de dependencias
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
+# Copy package manifests
+COPY package.json pnpm-lock.yaml ./
 
-# Instalar dependencias
-RUN pnpm config set ignore-scripts true && pnpm install
+# Install dependencies, approve core-js builds, reinstall to allow scripts
+RUN pnpm install --frozen-lockfile --ignore-scripts && pnpm approve-builds core-js@3.49.0 esbuild@0.18.20 esbuild@0.25.12 esbuild@0.28.1 && pnpm install --frozen-lockfile
 
-# Copiar el resto del código
+# Copy source code
 COPY . .
 
-# Construir la app para Node.js
-RUN pnpm build
 
-# Etapa de producción
-FROM node:22-alpine
 
+# Build the SvelteKit app (produces .svelte-kit and build)
+RUN pnpm approve-builds core-js@3.49.0 && pnpm install --frozen-lockfile && pnpm build
+
+# ---------- Runtime stage ----------
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Solo copiamos el build final, package.json y pnpm-lock.yaml
+# Copy only the needed files from builder
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/build ./build
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder /app/node_modules ./node_modules
 
-# Instalar solo dependencias de producción
-RUN corepack enable && corepack prepare pnpm@latest --activate && pnpm config set ignore-scripts true && pnpm install --prod
-
-ENV NODE_ENV=production
-ENV PORT=3000
-
+# Expose the server port
 EXPOSE 3000
+ENV NODE_ENV=production
 
-# Arrancar el servidor Node nativo
+# Run the node server
 CMD ["node", "build/index.js"]

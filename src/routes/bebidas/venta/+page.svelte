@@ -27,14 +27,14 @@
   </div>
 
   {#if form?.success}
-    <div transition:fade class="bg-emerald-50 text-emerald-800 p-4 rounded-xl mb-6 shadow-sm border border-emerald-200">
+    <div  class="bg-emerald-50 text-emerald-800 p-4 rounded-xl mb-6 shadow-sm border border-emerald-200">
       <span class="font-bold text-lg block mb-1">¡Auditoría Registrada! ✅</span> 
       <span class="whitespace-pre-line text-sm">{form.message}</span>
     </div>
   {/if}
 
   {#if form?.error}
-    <div transition:fade class="bg-red-50 text-red-800 p-4 rounded-xl mb-6 shadow-sm border border-red-200">
+    <div  class="bg-red-50 text-red-800 p-4 rounded-xl mb-6 shadow-sm border border-red-200">
       <span class="font-bold">Error:</span> {form.error}
     </div>
   {/if}

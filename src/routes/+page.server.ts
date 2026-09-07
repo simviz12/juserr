@@ -8,10 +8,11 @@ export const load: PageServerLoad = async (event) => {
         throw redirect(302, '/login');
     }
 
-    // Redirección inteligente basada en el rol
     if (user.rol === 'jefe') {
         throw redirect(302, '/dashboard');
+    } else if (user.rol === 'bodeguero') {
+        throw redirect(302, '/bodega');
     } else {
-        throw redirect(302, '/inventory');
+        throw redirect(302, '/turnos/cierre');
     }
 };

@@ -66,6 +66,8 @@
             <th class="p-4 font-medium">Nombre</th>
             <th class="p-4 font-medium">Categoría</th>
             <th class="p-4 font-medium">Tipo Conteo</th>
+            <th class="p-4 font-medium">Stock Actual</th>
+            <th class="p-4 font-medium">Stock Mínimo</th>
             <th class="p-4 font-medium">Precio</th>
             <th class="p-4 font-medium text-right">Acciones</th>
           </tr>
@@ -78,6 +80,8 @@
                 <span class="inline-block px-2 py-1 bg-slate-100 rounded-md text-xs">{prod.categoriaNombre}</span>
               </td>
               <td class="p-4 text-slate-600 capitalize">{prod.unidadMedida}</td>
+              <td class="p-4 font-black text-slate-900 text-lg">{prod.stockActual || 0}</td>
+              <td class="p-4 font-bold text-red-500">{prod.stockMinimo}</td>
               <td class="p-4 text-slate-600">${prod.precio}</td>
               <td class="p-4 flex justify-end gap-2">
                 <button 
@@ -99,7 +103,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="5" class="p-8 text-center text-slate-500">
+              <td colspan="7" class="p-8 text-center text-slate-500">
                 No hay productos registrados. Haz clic en "Nuevo Producto".
               </td>
             </tr>

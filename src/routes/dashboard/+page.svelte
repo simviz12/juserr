@@ -1,198 +1,128 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import Chart from 'chart.js/auto';
-  
+  import { page } from '$app/stores';
+  import { Home, Clock, Truck, BarChart2, Settings, PlusCircle, Search, Bell, User } from '@lucide/svelte';
   let { data } = $props();
 
-  let chartCanvas: HTMLCanvasElement;
+  const metaVentas = 2000000;
+  let ventaBrutaHoy = $derived({ monto: data.ventasHoy, meta: metaVentas });
+  let masas = $derived({ usadas: Math.floor(data.totalPorcionesVendidas / 8), disponibles: 100 }); // Aproximado
+  let porcionesVendidas = $derived(data.totalPorcionesVendidas); 
+  let mermas = $derived({ perdidas: data.saboresDesperdicio.reduce((sum, s) => sum + Number(s.cantidad), 0), total: data.totalPorcionesVendidas });
 
-  onMount(() => {
-    if (!chartCanvas) return;
-    
-    // Preparar datos para el gráfico
-    const labels = data.masVendidos.map(v => v.sabor || 'Desconocido');
-    const values = data.masVendidos.map(v => v.cantidad || 0);
-
-    if (labels.length === 0) {
-      labels.push('Sin ventas hoy');
-      values.push(1);
-    }
-
-    new Chart(chartCanvas, {
-      type: 'doughnut',
-      data: {
-        labels: labels,
-        datasets: [{
-          data: values,
-          backgroundColor: [
-            '#f97316', // orange-500
-            '#ef4444', // red-500
-            '#3b82f6', // blue-500
-            '#10b981', // emerald-500
-            '#8b5cf6'  // violet-500
-          ],
-          borderWidth: 0,
-          hoverOffset: 4
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'right',
-            labels: {
-              font: { family: "'Outfit', sans-serif", size: 14 }
-            }
-          }
-        },
-        cutout: '70%'
-      }
-    });
-  });
+  const perc = (value: number, total: number) => total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
 </script>
 
-<div class="max-w-7xl mx-auto space-y-8">
-  <!-- Header -->
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-    <div>
-      <h1 class="text-3xl font-bold text-slate-800">
-        {#if data.rangoActual === 'semanal'}
-          Resumen Semanal
-        {:else if data.rangoActual === 'mensual'}
-          Resumen Mensual
-        {:else}
-          Resumen Diario
-        {/if}
-      </h1>
-      <p class="text-slate-500">Un vistazo rápido al rendimiento del negocio.</p>
-    </div>
-    
-    <div class="flex flex-col items-end gap-3">
-      <div class="bg-slate-100 p-1 rounded-xl inline-flex text-sm font-medium">
-        <a href="?rango=diario{data.fechaSeleccionada ? `&fecha=${data.fechaSeleccionada}` : ''}" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'diario' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Diario</a>
-        <a href="?rango=semanal{data.fechaSeleccionada ? `&fecha=${data.fechaSeleccionada}` : ''}" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'semanal' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Semanal</a>
-        <a href="?rango=mensual{data.fechaSeleccionada ? `&fecha=${data.fechaSeleccionada}` : ''}" class="px-4 py-1.5 rounded-lg transition-colors {data.rangoActual === 'mensual' ? 'bg-white shadow text-orange-600' : 'text-slate-600 hover:text-slate-900'}">Mensual</a>
+<div class="font-sans text-sm">
+  <div class="flex items-center justify-between bg-white rounded-2xl shadow-sm p-4 mb-6">
+    <div class="flex items-center gap-4 w-full max-w-md">
+      <div class="relative flex-1">
+        <Search size="20" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input type="text" placeholder="Buscar..." class="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5B29]" />
       </div>
-      <div class="flex flex-col text-right">
-        <p class="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">Cambiar Fecha</p>
-        <form data-sveltekit-noscroll data-sveltekit-keepfocus>
-          <input type="hidden" name="rango" value="{data.rangoActual}">
-          <input 
-            type="date" 
-            name="fecha" 
-            class="px-3 py-1.5 text-sm border border-slate-200 rounded-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 text-slate-700 font-medium cursor-pointer"
-            value="{data.fechaSeleccionada}"
-            onchange={(e) => (e.target as HTMLInputElement).form?.submit()}
-          >
-        </form>
-        {#if !data.fechaSeleccionada}
-          <p class="text-xs text-slate-400 mt-1">Viendo resultados de hoy</p>
-        {/if}
-      </div>
+      <button class="flex items-center gap-2 bg-[#FF5B29] text-white px-4 py-2 rounded-full hover:bg-[#e04a1f] transition-colors">
+        <PlusCircle size="18" /> Abrir Turno
+      </button>
     </div>
   </div>
 
-  <!-- Cards (Top Row) -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-      <!-- Ventas -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-slate-500 font-medium text-sm">Ventas Declaradas</h2>
-          <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-            <span class="text-emerald-600 text-lg">💰</span>
-          </div>
-        </div>
-        <div class="flex items-end justify-between">
-          <p class="text-3xl font-black text-slate-800 tracking-tight">
-            ${data.ventasHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
+  <!-- KPI cards -->
+  <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+    <!-- Venta Bruta Hoy -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
+      <div class="w-16 h-16 relative">
+        <svg viewBox="0 0 36 36" class="w-full h-full">
+          <path d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831" fill="none" stroke="#FFEDD5" stroke-width="4" />
+          <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="#FF5B29" stroke-width="4" stroke-dasharray="{perc(ventaBrutaHoy.monto, ventaBrutaHoy.meta)} 100" />
+        </svg>
+        <span class="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF5B29]">{perc(ventaBrutaHoy.monto, ventaBrutaHoy.meta)}%</span>
       </div>
-
-      <!-- Efectivo Caja -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-slate-500 font-medium text-sm">Efectivo Físico</h2>
-          <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-            <span class="text-green-600 text-lg">💵</span>
-          </div>
-        </div>
-        <div class="flex flex-col">
-          <p class="text-3xl font-black text-orange-600 tracking-tight">
-            ${data.cajaEsperada.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-      </div>
-
-      <!-- Transferencias -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-slate-500 font-medium text-sm">Transferencias</h2>
-          <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <span class="text-blue-600 text-lg">📱</span>
-          </div>
-        </div>
-        <div class="flex flex-col">
-          <p class="text-3xl font-black text-blue-600 tracking-tight">
-            ${data.transferenciasHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-      </div>
-
-      <!-- Gastos -->
-      <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-slate-500 font-medium text-sm">Gastos Reportados</h2>
-          <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-            <span class="text-red-600 text-lg">📉</span>
-          </div>
-        </div>
-        <div class="flex items-end justify-between">
-          <p class="text-3xl font-black text-slate-800 tracking-tight">
-            ${data.gastosHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
+      <div>
+        <h3 class="font-medium text-gray-800">Venta Bruta Hoy</h3>
+        <p class="text-lg font-bold text-gray-900">${ventaBrutaHoy.monto.toLocaleString('es-CO')}</p>
       </div>
     </div>
 
-  <!-- Charts & Lists Row -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
-    <!-- Chart -->
-    <div class="lg:col-span-2 glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50">
-      <h3 class="text-lg font-bold text-slate-800 mb-6">Pizzas más vendidas hoy</h3>
-      <div class="relative h-64 w-full">
-        <canvas bind:this={chartCanvas}></canvas>
+    <!-- Masas -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
+      <div class="w-16 h-16 relative">
+        <svg viewBox="0 0 36 36" class="w-full h-full">
+          <path d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831" fill="none" stroke="#FFEDD5" stroke-width="4" />
+          <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="#FF5B29" stroke-width="4" stroke-dasharray="{perc(masas.usadas, masas.disponibles)} 100" />
+        </svg>
+        <span class="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF5B29]">{perc(masas.usadas, masas.disponibles)}%</span>
+      </div>
+      <div>
+        <h3 class="font-medium text-gray-800">Masas Usadas / Disp.</h3>
+        <p class="text-lg font-bold text-gray-900">{masas.usadas}/{masas.disponibles}</p>
       </div>
     </div>
 
-    <!-- Alerts -->
-    <div class="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 flex flex-col">
-      <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-        <span>⚠️</span> Alertas de Inventario
-      </h3>
-      
-      {#if data.inventarioBajo.length === 0}
-        <div class="flex-1 flex flex-col items-center justify-center text-slate-400 text-center">
-          <span class="text-4xl mb-2">✅</span>
-          <p>Todo el inventario está en niveles saludables.</p>
-        </div>
-      {:else}
-        <ul class="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-2">
-          {#each data.inventarioBajo as item}
-            <li class="bg-red-50 p-4 rounded-2xl border border-red-100 flex justify-between items-center">
-              <div>
-                <p class="font-bold text-red-900">{item.nombre}</p>
-                <p class="text-xs text-red-500 uppercase font-medium">Solo quedan {item.stockActual} {item.unidadMedida}s</p>
-              </div>
-              <a href="/inventory" class="text-red-700 bg-red-100/50 px-3 py-1 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors">
-                Abastecer
-              </a>
+    <!-- Porciones Vendidas -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
+      <div class="w-16 h-16 relative">
+        <svg viewBox="0 0 36 36" class="w-full h-full">
+          <path d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831" fill="none" stroke="#FFEDD5" stroke-width="4" />
+          <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="#FF5B29" stroke-width="4" stroke-dasharray="100 100" />
+        </svg>
+        <span class="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF5B29]">—</span>
+      </div>
+      <div>
+        <h3 class="font-medium text-gray-800">Porciones Vendidas</h3>
+        <p class="text-lg font-bold text-gray-900">{porcionesVendidas}</p>
+      </div>
+    </div>
+
+    <!-- Mermas / Desperdicio -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
+      <div class="w-16 h-16 relative">
+        <svg viewBox="0 0 36 36" class="w-full h-full">
+          <path d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831" fill="none" stroke="#FFEDD5" stroke-width="4" />
+          <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="#FF5B29" stroke-width="4" stroke-dasharray="{perc(mermas.perdidas, mermas.total)} 100" />
+        </svg>
+        <span class="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF5B29]">{perc(mermas.perdidas, mermas.total)}%</span>
+      </div>
+      <div>
+        <h3 class="font-medium text-gray-800">Mermas / Desperdicio</h3>
+        <p class="text-lg font-bold text-[#FF5B29]">{mermas.perdidas} pzas.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Top Sabores Vendidos -->
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+      <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2"><BarChart2 class="text-[#FF5B29]" /> Top Sabores (Sobras de Ayer - Sobras de Hoy)</h2>
+      {#if data.saboresVendidos && data.saboresVendidos.length > 0}
+        <ul class="space-y-4">
+          {#each data.saboresVendidos as sabor}
+            <li class="flex items-center justify-between border-b pb-2 last:border-0">
+              <span class="font-medium text-gray-700">{sabor.nombre}</span>
+              <span class="bg-[#FFEDD5] text-[#FF5B29] font-bold px-3 py-1 rounded-full">{sabor.cantidad} pts.</span>
             </li>
           {/each}
         </ul>
+      {:else}
+        <p class="text-gray-500 italic">No hay suficientes datos de ventas procesados para mostrar tendencias. ¡Cierra un turno para ver información aquí!</p>
       {/if}
     </div>
-  </div>
+
+    <!-- Alertas de Inventario -->
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+      <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2"><Bell class="text-red-500" /> Alertas de Inventario</h2>
+      {#if data.inventarioBajo && data.inventarioBajo.length > 0}
+        <ul class="space-y-4">
+          {#each data.inventarioBajo as item}
+            <li class="flex items-center justify-between border-b pb-2 last:border-0">
+              <span class="font-medium text-gray-700">{item.nombre}</span>
+              <span class="text-red-600 font-bold px-2 py-1 bg-red-50 rounded-md">Quedan: {item.stockActual} {item.unidadMedida}s (Min: {item.stockMinimo})</span>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="text-gray-500 italic flex items-center gap-2"><span class="w-2 h-2 bg-green-500 rounded-full inline-block"></span> Todo el inventario está por encima de los niveles mínimos de alerta. ¡Buen trabajo!</p>
+      {/if}
+    </div>
+  </section>
 </div>
+
+

@@ -25,6 +25,11 @@ export const handle: Handle = async ({ event, resolve }) => {
         event.locals.session = session;
     }
 
+    // Redirigir URLs viejas para evitar que el usuario se quede atrapado
+    if (event.url.pathname.startsWith('/inventory')) {
+        throw redirect(302, '/');
+    }
+
     // Proteger todas las rutas excepto /login
     if (event.url.pathname !== '/login') {
         if (!event.locals.user) {
@@ -41,22 +46,20 @@ export const handle: Handle = async ({ event, resolve }) => {
         
         if (user.rol === 'empleado' || user.rol === 'cajero') {
             const allowedForCajero = [
-                '/pizzas/mostrador',
-                '/bebidas/venta',
                 '/turnos/cierre'
             ];
             
-            if (!allowedForCajero.includes(p)) {
-                throw redirect(302, '/pizzas/mostrador');
+            if (!allowedForCajero.includes(p) && p !== '/') {
+                throw redirect(302, '/turnos/cierre');
             }
         } else if (user.rol === 'bodeguero') {
             const allowedForBodeguero = [
-                '/inventory/conteo',
-                '/inventory/compra'
+                '/bodega',
+                '/turnos/cierre'
             ];
 
-            if (!allowedForBodeguero.includes(p)) {
-                throw redirect(302, '/inventory/conteo');
+            if (!allowedForBodeguero.includes(p) && p !== '/') {
+                throw redirect(302, '/bodega');
             }
         }
     }

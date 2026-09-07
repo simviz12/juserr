@@ -1,74 +1,50 @@
 import { db } from '$lib/server/db';
-import { turnos, gastos, pizzaSabores, pizzaVentas, bebidas, movimientosBebidas } from '$lib/server/schema';
+import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno } from '$lib/server/schema';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getTodayRange } from '$lib/utils/date';
-import { and, gte, lt, eq, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export const load: PageServerLoad = async () => {
-    const { start, end } = getTodayRange();
-
-    // 1. Calcular total de pizzas vendidas hoy
-    const ventasPizzas = await db.select({
-        saborId: pizzaVentas.saborId,
-        totalVendidas: sql<number>`SUM(${pizzaVentas.cantidadVendida})`
-    })
-    .from(pizzaVentas)
-    .where(
-        and(
-            gte(pizzaVentas.fecha, start),
-            lt(pizzaVentas.fecha, end)
-        )
-    )
-    .groupBy(pizzaVentas.saborId);
-
-    const todosLosSabores = await db.select().from(pizzaSabores);
-    let totalPizzas = 0;
-    let dineroPizzas = 0;
+    // 1. Obtener o crear el producto "Masas"
+    let [masaProduct] = await db.select().from(productos).where(eq(productos.nombre, 'Masas'));
     
-    ventasPizzas.forEach(venta => {
-        const sabor = todosLosSabores.find(s => s.id === venta.saborId);
-        if (sabor) {
-            totalPizzas += Number(venta.totalVendidas);
-            dineroPizzas += Number(venta.totalVendidas) * parseFloat(sabor.precioPorcion || '0');
-        }
-    });
+    if (!masaProduct) {
+        const [nuevo] = await db.insert(productos).values({
+            nombre: 'Masas',
+            unidadMedida: 'unidad',
+            stockActual: 0,
+            precio: '0'
+        }).returning();
+        masaProduct = nuevo;
+    }
 
-    // 2. Calcular total de bebidas vendidas hoy
-    const ventasBebidas = await db.select({
-        bebidaId: movimientosBebidas.bebidaId,
-        totalVendidas: sql<number>`SUM(${movimientosBebidas.cantidad})`
+    // 2. Obtener las porciones que sobraron en el último turno
+    const [ultimoTurno] = await db.select({
+        id: turnos.id,
+        porcionesSobrantes: turnos.porcionesSobrantes
     })
-    .from(movimientosBebidas)
-    .where(
-        and(
-            eq(movimientosBebidas.tipo, 'venta'),
-            gte(movimientosBebidas.fecha, start),
-            lt(movimientosBebidas.fecha, end)
-        )
-    )
-    .groupBy(movimientosBebidas.bebidaId);
+    .from(turnos)
+    .orderBy(desc(turnos.id))
+    .limit(1);
 
-    const todasLasBebidas = await db.select().from(bebidas);
-    let totalBebidas = 0;
-    let dineroBebidas = 0;
+    const ultimoTurnoId = ultimoTurno?.id;
+    const porcionesAyer = ultimoTurno?.porcionesSobrantes || 0;
+    const masasActuales = masaProduct.stockActual || 0;
 
-    ventasBebidas.forEach(venta => {
-        const bebida = todasLasBebidas.find(b => b.id === venta.bebidaId);
-        if (bebida) {
-            totalBebidas += Number(venta.totalVendidas);
-            dineroBebidas += Number(venta.totalVendidas) * parseFloat(bebida.precio || '0');
-        }
-    });
+    const sabores = await db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true));
+
+    let sobrasAyer: { saborId: number; cantidad: number }[] = [];
+    if (ultimoTurnoId) {
+        sobrasAyer = await db.select({
+            saborId: pizzaSobras.saborId,
+            cantidad: pizzaSobras.cantidad
+        }).from(pizzaSobras).where(eq(pizzaSobras.turnoId, ultimoTurnoId));
+    }
 
     return { 
-        ventas: {
-            totalPizzas,
-            dineroPizzas,
-            totalBebidas,
-            dineroBebidas,
-            granTotal: dineroPizzas + dineroBebidas
-        } 
+        inventario: { masasActuales, porcionesAyer, precioPorcion: 7000 },
+        sabores,
+        sobrasAyer
     };
 };
 
@@ -77,54 +53,129 @@ export const actions: Actions = {
         if (!locals.user) return fail(401, { error: 'No autorizado' });
 
         const formData = await request.formData();
-        const montoStr = formData.get('monto')?.toString();
-        const transferenciasStr = formData.get('transferencias')?.toString();
-        const descripcionTurno = formData.get('descripcion')?.toString() || '';
-        
-        const monto = parseFloat(montoStr || '0');
-        const transferencias = parseFloat(transferenciasStr || '0');
 
-        if (isNaN(monto) || monto < 0 || isNaN(transferencias) || transferencias < 0) {
-            return fail(400, { error: 'Valores de caja o transferencias inválidos.' });
+        // ── Datos básicos ────────────────────────────────────────────────────
+        const monto = parseFloat(formData.get('monto')?.toString() || '0');
+        const descripcionTurno = formData.get('descripcion')?.toString() || '';
+
+        // ── Desglose de plataformas de pago ───────────────────────────────
+        const nequi     = parseFloat(formData.get('nequi')?.toString()     || '0');
+        const refNequi     = formData.get('ref_nequi')?.toString()     || '';
+
+        const totalTransferencias = nequi;
+        const totalDeclarado = monto + totalTransferencias;
+
+        // ── Validaciones ──────────────────────────────────────────────────
+        if (isNaN(monto) || monto < 0) {
+            return fail(400, { error: 'El monto de efectivo es inválido.' });
+        }
+        if (isNaN(nequi) || nequi < 0) {
+            return fail(400, { error: 'El valor de Nequi es inválido.' });
         }
 
-        // Recuperar los gastos dinámicos
-        const descripciones = formData.getAll('gasto_descripcion') as string[];
-        const montos = formData.getAll('gasto_monto') as string[];
+        // ── Inventario ────────────────────────────────────────────────────
+        const masasSobrantes   = parseFloat(formData.get('masas_sobrantes')?.toString()   || '0');
+        const porcionesSobrantes = parseInt(formData.get('porciones_sobrantes')?.toString() || '0');
+        const porcionesMermadas  = parseInt(formData.get('porciones_mermadas')?.toString()  || '0');
+        const masasIniciales     = parseFloat(formData.get('masas_iniciales')?.toString()   || '0');
+        const porcionesAyer      = parseInt(formData.get('porciones_ayer')?.toString()      || '0');
 
-        const gastosParsed = [];
-        for (let i = 0; i < descripciones.length; i++) {
-            const desc = descripciones[i].trim();
-            const val = parseFloat(montos[i]);
+        const masasUsadas = Math.max(0, masasIniciales - masasSobrantes);
+        const porcionesVendidasCalculado = Math.max(0, (masasUsadas * 8 + porcionesAyer) - porcionesSobrantes - porcionesMermadas);
+
+        // ── Gastos dinámicos ──────────────────────────────────────────────
+        const gastosDescripciones = formData.getAll('gasto_descripcion') as string[];
+        const gastosMontosRaw     = formData.getAll('gasto_monto') as string[];
+        const gastosParsed: { descripcion: string; monto: string }[] = [];
+
+        for (let i = 0; i < gastosDescripciones.length; i++) {
+            const desc = gastosDescripciones[i].trim();
+            const val  = parseFloat(gastosMontosRaw[i]);
             if (desc && !isNaN(val) && val > 0) {
                 gastosParsed.push({ descripcion: desc, monto: val.toString() });
             }
         }
 
+        // ── Sabores de pizza ──────────────────────────────────────────────
+        const sabores = await db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true));
+        // Obtener sobras del ÚLTIMO turno cerrado
+        const [ultimoTurno] = await db.select().from(turnos).orderBy(desc(turnos.id)).limit(1);
+        
+        let porcionesAyerData: { saborId: number; cantidad: number }[] = [];
+        let porcionesAyerSobrantes = 0;
+        if (ultimoTurno) {
+            porcionesAyerSobrantes = ultimoTurno.porcionesSobrantes || 0;
+            porcionesAyerData = await db.select({
+                saborId: pizzaSobras.saborId,
+                cantidad: pizzaSobras.cantidad
+            }).from(pizzaSobras).where(eq(pizzaSobras.turnoId, ultimoTurno.id));
+        }
+
         try {
-            return await db.transaction(async (tx) => {
-                // 1. Crear el turno
-                const [nuevoTurno] = await tx.insert(turnos).values({
+            
+
+                // 1. Insertar turno con el total de transferencias calculado
+                const [nuevoTurno] = await db.insert(turnos).values({
                     monto: monto.toString(),
-                    transferencias: transferencias.toString(),
+                    transferencias: totalTransferencias.toString(),
                     descripcion: descripcionTurno,
+                    masasIniciales,
+                    masasSobrantes,
+                    porcionesAyer,
+                    porcionesSobrantes,
+                    porcionesMermadas,
+                    porcionesVendidasCalculado
                 }).returning({ id: turnos.id });
 
-                // 2. Si hay gastos, insertarlos amarrados al turno
-                if (gastosParsed.length > 0) {
-                    const insertData = gastosParsed.map(g => ({
-                        turnoId: nuevoTurno.id,
-                        descripcion: g.descripcion,
-                        monto: g.monto
-                    }));
-                    await tx.insert(gastos).values(insertData);
+                // 2. Insertar desglose de plataformas (solo las que tienen monto > 0)
+                const plataformas = [
+                    { plataforma: 'nequi',     monto: nequi,     refs: refNequi },
+                ];
+                for (const p of plataformas) {
+                    if (p.monto > 0) {
+                        await db.insert(transaccionesTurno).values({
+                            turnoId: nuevoTurno.id,
+                            plataforma: p.plataforma,
+                            monto: p.monto.toString(),
+                            referencias: p.refs || null,
+                        });
+                    }
                 }
 
-                return { success: true, message: 'Turno y gastos registrados correctamente.' };
-            });
-        } catch (err) {
+                // 3. Insertar gastos
+                if (gastosParsed.length > 0) {
+                    await db.insert(gastos).values(
+                        gastosParsed.map(g => ({ turnoId: nuevoTurno.id, descripcion: g.descripcion, monto: g.monto }))
+                    );
+                }
+
+                // 4. Actualizar stock de Masas
+                await db.update(productos)
+                    .set({ stockActual: masasSobrantes })
+                    .where(eq(productos.nombre, 'Masas'));
+
+                // 5. Guardar métricas de pizzas por sabor
+                for (const sabor of sabores) {
+                    const ruedas = parseInt(formData.get(`ruedas_${sabor.id}`)?.toString() || '0');
+                    const sobras = parseFloat(formData.get(`sobras_${sabor.id}`)?.toString() || '0');
+                    if (ruedas > 0) await db.insert(pizzaRuedas).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidad: ruedas });
+                    if (sobras > 0) await db.insert(pizzaSobras).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidad: sobras });
+                    const sobrasAyerCant = porcionesAyerData.find(s => s.saborId === sabor.id)?.cantidad ?? 0;
+                    const vendidas = (sobrasAyerCant + ruedas * 8) - sobras;
+                    if (vendidas > 0) await db.insert(pizzaVentas).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidadVendida: vendidas });
+                }
+
+                return {
+                    success: true,
+                    message: `Turno cerrado. Total declarado: $${totalDeclarado.toLocaleString('es-CO')} (Efectivo: $${monto.toLocaleString('es-CO')} | Nequi: $${nequi.toLocaleString('es-CO')}).`
+                };
+            } catch (err) {
             console.error(err);
             return fail(500, { error: 'Error interno al registrar el cierre de turno.' });
         }
     }
 };
+
+
+
+

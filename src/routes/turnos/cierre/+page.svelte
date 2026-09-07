@@ -6,52 +6,78 @@
   let gastos = $state<{ id: number; descripcion: string; monto: string }[]>([]);
   let nextGastoId = 1;
 
-  function addGasto() {
-    gastos.push({ id: nextGastoId++, descripcion: '', monto: '' });
-  }
+  function addGasto() { gastos.push({ id: nextGastoId++, descripcion: '', monto: '' }); }
+  function removeGasto(id: number) { gastos = gastos.filter(g => g.id !== id); }
 
-  function removeGasto(id: number) {
-    gastos = gastos.filter(g => g.id !== id);
-  }
+  // ── Estados del formulario ────────────────────────────────────────────────
+  let montoFisico      = $state('');
+  let nequi            = $state('');
+  let refNequi         = $state('');
+  let masasSobrantesStr   = $state('');
+  let porcionesSobrantesStr = $state('');
+  let porcionesMermadasStr  = $state('');
 
-  let montoFisico = $state('');
-  let montoTransferencias = $state('');
+  // ── Derivados de inventario ───────────────────────────────────────────────
+  let masasIniciales   = $derived(data.inventario.masasActuales);
+  let porcionesAyer    = $derived(data.inventario.porcionesAyer);
+  let precioPorcion    = $derived(data.inventario.precioPorcion);
+  let masasSobrantes   = $derived(parseFloat(masasSobrantesStr)   || 0);
+  let porcionesSobrantes = $derived(parseInt(porcionesSobrantesStr)  || 0);
+  let porcionesMermadas  = $derived(parseInt(porcionesMermadasStr)   || 0);
+  let masasUsadas      = $derived(Math.max(0, masasIniciales - masasSobrantes));
+  let porcionesNuevas  = $derived(masasUsadas * 8);
+  let totalPorcionesDisp = $derived(porcionesNuevas + porcionesAyer);
+  let porcionesVendidas  = $derived(Math.max(0, totalPorcionesDisp - porcionesSobrantes - porcionesMermadas));
+  let granTotalEsperado  = $derived(porcionesVendidas * precioPorcion);
 
-  let totalGastos = $derived(gastos.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0));
-  let granTotalEsperado = $derived(data.ventas.granTotal);
-  
-  let totalDeclarado = $derived((parseFloat(montoFisico) || 0) + (parseFloat(montoTransferencias) || 0) + totalGastos);
-  let diferencia = $derived(totalDeclarado - granTotalEsperado);
+  // ── Derivados de caja y transferencias ────────────────────────────────────
+  let efectivoNum   = $derived(parseFloat(montoFisico) || 0);
+  let nequiNum      = $derived(parseFloat(nequi)       || 0);
+  let totalGastos   = $derived(gastos.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0));
+
+  let totalTransferencias = $derived(nequiNum);
+  let totalDeclarado      = $derived(efectivoNum + totalTransferencias + totalGastos);
+  let diferencia          = $derived(totalDeclarado - granTotalEsperado);
+
+  let hayDatos = $derived(montoFisico !== '' || nequi !== '' || gastos.length > 0);
 </script>
 
-<div class="max-w-3xl mx-auto">
-  <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div class="max-w-4xl mx-auto">
+  <div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
     <div>
-      <h1 class="text-2xl font-bold text-slate-800">Cierre de Turno y Gastos</h1>
-      <p class="text-slate-500 text-sm mt-1">Registra el efectivo final en caja y declara los gastos realizados en tu turno.</p>
+      <h1 class="text-3xl font-black text-slate-900 tracking-tight">Cierre de Turno</h1>
+      <p class="text-slate-500 font-medium mt-1">Audita el inventario físico y cuadra la caja.</p>
     </div>
     
-    <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 min-w-[280px] shadow-sm flex items-center justify-between">
+    <div class="bg-gradient-to-br from-orange-50 to-orange-100/50 border border-orange-200/60 rounded-3xl p-6 min-w-[300px] shadow-sm">
       <div>
-        <p class="text-xs font-bold text-indigo-800 uppercase tracking-wider">Total de Ventas Hoy</p>
-        <p class="text-3xl font-black text-indigo-600">${granTotalEsperado.toLocaleString('es-CO')}</p>
-        <div class="text-xs text-indigo-700 mt-1 space-y-0.5">
-          <p>🍕 Pizzas: <span class="font-bold">${data.ventas.dineroPizzas.toLocaleString('es-CO')}</span></p>
-          <p>🥤 Bebidas: <span class="font-bold">${data.ventas.dineroBebidas.toLocaleString('es-CO')}</span></p>
+        <p class="text-xs font-bold text-orange-800 uppercase tracking-wider mb-1">Venta Esperada</p>
+        <p class="text-4xl font-black text-orange-600">${granTotalEsperado.toLocaleString('es-CO')}</p>
+        <div class="text-xs text-orange-700 mt-3 space-y-1 bg-white/60 p-3 rounded-xl border border-orange-100">
+          <p class="flex justify-between"><span>📦 Masas Usadas:</span> <span class="font-bold text-slate-800">{masasUsadas}</span></p>
+          <p class="flex justify-between"><span>🍕 Porciones Vendidas:</span> <span class="font-bold text-slate-800">{porcionesVendidas}</span></p>
         </div>
       </div>
     </div>
   </div>
 
   {#if form?.success}
-    <div transition:fade class="bg-green-100 text-green-800 p-4 rounded-xl mb-6 shadow-sm border border-green-200">
-      <span class="font-bold">¡Éxito!</span> {form.message}
+    <div  class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl mb-6 shadow-sm border border-emerald-200 flex items-center gap-3">
+      <span class="text-2xl">✨</span>
+      <div>
+        <span class="font-bold block">¡Éxito!</span>
+        <span class="text-sm">{form.message}</span>
+      </div>
     </div>
   {/if}
 
   {#if form?.error}
-    <div transition:fade class="bg-red-100 text-red-800 p-4 rounded-xl mb-6 shadow-sm border border-red-200">
-      <span class="font-bold">Error:</span> {form.error}
+    <div  class="bg-red-50 text-red-800 p-5 rounded-2xl mb-6 shadow-sm border border-red-200 flex items-center gap-3">
+      <span class="text-2xl">⚠️</span>
+      <div>
+        <span class="font-bold block">Error</span>
+        <span class="text-sm">{form.error}</span>
+      </div>
     </div>
   {/if}
 
@@ -62,59 +88,170 @@
         gastos = [];
       }
     };
-  }} class="space-y-6">
+  }} class="space-y-8">
     
-    <!-- Sección de Caja -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-      <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-        <span>💵</span> Efectivo en Caja
+    <!-- Sección de Inventario -->
+    <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+      <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
+        <span class="bg-orange-100 p-2 rounded-xl">📦</span> Inventario Físico
       </h2>
       
-      <div class="space-y-4">
+      <!-- Campos ocultos para enviar al backend -->
+      <input type="hidden" name="masas_iniciales" value={masasIniciales} />
+      <input type="hidden" name="porciones_ayer" value={porcionesAyer} />
+
+      <div class="grid grid-cols-1 gap-6">
         <div>
-          <label for="monto" class="block text-sm font-medium text-slate-700 mb-1">Total Contado (Efectivo Físico)</label>
-          <div class="relative">
-            <span class="absolute left-4 top-3 text-slate-400 font-bold">$</span>
+          <label for="masas_sobrantes" class="block text-sm font-bold text-slate-600 mb-2">Masas Crudas Sobrantes</label>
+          <div class="flex items-center gap-4">
             <input 
               type="number" 
-              id="monto" 
-              name="monto" 
-              bind:value={montoFisico}
+              id="masas_sobrantes" 
+              name="masas_sobrantes" 
+              bind:value={masasSobrantesStr}
               required 
               min="0"
-              step="100"
-              placeholder="Ej. 150000"
-              class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all font-medium text-slate-800"
+              step="0.5"
+              placeholder="Ej. 12"
+              class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
             />
+            <span class="text-sm bg-slate-100 text-slate-500 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} iniciales</span>
           </div>
         </div>
 
         <div>
-          <label for="transferencias" class="block text-sm font-medium text-slate-700 mb-1">Total Transferencias (Nequi, etc.)</label>
+          <label for="porciones_sobrantes" class="block text-sm font-bold text-slate-600 mb-2">Porciones Horneadas Sobrantes (Vitrina)</label>
+          <input 
+            type="number" 
+            id="porciones_sobrantes" 
+            name="porciones_sobrantes" 
+            bind:value={porcionesSobrantesStr}
+            required 
+            min="0"
+            step="1"
+            placeholder="Ej. 3"
+            class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
+          />
+        </div>
+
+        <div>
+          <label for="porciones_mermadas" class="block text-sm font-bold text-slate-600 mb-2">Porciones Mermadas (Quemadas, dañadas)</label>
+          <input 
+            type="number" 
+            id="porciones_mermadas" 
+            name="porciones_mermadas" 
+            bind:value={porcionesMermadasStr}
+            required 
+            min="0"
+            step="1"
+            placeholder="Ej. 1"
+            class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección de Desglose de Sabores -->
+    <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+      <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
+        <span class="bg-orange-100 p-2 rounded-xl">🍕</span> Desglose por Sabores
+      </h2>
+      <p class="text-sm font-medium text-slate-500 mb-6">¿Cuántas pizzas preparaste de cada sabor y cuántas porciones sobraron de cada uno?</p>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
+              <th class="py-3 font-bold">Sabor</th>
+              <th class="py-3 font-bold">Ruedas Preparadas</th>
+              <th class="py-3 font-bold">Porciones Sobrantes</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-50">
+            {#each data.sabores as sabor}
+              <tr class="hover:bg-slate-50/50 transition-colors">
+                <td class="py-4 font-bold text-slate-800">{sabor.nombre}</td>
+                <td class="py-4 pr-4">
+                  <input 
+                    type="number" 
+                    name="ruedas_{sabor.id}" 
+                    min="0" 
+                    step="1" 
+                    placeholder="0"
+                    class="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
+                  />
+                </td>
+                <td class="py-4">
+                  <input 
+                    type="number" 
+                    name="sobras_{sabor.id}" 
+                    min="0" 
+                    step="0.5" 
+                    placeholder="0"
+                    class="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
+                  />
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sección de Caja Desglosada -->
+    <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+      <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
+        <span class="bg-orange-100 p-2 rounded-xl">💳</span> Medios de Pago
+      </h2>
+      <p class="text-sm font-medium text-slate-500 mb-6">Detalla el dinero recibido en cada plataforma. El sistema sumará todo para el cuadre.</p>
+
+      <div class="space-y-5">
+        <!-- Efectivo -->
+        <div class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl">
+          <label for="monto" class="block text-sm font-black text-emerald-800 mb-2">💵 Efectivo Físico en Caja</label>
           <div class="relative">
-            <span class="absolute left-4 top-3 text-slate-400 font-bold">$</span>
-            <input 
-              type="number" 
-              id="transferencias" 
-              name="transferencias" 
-              bind:value={montoTransferencias}
-              required 
-              min="0"
-              step="100"
-              placeholder="Ej. 50000"
-              class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none transition-all font-medium text-slate-800"
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-black">$</span>
+            <input type="number" id="monto" name="monto" bind:value={montoFisico}
+              required min="0" step="100" placeholder="0"
+              class="w-full md:w-1/2 pl-10 pr-4 py-3.5 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-slate-800"
             />
           </div>
         </div>
 
-        <div>
-          <label for="descripcion" class="block text-sm font-medium text-slate-700 mb-1">Observaciones del Turno (Opcional)</label>
-          <textarea 
-            id="descripcion" 
-            name="descripcion" 
-            rows="2"
+        <!-- Nequi -->
+        <div class="p-5 bg-purple-50 border border-purple-200 rounded-2xl space-y-3">
+          <label class="block text-sm font-black text-purple-800">📱 Nequi</label>
+          <div class="flex flex-col md:flex-row gap-4">
+            <div class="relative flex-1">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-purple-700 font-black">$</span>
+              <input type="number" name="nequi" bind:value={nequi}
+                min="0" step="100" placeholder="0"
+                class="w-full pl-10 pr-4 py-3.5 bg-white border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-800"
+              />
+            </div>
+            <input type="text" name="ref_nequi" bind:value={refNequi}
+              placeholder="Referencias (Ej: Cel 313..., Cel 310...)"
+              class="flex-1 md:flex-[2] px-4 py-3.5 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none text-sm font-medium text-slate-700"
+            />
+          </div>
+        </div>
+
+
+
+        <!-- Mini resumen de transferencias -->
+        {#if totalTransferencias > 0}
+          <div  class="flex justify-between items-center text-sm px-2 py-4 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-500 font-bold uppercase tracking-wider text-xs">Total Nequi:</span>
+            <span class="font-black text-slate-700 text-lg">${totalTransferencias.toLocaleString('es-CO')}</span>
+          </div>
+        {/if}
+
+        <!-- Observaciones -->
+        <div class="pt-4">
+          <label for="descripcion" class="block text-sm font-bold text-slate-600 mb-2">Observaciones del Turno (Opcional)</label>
+          <textarea id="descripcion" name="descripcion" rows="2"
             placeholder="Ej: Faltó billete de $50, el datafono falló en la mañana..."
-            class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none shadow-sm resize-none"
+            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-medium text-slate-800 resize-none"
           ></textarea>
         </div>
       </div>
@@ -142,7 +279,7 @@
       {:else}
         <div class="space-y-3">
           {#each gastos as gasto (gasto.id)}
-            <div transition:slide class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <div  class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <input 
                 type="text" 
                 name="gasto_descripcion" 
@@ -186,19 +323,38 @@
     </div>
 
     <!-- Cuadre de Caja -->
-    {#if montoFisico !== '' || montoTransferencias !== '' || gastos.length > 0}
-      <div transition:slide class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    {#if hayDatos}
+      <div  class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
           <span>⚖️</span> Cuadre de Caja
         </h2>
-        
-        <div class="flex justify-between items-center py-2">
-          <span class="text-slate-600 font-medium">Total Declarado (Efectivo + Nequi + Gastos):</span>
+
+        <div class="space-y-2 mb-3">
+          <div class="flex justify-between items-center py-1.5 text-sm">
+            <span class="text-slate-500">💵 Efectivo</span>
+            <span class="font-semibold text-slate-700">${efectivoNum.toLocaleString('es-CO')}</span>
+          </div>
+          {#if nequiNum > 0}
+            <div class="flex justify-between items-center text-sm py-1 border-b border-slate-100">
+              <span class="text-slate-500">📱 Nequi</span>
+              <span class="font-semibold text-purple-700">${nequiNum.toLocaleString('es-CO')}</span>
+            </div>
+          {/if}
+          {#if totalGastos > 0}
+            <div class="flex justify-between items-center py-1.5 text-sm">
+              <span class="text-slate-500">🧾 Gastos declarados</span>
+              <span class="font-semibold text-orange-700">${totalGastos.toLocaleString('es-CO')}</span>
+            </div>
+          {/if}
+        </div>
+
+        <div class="flex justify-between items-center py-2 border-t border-slate-100">
+          <span class="text-slate-600 font-medium">Total Declarado:</span>
           <span class="text-lg font-bold text-slate-800">${totalDeclarado.toLocaleString('es-CO')}</span>
         </div>
         
         <div class="flex justify-between items-center py-2 border-t border-slate-100">
-          <span class="text-slate-600 font-medium">Total Ventas Sistema:</span>
+          <span class="text-slate-600 font-medium">Total Ventas (por inventario):</span>
           <span class="text-lg font-bold text-slate-800">${granTotalEsperado.toLocaleString('es-CO')}</span>
         </div>
 
@@ -210,25 +366,23 @@
         </div>
 
         {#if diferencia > 0}
-          <div transition:fade class="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
+          <div  class="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
             <span class="text-green-600 text-xl">💡</span>
             <p class="text-sm font-medium text-green-800">
-              Hay un <span class="font-bold">sobrante de ${diferencia.toLocaleString('es-CO')}</span> en caja. Esto suele ser por ventas de <strong>vasos de gaseosa</strong> u otros ingresos menores no registrados.
+              Hay un <span class="font-bold">sobrante de ${diferencia.toLocaleString('es-CO')}</span> en caja. Puede ser por ventas de vasos de gaseosa u otros ingresos menores no registrados.
             </p>
           </div>
         {:else if diferencia < 0}
-          <div transition:fade class="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+          <div  class="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
             <span class="text-red-600 text-xl">⚠️</span>
             <p class="text-sm font-medium text-red-800">
-              Hay un <span class="font-bold">faltante de ${Math.abs(diferencia).toLocaleString('es-CO')}</span> en caja. Revisa si olvidaste registrar algún gasto o si se entregó mal algún cambio.
+              Hay un <span class="font-bold">faltante de ${Math.abs(diferencia).toLocaleString('es-CO')}</span>. Revisa si olvidaste registrar algún gasto o transferencia.
             </p>
           </div>
         {:else}
-          <div transition:fade class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
+          <div  class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
             <span class="text-slate-600 text-xl">✅</span>
-            <p class="text-sm font-medium text-slate-800">
-              ¡La caja está cuadrada perfectamente!
-            </p>
+            <p class="text-sm font-medium text-slate-800">¡La caja está cuadrada perfectamente!</p>
           </div>
         {/if}
       </div>

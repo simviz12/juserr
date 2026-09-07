@@ -27,6 +27,7 @@ export const productos = pgTable('productos', {
   stockActual: real('stock_actual').default(0),
   stockMinimo: real('stock_minimo').default(5),
   precio: numeric('precio', { precision: 10, scale: 2 }).default('0'),
+  precioCosto: numeric('precio_costo', { precision: 10, scale: 2 }).default('0'),
 });
 
 export const movimientosInventario = pgTable('movimientos_inventario', {
@@ -35,6 +36,8 @@ export const movimientosInventario = pgTable('movimientos_inventario', {
   usuarioId: integer('usuario_id').references(() => usuarios.id), // Permite null por si hay movimientos antiguos
   tipo: text('tipo').notNull(), // entrada, salida, ajuste
   cantidad: real('cantidad').notNull(),
+  costoUnitario: numeric('costo_unitario', { precision: 10, scale: 2 }).default('0'),
+  costoTotal: numeric('costo_total', { precision: 10, scale: 2 }).default('0'),
   fecha: timestamp('fecha').defaultNow(),
 });
 
@@ -65,6 +68,7 @@ export const pizzaSabores = pgTable('pizza_sabores', {
 export const pizzaRuedas = pgTable('pizza_ruedas', {
   id: serial('id').primaryKey(),
   saborId: integer('sabor_id').references(() => pizzaSabores.id).notNull(),
+  turnoId: integer('turno_id').references(() => turnos.id),
   cantidad: integer('cantidad').notNull(),
   fecha: timestamp('fecha').defaultNow(),
 });
@@ -72,6 +76,7 @@ export const pizzaRuedas = pgTable('pizza_ruedas', {
 export const pizzaSobras = pgTable('pizza_sobras', {
   id: serial('id').primaryKey(),
   saborId: integer('sabor_id').references(() => pizzaSabores.id).notNull(),
+  turnoId: integer('turno_id').references(() => turnos.id),
   cantidad: real('cantidad').notNull(), // Puede sobrar media pizza
   fecha: timestamp('fecha').defaultNow(),
 });
@@ -79,6 +84,7 @@ export const pizzaSobras = pgTable('pizza_sobras', {
 export const pizzaVentas = pgTable('pizza_ventas', {
   id: serial('id').primaryKey(),
   saborId: integer('sabor_id').references(() => pizzaSabores.id).notNull(),
+  turnoId: integer('turno_id').references(() => turnos.id),
   cantidadVendida: real('cantidad_vendida').notNull(),
   fecha: timestamp('fecha').defaultNow(),
 });
@@ -86,8 +92,25 @@ export const pizzaVentas = pgTable('pizza_ventas', {
 export const turnos = pgTable('turnos', {
   id: serial('id').primaryKey(),
   monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
-  transferencias: numeric('transferencias', { precision: 10, scale: 2 }).default('0'),
+  transferencias: numeric('transferencias', { precision: 10, scale: 2 }).default('0'), // total calculado
   descripcion: text('descripcion'),
+  fecha: timestamp('fecha').defaultNow(),
+  // Campos para modelo de inventario
+  masasIniciales: real('masas_iniciales').default(0),
+  masasSobrantes: real('masas_sobrantes').default(0),
+  porcionesAyer: integer('porciones_ayer').default(0),
+  porcionesSobrantes: integer('porciones_sobrantes').default(0),
+  porcionesMermadas: integer('porciones_mermadas').default(0),
+  porcionesVendidasCalculado: integer('porciones_vendidas_calculado').default(0),
+});
+
+// Desglose de medios de pago por turno (Nequi, Daviplata, Bold/Tarjeta)
+export const transaccionesTurno = pgTable('transacciones_turno', {
+  id: serial('id').primaryKey(),
+  turnoId: integer('turno_id').references(() => turnos.id).notNull(),
+  plataforma: text('plataforma').notNull(), // 'nequi' | 'daviplata' | 'bold'
+  monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
+  referencias: text('referencias'), // Lista de referencias de pago importantes (opcional)
   fecha: timestamp('fecha').defaultNow(),
 });
 
