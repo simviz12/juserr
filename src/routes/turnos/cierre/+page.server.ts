@@ -41,10 +41,41 @@ export const load: PageServerLoad = async () => {
         }).from(pizzaSobras).where(eq(pizzaSobras.turnoId, ultimoTurnoId));
     }
 
+    // 3. Obtener historial detallado de los últimos turnos (fecha, hora, efectivo, nequi, gastos, masas, porciones)
+    const ultimosTurnosRaw = await db.select({
+        id: turnos.id,
+        fecha: turnos.fecha,
+        monto: turnos.monto,
+        transferencias: turnos.transferencias,
+        descripcion: turnos.descripcion,
+        masasIniciales: turnos.masasIniciales,
+        masasSobrantes: turnos.masasSobrantes,
+        porcionesVendidas: turnos.porcionesVendidasCalculado,
+        porcionesMermadas: turnos.porcionesMermadas,
+        porcionesSobrantes: turnos.porcionesSobrantes,
+    })
+    .from(turnos)
+    .orderBy(desc(turnos.id))
+    .limit(20);
+
+    const ultimosTurnos = await Promise.all(ultimosTurnosRaw.map(async (t) => {
+        const transacciones = await db.select().from(transaccionesTurno).where(eq(transaccionesTurno.turnoId, t.id));
+        const gastosTurno = await db.select().from(gastos).where(eq(gastos.turnoId, t.id));
+        const totalGastosTurno = gastosTurno.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0);
+        return {
+            ...t,
+            transacciones,
+            gastos: gastosTurno,
+            totalGastos: totalGastosTurno,
+            totalIngresado: (parseFloat(t.monto) || 0) + (parseFloat(t.transferencias || '0') || 0)
+        };
+    }));
+
     return { 
         inventario: { masasActuales, porcionesAyer, precioPorcion: 7000 },
         sabores,
-        sobrasAyer
+        sobrasAyer,
+        historialTurnos: ultimosTurnos
     };
 };
 

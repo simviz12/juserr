@@ -17,6 +17,16 @@
   let porcionesSobrantesStr = $state('');
   let porcionesMermadasStr  = $state('');
 
+  // Registro de quemadas por sabor reactivo
+  let quemadasPorSabor = $state<Record<number, number>>({});
+
+  function updateQuemada(saborId: number, val: string) {
+    const parsed = parseInt(val) || 0;
+    quemadasPorSabor[saborId] = parsed;
+    const total = Object.values(quemadasPorSabor).reduce((a, b) => a + b, 0);
+    porcionesMermadasStr = total.toString();
+  }
+
   // ── Derivados de inventario ───────────────────────────────────────────────
   let masasIniciales   = $derived(data.inventario.masasActuales);
   let porcionesAyer    = $derived(data.inventario.porcionesAyer);
@@ -203,6 +213,7 @@
                     min="0" 
                     step="1" 
                     placeholder="0"
+                    oninput={(e) => updateQuemada(sabor.id, e.currentTarget.value)}
                     class="w-full max-w-[120px] px-3 py-2 bg-rose-50 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none font-bold text-rose-700"
                   />
                 </td>
@@ -458,4 +469,91 @@
     </div>
     
   </form>
+
+  <!-- HISTORIAL COMPLETO DE TURNOS Y AUDITORÍA DE CAJA -->
+  {#if data.historialTurnos && data.historialTurnos.length > 0}
+    <div class="mt-12 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden">
+      <div class="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold mb-2">
+            <span>🕒</span> Auditoría y Trazabilidad
+          </div>
+          <h2 class="text-2xl font-black text-slate-900 tracking-tight">Historial de Turnos y Entradas de Caja</h2>
+          <p class="text-sm text-slate-500 mt-1">
+            Registro detallado con fecha, hora exacta, desglose de lo que entró a caja física, transferencias Nequi y salidas por gastos.
+          </p>
+        </div>
+        <span class="text-xs font-bold uppercase tracking-wider px-3 py-1.5 bg-slate-100 text-slate-600 rounded-full">
+          {data.historialTurnos.length} turnos registrados
+        </span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50/80 text-slate-400 text-xs uppercase tracking-wider font-extrabold border-b border-slate-100">
+              <th class="p-4 pl-6">Fecha y Hora</th>
+              <th class="p-4 text-center">Porciones Vendidas</th>
+              <th class="p-4 text-center text-rose-500">Mermas</th>
+              <th class="p-4 text-right">💵 Efectivo</th>
+              <th class="p-4 text-right text-purple-600">📱 Nequi</th>
+              <th class="p-4 text-right text-amber-600">🧾 Gastos</th>
+              <th class="p-4 text-right pr-6 font-black text-slate-900">Total Producido</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 text-sm">
+            {#each data.historialTurnos as turno}
+              <tr class="hover:bg-slate-50/70 transition-colors">
+                <td class="p-4 pl-6 font-bold text-slate-800">
+                  <div class="flex flex-col">
+                    <span class="text-slate-900">
+                      {turno.fecha ? new Date(turno.fecha).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                    </span>
+                    <span class="text-xs font-semibold text-slate-400">
+                      {turno.fecha ? new Date(turno.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                    {#if turno.descripcion}
+                      <span class="text-[11px] text-slate-500 font-normal italic mt-0.5 max-w-xs truncate" title={turno.descripcion}>
+                        "{turno.descripcion}"
+                      </span>
+                    {/if}
+                  </div>
+                </td>
+                <td class="p-4 text-center font-bold text-slate-700">
+                  <span class="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold">
+                    {turno.porcionesVendidas ?? 0} porc.
+                  </span>
+                </td>
+                <td class="p-4 text-center">
+                  {#if (turno.porcionesMermadas ?? 0) > 0}
+                    <span class="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-md text-xs font-bold">
+                      🔥 {turno.porcionesMermadas}
+                    </span>
+                  {:else}
+                    <span class="text-xs text-slate-300">-</span>
+                  {/if}
+                </td>
+                <td class="p-4 text-right font-semibold text-slate-700">
+                  ${Number(turno.monto).toLocaleString('es-CO')}
+                </td>
+                <td class="p-4 text-right font-semibold text-purple-700">
+                  ${Number(turno.transferencias || 0).toLocaleString('es-CO')}
+                </td>
+                <td class="p-4 text-right font-semibold text-amber-700">
+                  {#if turno.totalGastos > 0}
+                    -${turno.totalGastos.toLocaleString('es-CO')}
+                  {:else}
+                    <span class="text-xs text-slate-300">$0</span>
+                  {/if}
+                </td>
+                <td class="p-4 text-right pr-6 font-black text-slate-900">
+                  ${(Number(turno.monto) + Number(turno.transferencias || 0) + (turno.totalGastos || 0)).toLocaleString('es-CO')}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {/if}
 </div>
