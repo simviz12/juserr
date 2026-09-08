@@ -120,7 +120,7 @@
         </div>
 
         <div>
-          <label for="porciones_sobrantes" class="block text-sm font-bold text-slate-600 mb-2">Porciones Horneadas Sobrantes (Vitrina)</label>
+          <label for="porciones_sobrantes" class="block text-sm font-bold text-slate-600 mb-2">Porciones Buenas Sobrantes (Vitrina para mañana)</label>
           <input 
             type="number" 
             id="porciones_sobrantes" 
@@ -132,10 +132,11 @@
             placeholder="Ej. 3"
             class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
           />
+          <p class="text-xs text-slate-400 mt-1">Porciones en perfecto estado que quedan disponibles para el inicio del siguiente turno.</p>
         </div>
 
         <div>
-          <label for="porciones_mermadas" class="block text-sm font-bold text-slate-600 mb-2">Porciones Mermadas (Quemadas, dañadas)</label>
+          <label for="porciones_mermadas" class="block text-sm font-bold text-slate-600 mb-2">🔥 Pizzas / Porciones Quemadas o Dañadas (Merma)</label>
           <input 
             type="number" 
             id="porciones_mermadas" 
@@ -144,9 +145,12 @@
             required 
             min="0"
             step="1"
-            placeholder="Ej. 1"
-            class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
+            placeholder="Ej. 0"
+            class="w-full md:w-1/2 px-4 py-3.5 bg-rose-50 border border-rose-200 rounded-2xl focus:ring-4 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all font-bold text-rose-800"
           />
+          <p class="text-xs text-rose-600 mt-1">
+            ⚠️ <strong>Importante:</strong> Las porciones quemadas se descuentan de la venta esperada. Es decir, el sistema <strong>no</strong> exigirá el dinero de estas porciones en caja, pero registrará la pérdida en el inventario.
+          </p>
         </div>
       </div>
     </div>
@@ -154,9 +158,9 @@
     <!-- Sección de Desglose de Sabores -->
     <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
       <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl">🍕</span> Desglose por Sabores
+        <span class="bg-orange-100 p-2 rounded-xl">🍕</span> Desglose por Sabores y Mermas
       </h2>
-      <p class="text-sm font-medium text-slate-500 mb-6">¿Cuántas pizzas preparaste de cada sabor y cuántas porciones sobraron de cada uno?</p>
+      <p class="text-sm font-medium text-slate-500 mb-6">Detalla cuántas ruedas preparaste, cuántas porciones buenas sobraron en vitrina y si hubo porciones quemadas o dañadas por sabor:</p>
       
       <div class="overflow-x-auto">
         <table class="w-full text-left">
@@ -165,6 +169,7 @@
               <th class="py-3 font-bold">Sabor</th>
               <th class="py-3 font-bold">Ruedas Preparadas</th>
               <th class="py-3 font-bold">Porciones Sobrantes</th>
+              <th class="py-3 font-bold text-rose-600">Porciones Quemadas</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-50">
@@ -181,7 +186,7 @@
                     class="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
                   />
                 </td>
-                <td class="py-4">
+                <td class="py-4 pr-4">
                   <input 
                     type="number" 
                     name="sobras_{sabor.id}" 
@@ -189,6 +194,16 @@
                     step="0.5" 
                     placeholder="0"
                     class="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
+                  />
+                </td>
+                <td class="py-4">
+                  <input 
+                    type="number" 
+                    name="quemadas_{sabor.id}" 
+                    min="0" 
+                    step="1" 
+                    placeholder="0"
+                    class="w-full max-w-[120px] px-3 py-2 bg-rose-50 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none font-bold text-rose-700"
                   />
                 </td>
               </tr>
@@ -324,65 +339,109 @@
 
     <!-- Cuadre de Caja -->
     {#if hayDatos}
-      <div  class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <span>⚖️</span> Cuadre de Caja
-        </h2>
-
-        <div class="space-y-2 mb-3">
-          <div class="flex justify-between items-center py-1.5 text-sm">
-            <span class="text-slate-500">💵 Efectivo</span>
-            <span class="font-semibold text-slate-700">${efectivoNum.toLocaleString('es-CO')}</span>
+      <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 space-y-6">
+        <div class="border-b border-slate-100 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+          <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-3">
+              <span class="bg-blue-100 p-2 rounded-xl">⚖️</span> Balance y Cuadre de Turno
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">Comparación exacta entre el dinero recibido (físico + digital) y las porciones vendidas.</p>
           </div>
-          {#if nequiNum > 0}
-            <div class="flex justify-between items-center text-sm py-1 border-b border-slate-100">
-              <span class="text-slate-500">📱 Nequi</span>
-              <span class="font-semibold text-purple-700">${nequiNum.toLocaleString('es-CO')}</span>
-            </div>
-          {/if}
-          {#if totalGastos > 0}
-            <div class="flex justify-between items-center py-1.5 text-sm">
-              <span class="text-slate-500">🧾 Gastos declarados</span>
-              <span class="font-semibold text-orange-700">${totalGastos.toLocaleString('es-CO')}</span>
-            </div>
-          {/if}
-        </div>
-
-        <div class="flex justify-between items-center py-2 border-t border-slate-100">
-          <span class="text-slate-600 font-medium">Total Declarado:</span>
-          <span class="text-lg font-bold text-slate-800">${totalDeclarado.toLocaleString('es-CO')}</span>
-        </div>
-        
-        <div class="flex justify-between items-center py-2 border-t border-slate-100">
-          <span class="text-slate-600 font-medium">Total Ventas (por inventario):</span>
-          <span class="text-lg font-bold text-slate-800">${granTotalEsperado.toLocaleString('es-CO')}</span>
-        </div>
-
-        <div class="flex justify-between items-center py-3 mt-2 border-t-2 border-slate-200">
-          <span class="text-slate-800 font-bold">Diferencia:</span>
-          <span class="text-xl font-black {diferencia > 0 ? 'text-green-600' : diferencia < 0 ? 'text-red-600' : 'text-slate-800'}">
-            {diferencia > 0 ? '+' : ''}{diferencia.toLocaleString('es-CO')}
+          <span class="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full {diferencia === 0 ? 'bg-emerald-100 text-emerald-700' : diferencia > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}">
+            {diferencia === 0 ? '✓ Caja Cuadrada' : diferencia > 0 ? 'Sobrante en Caja' : 'Faltante de Dinero'}
           </span>
         </div>
 
+        <!-- 3 Columnas Explicativas de Dinero -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Columna 1: Efectivo Físico -->
+          <div class="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl">
+            <span class="text-xs font-bold uppercase text-emerald-800 tracking-wider block">1. Físico en Cajón</span>
+            <p class="text-2xl font-black text-emerald-700 mt-1">${efectivoNum.toLocaleString('es-CO')}</p>
+            <p class="text-xs text-emerald-600 mt-2">Billetes y monedas contados físicamente en la gaveta.</p>
+          </div>
+
+          <!-- Columna 2: Nequi Digital -->
+          <div class="p-4 bg-purple-50/70 border border-purple-200/80 rounded-2xl">
+            <span class="text-xs font-bold uppercase text-purple-800 tracking-wider block">2. Nequi (En el Celular)</span>
+            <p class="text-2xl font-black text-purple-700 mt-1">${nequiNum.toLocaleString('es-CO')}</p>
+            <p class="text-xs text-purple-600 mt-2">Plata recibida en la cuenta Nequi (<strong>no</strong> está en la gaveta física).</p>
+          </div>
+
+          <!-- Columna 3: Gastos Menores -->
+          <div class="p-4 bg-amber-50/70 border border-amber-200/80 rounded-2xl">
+            <span class="text-xs font-bold uppercase text-amber-800 tracking-wider block">3. Gastos del Turno</span>
+            <p class="text-2xl font-black text-amber-700 mt-1">-${totalGastos.toLocaleString('es-CO')}</p>
+            <p class="text-xs text-amber-600 mt-2">Dinero de la caja usado para compras inmediatas (hielo, insumos).</p>
+          </div>
+        </div>
+
+        <!-- Tabla Resumen Comparativa -->
+        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-3">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-600 font-medium">Dinero Físico en Gaveta:</span>
+            <span class="font-bold text-slate-800">${efectivoNum.toLocaleString('es-CO')}</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-600 font-medium">+ Transferencias Nequi en Cuenta:</span>
+            <span class="font-bold text-purple-700">+${nequiNum.toLocaleString('es-CO')}</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-600 font-medium">+ Gastos Justificados con Recibo/Turno:</span>
+            <span class="font-bold text-amber-700">+${totalGastos.toLocaleString('es-CO')}</span>
+          </div>
+
+          <div class="pt-3 border-t border-slate-200 flex justify-between items-center">
+            <span class="font-bold text-slate-700">Total Producido Declarado:</span>
+            <span class="text-lg font-black text-slate-900">${totalDeclarado.toLocaleString('es-CO')}</span>
+          </div>
+
+          <div class="flex justify-between items-center text-sm">
+            <span class="font-medium text-slate-500">Venta Esperada por Inventario ({porcionesVendidas} porciones vendidas):</span>
+            <span class="font-bold text-slate-700">${granTotalEsperado.toLocaleString('es-CO')}</span>
+          </div>
+
+          <!-- Diferencia final -->
+          <div class="pt-3 border-t-2 border-slate-300 flex justify-between items-center">
+            <div>
+              <span class="text-base font-black text-slate-900 block">Diferencia (Descuadre):</span>
+              <span class="text-xs text-slate-500">Total Declarado menos Venta Esperada por Porciones</span>
+            </div>
+            <span class="text-2xl font-black {diferencia > 0 ? 'text-blue-600' : diferencia < 0 ? 'text-rose-600' : 'text-emerald-600'}">
+              {diferencia > 0 ? '+' : ''}${diferencia.toLocaleString('es-CO')}
+            </span>
+          </div>
+        </div>
+
         {#if diferencia > 0}
-          <div  class="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-            <span class="text-green-600 text-xl">💡</span>
-            <p class="text-sm font-medium text-green-800">
-              Hay un <span class="font-bold">sobrante de ${diferencia.toLocaleString('es-CO')}</span> en caja. Puede ser por ventas de vasos de gaseosa u otros ingresos menores no registrados.
-            </p>
+          <div class="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3">
+            <span class="text-blue-600 text-2xl">💡</span>
+            <div>
+              <p class="text-sm font-bold text-blue-900">Sobrante de dinero (+${diferencia.toLocaleString('es-CO')})</p>
+              <p class="text-xs text-blue-800 mt-1">
+                Entró más dinero del esperado por inventario. Puede deberse a propinas voluntarias, venta de gaseosas/bebidas o redondeos a favor.
+              </p>
+            </div>
           </div>
         {:else if diferencia < 0}
-          <div  class="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <span class="text-red-600 text-xl">⚠️</span>
-            <p class="text-sm font-medium text-red-800">
-              Hay un <span class="font-bold">faltante de ${Math.abs(diferencia).toLocaleString('es-CO')}</span>. Revisa si olvidaste registrar algún gasto o transferencia.
-            </p>
+          <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+            <span class="text-rose-600 text-2xl">⚠️</span>
+            <div>
+              <p class="text-sm font-bold text-rose-900">Faltante de dinero (-${Math.abs(diferencia).toLocaleString('es-CO')})</p>
+              <p class="text-xs text-rose-800 mt-1">
+                Falta dinero en comparación con las porciones que salieron del horno. Revisa si olvidaste registrar algún gasto menor pagado en efectivo, un pago recibido por Nequi, o si hubo alguna pizza quemada/dañada que no registraste en la casilla de merma.
+              </p>
+            </div>
           </div>
         {:else}
-          <div  class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
-            <span class="text-slate-600 text-xl">✅</span>
-            <p class="text-sm font-medium text-slate-800">¡La caja está cuadrada perfectamente!</p>
+          <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+            <span class="text-emerald-600 text-2xl">🎉</span>
+            <div>
+              <p class="text-sm font-bold text-emerald-900">¡Caja perfectamente balanceada!</p>
+              <p class="text-xs text-emerald-800 mt-1">
+                El total del dinero (físico + Nequi + gastos) coincide exactamente con las porciones vendidas.
+              </p>
+            </div>
           </div>
         {/if}
       </div>

@@ -17,6 +17,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     
     const { start: hoy, end: manana } = getRange(rango, fechaStr);
 
+    const [masaItem] = await db.select().from(productos).where(eq(productos.nombre, 'Masas'));
+    const stockMasasReal = masaItem?.stockActual || 0;
+
     const [
         turnosResult, 
         gastosResult, 
@@ -102,6 +105,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         inventarioBajo,
         totalPorcionesVendidas,
         masasCompradas,
+        stockMasasActual: stockMasasReal,
         saboresVendidos,
         saboresDesperdicio
     };

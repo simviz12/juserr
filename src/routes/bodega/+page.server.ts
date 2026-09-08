@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { productos, movimientosInventario } from '$lib/server/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -23,9 +23,26 @@ export const load: PageServerLoad = async ({ locals }) => {
         allProducts.push(nuevo);
     }
 
+    // Movimientos recientes con nombre de producto
+    const historialMovimientos = await db.select({
+        id: movimientosInventario.id,
+        productoNombre: productos.nombre,
+        unidadMedida: productos.unidadMedida,
+        tipo: movimientosInventario.tipo,
+        cantidad: movimientosInventario.cantidad,
+        costoUnitario: movimientosInventario.costoUnitario,
+        costoTotal: movimientosInventario.costoTotal,
+        fecha: movimientosInventario.fecha
+    })
+    .from(movimientosInventario)
+    .innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
+    .orderBy(desc(movimientosInventario.fecha))
+    .limit(20);
+
     return { 
         stockMasas: masaProduct.stockActual || 0,
-        productos: allProducts 
+        productos: allProducts,
+        historialMovimientos
     };
 };
 

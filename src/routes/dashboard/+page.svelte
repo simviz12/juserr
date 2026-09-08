@@ -5,7 +5,8 @@
 
   const metaVentas = 2000000;
   let ventaBrutaHoy = $derived({ monto: data.ventasHoy, meta: metaVentas });
-  let masas = $derived({ usadas: Math.floor(data.totalPorcionesVendidas / 8), disponibles: 100 }); // Aproximado
+  let masasUsadas = $derived(Math.floor(data.totalPorcionesVendidas / 8));
+  let masasDisponibles = $derived(data.stockMasasActual || 0);
   let porcionesVendidas = $derived(data.totalPorcionesVendidas); 
   let mermas = $derived({ perdidas: data.saboresDesperdicio.reduce((sum, s) => sum + Number(s.cantidad), 0), total: data.totalPorcionesVendidas });
 
@@ -19,9 +20,6 @@
         <Search size="20" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input type="text" placeholder="Buscar..." class="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF5B29]" />
       </div>
-      <button class="flex items-center gap-2 bg-[#FF5B29] text-white px-4 py-2 rounded-full hover:bg-[#e04a1f] transition-colors">
-        <PlusCircle size="18" /> Abrir Turno
-      </button>
     </div>
   </div>
 
@@ -42,18 +40,14 @@
       </div>
     </div>
 
-    <!-- Masas -->
+    <!-- Masas Reales -->
     <div class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
-      <div class="w-16 h-16 relative">
-        <svg viewBox="0 0 36 36" class="w-full h-full">
-          <path d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831" fill="none" stroke="#FFEDD5" stroke-width="4" />
-          <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="#FF5B29" stroke-width="4" stroke-dasharray="{perc(masas.usadas, masas.disponibles)} 100" />
-        </svg>
-        <span class="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF5B29]">{perc(masas.usadas, masas.disponibles)}%</span>
+      <div class="w-16 h-16 relative flex items-center justify-center bg-orange-50 rounded-2xl text-2xl">
+        🍕
       </div>
       <div>
-        <h3 class="font-medium text-gray-800">Masas Usadas / Disp.</h3>
-        <p class="text-lg font-bold text-gray-900">{masas.usadas}/{masas.disponibles}</p>
+        <h3 class="font-medium text-gray-800">Masas en Bodega</h3>
+        <p class="text-lg font-bold text-gray-900">{masasDisponibles} disp. <span class="text-xs text-slate-400 font-normal">({masasUsadas} horneadas)</span></p>
       </div>
     </div>
 

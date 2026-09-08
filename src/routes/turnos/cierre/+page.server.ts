@@ -158,10 +158,11 @@ export const actions: Actions = {
                 for (const sabor of sabores) {
                     const ruedas = parseInt(formData.get(`ruedas_${sabor.id}`)?.toString() || '0');
                     const sobras = parseFloat(formData.get(`sobras_${sabor.id}`)?.toString() || '0');
+                    const quemadas = parseFloat(formData.get(`quemadas_${sabor.id}`)?.toString() || '0');
                     if (ruedas > 0) await db.insert(pizzaRuedas).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidad: ruedas });
                     if (sobras > 0) await db.insert(pizzaSobras).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidad: sobras });
                     const sobrasAyerCant = porcionesAyerData.find(s => s.saborId === sabor.id)?.cantidad ?? 0;
-                    const vendidas = (sobrasAyerCant + ruedas * 8) - sobras;
+                    const vendidas = Math.max(0, (sobrasAyerCant + ruedas * 8) - sobras - quemadas);
                     if (vendidas > 0) await db.insert(pizzaVentas).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidadVendida: vendidas });
                 }
 
