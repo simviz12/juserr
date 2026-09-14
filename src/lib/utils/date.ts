@@ -2,13 +2,13 @@ export function getTodayRange() {
     return getRange('diario');
 }
 
-export function getRange(type: 'diario' | 'semanal' | 'mensual', specificDateStr?: string) {
+export function getRange(type: 'diario' | 'semanal' | 'mensual' | 'anual', specificDateStr?: string) {
     const now = specificDateStr ? new Date(specificDateStr + 'T00:00:00') : new Date();
     const offset = -5; // Hora de Colombia
     
     // Si pasamos fecha específica, asumimos que es inicio de ese día en Colombia
     // Si no, usamos el ajuste normal de hora y "business day"
-    let localTime;
+    let localTime: Date;
     if (specificDateStr) {
         localTime = new Date(now.getTime() - offset * 3600 * 1000);
         localTime.setUTCHours(12, 0, 0, 0); // Mitad del día local para evitar cortes
@@ -28,6 +28,8 @@ export function getRange(type: 'diario' | 'semanal' | 'mensual', specificDateStr
         startLocal.setUTCDate(diff);
     } else if (type === 'mensual') {
         startLocal.setUTCDate(1);
+    } else if (type === 'anual') {
+        startLocal.setUTCMonth(0, 1);
     }
 
     const start = new Date(startLocal.getTime() - offset * 3600 * 1000);
@@ -39,6 +41,8 @@ export function getRange(type: 'diario' | 'semanal' | 'mensual', specificDateStr
         endLocal.setUTCDate(endLocal.getUTCDate() + 7);
     } else if (type === 'mensual') {
         endLocal.setUTCMonth(endLocal.getUTCMonth() + 1);
+    } else if (type === 'anual') {
+        endLocal.setUTCFullYear(endLocal.getUTCFullYear() + 1);
     }
 
     const end = new Date(endLocal.getTime() - offset * 3600 * 1000);

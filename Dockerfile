@@ -7,19 +7,17 @@ WORKDIR /app
 # Enable pnpm via corepack
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy package manifests
-COPY package.json pnpm-lock.yaml ./
+# Copy package manifests and pnpm workspace config
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install dependencies, approve core-js builds, reinstall to allow scripts
-RUN pnpm install --frozen-lockfile --ignore-scripts && pnpm approve-builds core-js@3.49.0 esbuild@0.18.20 esbuild@0.25.12 esbuild@0.28.1 && pnpm install --frozen-lockfile
+# Install dependencies allowing configured builds
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
-
-
 # Build the SvelteKit app (produces .svelte-kit and build)
-RUN pnpm approve-builds core-js@3.49.0 && pnpm install --frozen-lockfile && pnpm build
+RUN pnpm build
 
 # ---------- Runtime stage ----------
 FROM node:20-alpine AS runner
