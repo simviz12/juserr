@@ -134,9 +134,9 @@
     {#if data.historialDias && data.historialDias.length > 0}
       <button 
         onclick={exportToPDF}
-        class="py-3 px-6 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-2xl transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+        class="py-4 px-7 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-2xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2.5 text-base cursor-pointer transform active:scale-98"
       >
-        <span>📄</span> Descargar Informe PDF
+        <span class="text-xl">📄</span> Descargar Informe PDF
       </button>
     {/if}
   </div>
@@ -151,7 +151,7 @@
           id="inicio" 
           name="inicio" 
           value={data.inicio}
-          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-semibold text-slate-700"
+          class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-bold text-slate-800 text-base"
         />
       </div>
       <div class="flex-1 w-full">
@@ -161,14 +161,14 @@
           id="fin" 
           name="fin" 
           value={data.fin}
-          class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-semibold text-slate-700"
+          class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-bold text-slate-800 text-base"
         />
       </div>
       <button 
         type="submit" 
-        class="w-full md:w-auto py-3 px-8 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all shadow-md flex items-center justify-center gap-2"
+        class="w-full md:w-auto py-4 px-10 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 text-base cursor-pointer transform active:scale-98"
       >
-        <span>🔍</span> Filtrar
+        <span class="text-lg">🔍</span> Filtrar
       </button>
     </form>
   </div>

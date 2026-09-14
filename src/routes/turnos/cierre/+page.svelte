@@ -292,9 +292,9 @@
         <button 
           type="button" 
           onclick={addGasto}
-          class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg transition-colors"
+          class="text-base bg-orange-100 hover:bg-orange-200 text-orange-800 font-extrabold py-3 px-5 rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer"
         >
-          + Agregar Gasto
+          <span class="text-lg">+</span> Agregar Gasto
         </button>
       </div>
 
@@ -459,12 +459,12 @@
     {/if}
 
     <!-- Botón de Envío -->
-    <div class="pt-4">
+    <div class="pt-6">
       <button 
         type="submit" 
-        class="w-full py-4 px-6 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900 transition-all shadow-md hover:shadow-lg text-lg flex justify-center items-center gap-3"
+        class="w-full py-5 px-8 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-xl flex justify-center items-center gap-3 cursor-pointer transform active:scale-98"
       >
-        <span>🔒</span> Guardar y Cerrar Turno
+        <span class="text-2xl">🔒</span> Guardar y Cerrar Turno
       </button>
     </div>
     

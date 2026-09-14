@@ -4,6 +4,11 @@
   --font-sans: 'Outfit', sans-serif;
 }
 
+/* Escala general de la interfaz para máxima legibilidad en pantallas táctiles y escritorio */
+:root {
+  font-size: 17.5px;
+}
+
 body {
   font-family: 'Outfit', sans-serif;
   background-color: #f8fafc;
@@ -12,6 +17,9 @@ body {
     radial-gradient(at 50% 0%, hsla(225,39%,30%,0.03) 0, transparent 50%), 
     radial-gradient(at 100% 0%, hsla(339,49%,30%,0.03) 0, transparent 50%);
   background-attachment: fixed;
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Glassmorphism Utilities */
@@ -27,4 +35,13 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Mejora global de botones interactivos e inputs */
+button, .btn {
+  letter-spacing: -0.01em;
+}
+
+button:active {
+  transform: scale(0.98);
 }

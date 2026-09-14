@@ -81,20 +81,20 @@
       </p>
 
       <!-- Selector de Modo Sin Bug de Saltos -->
-      <div class="mt-4 p-1.5 bg-slate-100 rounded-2xl flex flex-col sm:flex-row gap-2 max-w-xl">
+      <div class="mt-4 p-2 bg-slate-100 rounded-2xl flex flex-col sm:flex-row gap-3 max-w-2xl">
         <button 
           type="button" 
           onclick={() => tipoOperacion = 'entrada'}
-          class="flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 {tipoOperacion === 'entrada' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}"
+          class="flex-1 py-4 px-6 rounded-xl font-extrabold text-base transition-all flex items-center justify-center gap-3 cursor-pointer {tipoOperacion === 'entrada' ? 'bg-white text-orange-600 shadow-md ring-2 ring-orange-500/20' : 'text-slate-600 hover:text-slate-900'}"
         >
-          <span>📥</span> Registrar Compras (Sumar)
+          <span class="text-xl">📥</span> Registrar Compras (Sumar)
         </button>
         <button 
           type="button" 
           onclick={() => tipoOperacion = 'ajuste'}
-          class="flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 {tipoOperacion === 'ajuste' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}"
+          class="flex-1 py-4 px-6 rounded-xl font-extrabold text-base transition-all flex items-center justify-center gap-3 cursor-pointer {tipoOperacion === 'ajuste' ? 'bg-white text-blue-600 shadow-md ring-2 ring-blue-500/20' : 'text-slate-600 hover:text-slate-900'}"
         >
-          <span>📋</span> Conteo Real (Sobreescribir)
+          <span class="text-xl">📋</span> Conteo Real (Sobreescribir)
         </button>
       </div>
 
@@ -213,12 +213,12 @@
         {/if}
       </div>
 
-      <div class="pt-4 border-t border-slate-100 flex justify-end">
+      <div class="pt-6 border-t border-slate-100 flex justify-end">
         <button 
           type="submit" 
-          class="w-full sm:w-auto py-4 px-8 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-sm"
+          class="w-full sm:w-auto py-5 px-10 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl flex items-center justify-center gap-3 text-lg cursor-pointer transform active:scale-98"
         >
-          <span>{tipoOperacion === 'entrada' ? '📥' : '💾'}</span>
+          <span class="text-xl">{tipoOperacion === 'entrada' ? '📥' : '💾'}</span>
           {tipoOperacion === 'entrada' ? 'Registrar Compra e Incrementar Stock' : 'Guardar Conteo Físico (Ajustar Stock)'}
         </button>
       </div>

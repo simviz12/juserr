@@ -32,13 +32,13 @@
         <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Menú Principal</p>
       </div>
 
-      <nav class="flex-1 px-4 space-y-1 overflow-y-auto pb-4 custom-scrollbar">
+      <nav class="flex-1 px-4 space-y-1.5 overflow-y-auto pb-4 custom-scrollbar">
       {#each visibleNavItems as item}
         <a 
           href={item.path} 
-          class="flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-200 font-medium {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}"
+          class="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-200 font-bold text-base {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}"
         >
-          <span class="text-xl { $page.url.pathname.startsWith(item.path) ? 'opacity-100' : 'opacity-70' }">{item.icon}</span>
+          <span class="text-2xl { $page.url.pathname.startsWith(item.path) ? 'opacity-100' : 'opacity-70' }">{item.icon}</span>
           <span>{item.name}</span>
         </a>
       {/each}
@@ -46,16 +46,16 @@
     
       <div class="p-6">
         <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-4 mb-4">
-          <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-lg">
+          <div class="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-black text-xl">
             {data.user.nombre.charAt(0).toUpperCase()}
           </div>
           <div class="flex-1 overflow-hidden">
-            <p class="font-bold text-slate-800 truncate">{data.user.nombre}</p>
+            <p class="font-bold text-slate-800 truncate text-base">{data.user.nombre}</p>
             <p class="text-xs font-bold uppercase tracking-wider text-orange-500">{data.user.rol}</p>
           </div>
         </div>
         <form action="/logout" method="POST">
-          <button type="submit" class="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-4 py-3 rounded-xl transition-all font-bold text-sm shadow-sm">
+          <button type="submit" class="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-5 py-3.5 rounded-2xl transition-all font-bold text-base shadow-sm">
             <span>🚪</span> Cerrar sesión
           </button>
         </form>

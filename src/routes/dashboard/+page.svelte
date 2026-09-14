@@ -73,47 +73,47 @@
     <!-- Botonera de Períodos y Fecha -->
     <div class="flex flex-wrap items-center gap-3">
       <!-- Selector de Pestañas: Día / Semana / Mes / Año -->
-      <div class="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/60 shadow-inner">
+      <div class="bg-slate-100 p-1.5 rounded-2xl flex items-center gap-1.5 border border-slate-200/80 shadow-inner">
         <button
           onclick={() => cambiarRango('diario')}
-          class="px-4 py-2 rounded-xl text-xs font-bold transition-all {rangoSeleccionado === 'diario' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'diario' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
           Hoy (Día)
         </button>
         <button
           onclick={() => cambiarRango('semanal')}
-          class="px-4 py-2 rounded-xl text-xs font-bold transition-all {rangoSeleccionado === 'semanal' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'semanal' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
           Esta Semana
         </button>
         <button
           onclick={() => cambiarRango('mensual')}
-          class="px-4 py-2 rounded-xl text-xs font-bold transition-all {rangoSeleccionado === 'mensual' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'mensual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
           Este Mes
         </button>
         <button
           onclick={() => cambiarRango('anual')}
-          class="px-4 py-2 rounded-xl text-xs font-bold transition-all {rangoSeleccionado === 'anual' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}"
+          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'anual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
           Este Año
         </button>
       </div>
 
       <!-- Selector de Fecha Específica (Opcional) -->
-      <div class="flex items-center gap-2 bg-slate-50 p-1.5 px-3 rounded-2xl border border-slate-200">
-        <Calendar size="16" class="text-slate-400" />
+      <div class="flex items-center gap-3 bg-slate-50 p-2 px-4 rounded-2xl border border-slate-200">
+        <Calendar size="20" class="text-slate-500" />
         <input
           type="date"
           bind:value={fechaInput}
           onchange={filtrarFecha}
-          class="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+          class="bg-transparent text-sm font-bold text-slate-800 outline-none cursor-pointer py-1"
           title="Selecciona una fecha de referencia"
         />
         {#if fechaInput}
           <button
             onclick={limpiarFecha}
-            class="text-xs text-slate-400 hover:text-red-500 font-bold px-1"
+            class="text-base text-slate-400 hover:text-red-500 font-black px-1.5"
             title="Restablecer a fecha actual"
           >
             ×

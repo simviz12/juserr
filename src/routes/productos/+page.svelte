@@ -43,12 +43,12 @@
 
 <div class="max-w-6xl mx-auto">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold text-slate-800">Catálogo de Productos</h1>
+    <h1 class="text-3xl font-black text-slate-900 tracking-tight">Catálogo de Productos</h1>
     <button 
       onclick={openCreateModal}
-      class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium shadow transition-colors"
+      class="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-6 py-3.5 rounded-2xl font-black text-base shadow-lg hover:shadow-xl transition-all flex items-center gap-2 cursor-pointer transform active:scale-98"
     >
-      + Nuevo Producto
+      <span class="text-xl leading-none">+</span> Nuevo Producto
     </button>
   </div>
 

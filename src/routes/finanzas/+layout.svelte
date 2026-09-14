@@ -17,13 +17,13 @@
   </div>
 
   <!-- Tabs Navigation -->
-  <div class="glass-panel rounded-2xl p-2 flex overflow-x-auto custom-scrollbar shadow-sm border border-slate-200/50">
+  <div class="glass-panel rounded-2xl p-2.5 flex overflow-x-auto custom-scrollbar shadow-sm border border-slate-200/60 gap-2">
     {#each tabs as tab}
       <a 
         href={tab.path}
-        class="flex items-center gap-2 px-6 py-3 rounded-xl whitespace-nowrap font-medium transition-all { $page.url.pathname === tab.path ? 'bg-slate-800 text-orange-400 shadow-md' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' }"
+        class="flex items-center gap-2.5 px-7 py-4 rounded-xl whitespace-nowrap font-bold text-base transition-all { $page.url.pathname === tab.path ? 'bg-slate-900 text-orange-400 shadow-md ring-2 ring-orange-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' }"
       >
-        <span>{tab.icon}</span>
+        <span class="text-xl">{tab.icon}</span>
         {tab.name}
       </a>
     {/each}
