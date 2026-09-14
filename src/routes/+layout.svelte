@@ -36,7 +36,6 @@
       {#each visibleNavItems as item}
         <a 
           href={item.path} 
-          data-sveltekit-reload
           class="flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-200 font-medium {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}"
         >
           <span class="text-xl { $page.url.pathname.startsWith(item.path) ? 'opacity-100' : 'opacity-70' }">{item.icon}</span>
@@ -77,7 +76,6 @@
           {#each visibleNavItems as item}
             <a 
               href={item.path} 
-              data-sveltekit-reload
               onclick={() => mobileMenuOpen = false}
               class="flex items-center gap-4 px-4 py-4 rounded-2xl transition-all font-medium text-lg {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600' : 'text-slate-600'}"
             >
