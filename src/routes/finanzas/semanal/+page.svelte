@@ -91,8 +91,10 @@
 
         <div class="border-t border-slate-100 pt-6">
           <label for="totalReal" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-            Efectivo Físico Recolectado
-            <span class="block text-xs text-slate-400 font-normal mt-0.5 capitalize">Total billetes y monedas que tienes en la mano.</span>
+            💵 Efectivo Físico Contado en Mano (Billetes y Monedas)
+            <span class="block text-xs text-slate-400 font-normal mt-0.5">
+              Ingresa el total de dinero en efectivo que recolectaste de las cajas para comparar contra los turnos registrados por el sistema.
+            </span>
           </label>
           <div class="relative max-w-md">
             <span class="absolute left-4 top-3.5 text-slate-400 font-black text-2xl">$</span>
@@ -115,7 +117,7 @@
             type="submit" 
             class="w-full md:w-auto py-4 px-10 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg flex justify-center items-center gap-2 text-base"
           >
-            <span>⚖️</span> Guardar y Comparar Corte
+            <span>⚖️</span> Auditar y Guardar Corte
           </button>
         </div>
       </form>

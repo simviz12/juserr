@@ -19,39 +19,98 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     const start = new Date(inicioParam + 'T00:00:00');
     const end = new Date(finParam + 'T23:59:59');
 
-    // 1. Obtener cierres de día en el rango
-    const cierres = await db.select()
-        .from(cierresDia)
-        .where(and(gte(cierresDia.fecha, start), lte(cierresDia.fecha, end)))
-        .orderBy(desc(cierresDia.fecha));
+    // 1. Obtener todos los turnos cerrados en el rango directamente (sin requerir cierre manual duplicado)
+    const turnosRango = await db.select({
+        id: turnos.id,
+        fecha: turnos.fecha,
+        monto: turnos.monto,
+        transferencias: turnos.transferencias,
+        descripcion: turnos.descripcion
+    })
+    .from(turnos)
+    .where(and(gte(turnos.fecha, start), lte(turnos.fecha, end)))
+    .orderBy(desc(turnos.fecha));
 
-    // 2. Obtener desglose por medios de pago en ese rango
+    // 2. Obtener gastos en el rango
+    const gastosRango = await db.select()
+        .from(gastos)
+        .where(and(gte(gastos.fecha, start), lte(gastos.fecha, end)))
+        .orderBy(desc(gastos.fecha));
+
+    // 3. Obtener desglose por medios de pago en ese rango
     const pagosDesglose = await db.select({
         plataforma: transaccionesTurno.plataforma,
-        total: sql<number>`SUM(CAST(${transaccionesTurno.monto} AS NUMERIC))`
+        total: sql<number>`COALESCE(SUM(CAST(${transaccionesTurno.monto} AS NUMERIC)), 0)`
     })
     .from(transaccionesTurno)
     .where(and(gte(transaccionesTurno.fecha, start), lte(transaccionesTurno.fecha, end)))
     .groupBy(transaccionesTurno.plataforma);
 
-    // 3. Obtener gastos con descripción en el rango
-    const listaGastos = await db.select({
-        id: gastos.id,
-        descripcion: gastos.descripcion,
-        monto: gastos.monto,
-        fecha: gastos.fecha
-    })
-    .from(gastos)
-    .where(and(gte(gastos.fecha, start), lte(gastos.fecha, end)))
-    .orderBy(desc(gastos.fecha))
-    .limit(10);
+    // 4. Agrupar turnos y gastos por fecha calendario (Día)
+    const diasMap: Record<string, {
+        fecha: string;
+        efectivo: number;
+        transferencias: number;
+        gastos: number;
+        turnosCount: number;
+    }> = {};
 
-    // 4. Agrupación por semanas
-    const agruparPorSemana = (cierresArray: any[]) => {
+    turnosRango.forEach(t => {
+        const fechaStr = t.fecha ? new Date(t.fecha).toISOString().split('T')[0] : '';
+        if (!fechaStr) return;
+
+        if (!diasMap[fechaStr]) {
+            diasMap[fechaStr] = {
+                fecha: fechaStr,
+                efectivo: 0,
+                transferencias: 0,
+                gastos: 0,
+                turnosCount: 0
+            };
+        }
+        diasMap[fechaStr].efectivo += parseFloat(t.monto) || 0;
+        diasMap[fechaStr].transferencias += parseFloat(t.transferencias || '0') || 0;
+        diasMap[fechaStr].turnosCount += 1;
+    });
+
+    gastosRango.forEach(g => {
+        const fechaStr = g.fecha ? new Date(g.fecha).toISOString().split('T')[0] : '';
+        if (!fechaStr) return;
+
+        if (!diasMap[fechaStr]) {
+            diasMap[fechaStr] = {
+                fecha: fechaStr,
+                efectivo: 0,
+                transferencias: 0,
+                gastos: 0,
+                turnosCount: 0
+            };
+        }
+        diasMap[fechaStr].gastos += parseFloat(g.monto) || 0;
+    });
+
+    const historialDias = Object.values(diasMap)
+        .map(d => {
+            const ventasBrutas = d.efectivo + d.transferencias;
+            const utilidadNeta = Math.max(0, ventasBrutas - d.gastos);
+            return {
+                id: d.fecha,
+                fecha: d.fecha,
+                efectivo: d.efectivo,
+                transferencias: d.transferencias,
+                gastos: d.gastos,
+                ventasBrutas,
+                utilidadNeta
+            };
+        })
+        .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    // 5. Agrupación por semanas
+    const agruparPorSemana = (dias: typeof historialDias) => {
         const semanas: Record<string, any> = {};
 
-        cierresArray.forEach(cierre => {
-            const fecha = new Date(cierre.fecha);
+        dias.forEach(d => {
+            const fecha = new Date(d.fecha + 'T00:00:00');
             const diaSemana = fecha.getDay();
             const diff = fecha.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
             const lunes = new Date(fecha.setDate(diff));
@@ -68,42 +127,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
                 };
             }
 
-            const neta = Number(cierre.totalEfectivo || 0);
-            const trans = Number(cierre.totalTransferencias || 0);
-            const gst = Number(cierre.totalGastos || 0);
-            const brutas = neta + trans + gst;
-
-            semanas[lunesStr].ventasBrutas += brutas;
-            semanas[lunesStr].utilidadNeta += neta;
-            semanas[lunesStr].transferencias += trans;
-            semanas[lunesStr].gastos += gst;
+            semanas[lunesStr].ventasBrutas += d.ventasBrutas;
+            semanas[lunesStr].utilidadNeta += d.utilidadNeta;
+            semanas[lunesStr].transferencias += d.transferencias;
+            semanas[lunesStr].gastos += d.gastos;
             semanas[lunesStr].diasContados += 1;
         });
 
-        return Object.values(semanas).sort((a: any, b: any) => a.lunes.localeCompare(b.lunes));
+        return Object.values(semanas).sort((a: any, b: any) => b.lunes.localeCompare(a.lunes));
     };
 
-    const semanas = agruparPorSemana(cierres);
+    const semanas = agruparPorSemana(historialDias);
 
-    // 5. Historial diario detallado
-    const historialDias = cierres.map(c => {
-        const ef = Number(c.totalEfectivo || 0);
-        const tr = Number(c.totalTransferencias || 0);
-        const gt = Number(c.totalGastos || 0);
-        const brutas = ef + tr + gt;
-        return {
-            id: c.id,
-            fecha: c.fecha ? new Date(c.fecha).toISOString().split('T')[0] : '',
-            fechaRaw: c.fecha,
-            efectivo: ef,
-            transferencias: tr,
-            gastos: gt,
-            ventasBrutas: brutas,
-            utilidadNeta: ef + tr
-        };
-    });
-
-    // 6. Gran Total
+    // 6. Gran Total acumulado del período
     const granTotal = historialDias.reduce((acc, curr) => {
         acc.ventasBrutas += curr.ventasBrutas;
         acc.utilidadNeta += curr.utilidadNeta;
@@ -121,7 +157,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
         granTotal,
         promedioDiario,
         pagosDesglose,
-        listaGastos,
+        listaGastos: gastosRango.slice(0, 10),
         inicio: inicioParam,
         fin: finParam
     };

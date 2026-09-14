@@ -43,14 +43,14 @@ export const actions: Actions = {
         }
 
         try {
-            // Sumar todos los cierres diarios en el rango
-            const [sumaCierres] = await db.select({
-                total: sql<number>`SUM(CAST(${cierresDia.totalEfectivo} AS NUMERIC))`
+            // Sumar todo el efectivo físico ingresado en los turnos cerrados en ese rango de fechas
+            const [sumaTurnos] = await db.select({
+                total: sql<number>`COALESCE(SUM(CAST(${turnos.monto} AS NUMERIC)), 0)`
             })
-            .from(cierresDia)
-            .where(and(gte(cierresDia.fecha, start), lte(cierresDia.fecha, end)));
+            .from(turnos)
+            .where(and(gte(turnos.fecha, start), lte(turnos.fecha, end)));
 
-            const totalCalculado = Number(sumaCierres?.total || 0);
+            const totalCalculado = Number(sumaTurnos?.total || 0);
             const diferencia = totalReal - totalCalculado;
 
             // Guardar el corte
