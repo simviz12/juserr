@@ -17,10 +17,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     
     const { start: fechaInicio, end: fechaFin } = getRange(rango, fechaStr);
 
-    const [masaItem] = await db.select().from(productos).where(eq(productos.nombre, 'Masas'));
-    const stockMasasReal = masaItem?.stockActual || 0;
-
     const [
+        masaItemResult,
         turnosResult, 
         gastosResult, 
         inventarioBajoResult,
@@ -28,6 +26,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         saboresVendidosResult,
         saboresDesperdicioResult
     ] = await Promise.all([
+        db.select().from(productos).where(eq(productos.nombre, 'Masas')),
         db.select({ 
             efectivo: sql<number>`COALESCE(SUM(CAST(${turnos.monto} AS NUMERIC)), 0)`,
             transferencias: sql<number>`COALESCE(SUM(CAST(${turnos.transferencias} AS NUMERIC)), 0)`,
@@ -82,6 +81,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         .orderBy(desc(sql`SUM(${pizzaSobras.cantidad})`))
         .limit(6)
     ]);
+
+    const masaItem = masaItemResult[0];
+    const stockMasasReal = masaItem?.stockActual || 0;
 
     const turnosData = turnosResult[0];
     const totalEfectivo = Number(turnosData?.efectivo || 0);

@@ -21,8 +21,25 @@ export async function createSession(token: string, userId: number): Promise<type
   return session;
 }
 
+// Caché en memoria para evitar consultar Neon DB en cada clic o navegación SPA (TTL: 60 segundos)
+interface CachedSession {
+  user: typeof usuarios.$inferSelect;
+  session: typeof sesiones.$inferSelect;
+  cachedAt: number;
+}
+const sessionCache = new Map<string, CachedSession>();
+
 export async function validateSessionToken(token: string) {
   const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+  
+  const cached = sessionCache.get(sessionId);
+  if (cached && Date.now() - cached.cachedAt < 60000) {
+    if (Date.now() < cached.session.expiresAt.getTime()) {
+      return { session: cached.session, user: cached.user };
+    }
+    sessionCache.delete(sessionId);
+  }
+
   const result = await db
     .select({ user: usuarios, session: sesiones })
     .from(sesiones)
@@ -30,12 +47,14 @@ export async function validateSessionToken(token: string) {
     .where(eq(sesiones.id, sessionId));
 
   if (result.length < 1) {
+    sessionCache.delete(sessionId);
     return { session: null, user: null };
   }
 
   const { user, session } = result[0];
   
   if (Date.now() >= session.expiresAt.getTime()) {
+    sessionCache.delete(sessionId);
     await db.delete(sesiones).where(eq(sesiones.id, session.id));
     return { session: null, user: null };
   }
@@ -46,10 +65,13 @@ export async function validateSessionToken(token: string) {
     await db.update(sesiones).set({ expiresAt: session.expiresAt }).where(eq(sesiones.id, session.id));
   }
 
+  sessionCache.set(sessionId, { user, session, cachedAt: Date.now() });
+
   return { session, user };
 }
 
 export async function invalidateSession(sessionId: string) {
+  sessionCache.delete(sessionId);
   await db.delete(sesiones).where(eq(sesiones.id, sessionId));
 }
  

@@ -19,32 +19,32 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     const start = new Date(inicioParam + 'T00:00:00');
     const end = new Date(finParam + 'T23:59:59');
 
-    // 1. Obtener todos los turnos cerrados en el rango directamente (sin requerir cierre manual duplicado)
-    const turnosRango = await db.select({
-        id: turnos.id,
-        fecha: turnos.fecha,
-        monto: turnos.monto,
-        transferencias: turnos.transferencias,
-        descripcion: turnos.descripcion
-    })
-    .from(turnos)
-    .where(and(gte(turnos.fecha, start), lte(turnos.fecha, end)))
-    .orderBy(desc(turnos.fecha));
+    // 1, 2, 3. Obtener turnos, gastos y pagos por desglose en paralelo en una sola ronda de red
+    const [turnosRango, gastosRango, pagosDesglose] = await Promise.all([
+        db.select({
+            id: turnos.id,
+            fecha: turnos.fecha,
+            monto: turnos.monto,
+            transferencias: turnos.transferencias,
+            descripcion: turnos.descripcion
+        })
+        .from(turnos)
+        .where(and(gte(turnos.fecha, start), lte(turnos.fecha, end)))
+        .orderBy(desc(turnos.fecha)),
 
-    // 2. Obtener gastos en el rango
-    const gastosRango = await db.select()
-        .from(gastos)
-        .where(and(gte(gastos.fecha, start), lte(gastos.fecha, end)))
-        .orderBy(desc(gastos.fecha));
+        db.select()
+            .from(gastos)
+            .where(and(gte(gastos.fecha, start), lte(gastos.fecha, end)))
+            .orderBy(desc(gastos.fecha)),
 
-    // 3. Obtener desglose por medios de pago en ese rango
-    const pagosDesglose = await db.select({
-        plataforma: transaccionesTurno.plataforma,
-        total: sql<number>`COALESCE(SUM(CAST(${transaccionesTurno.monto} AS NUMERIC)), 0)`
-    })
-    .from(transaccionesTurno)
-    .where(and(gte(transaccionesTurno.fecha, start), lte(transaccionesTurno.fecha, end)))
-    .groupBy(transaccionesTurno.plataforma);
+        db.select({
+            plataforma: transaccionesTurno.plataforma,
+            total: sql<number>`COALESCE(SUM(CAST(${transaccionesTurno.monto} AS NUMERIC)), 0)`
+        })
+        .from(transaccionesTurno)
+        .where(and(gte(transaccionesTurno.fecha, start), lte(transaccionesTurno.fecha, end)))
+        .groupBy(transaccionesTurno.plataforma)
+    ]);
 
     // 4. Agrupar turnos y gastos por fecha calendario (Día)
     const diasMap: Record<string, {

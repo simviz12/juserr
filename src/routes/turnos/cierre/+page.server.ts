@@ -2,12 +2,32 @@ import { db } from '$lib/server/db';
 import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno } from '$lib/server/schema';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 
 export const load: PageServerLoad = async () => {
-    // 1. Obtener o crear el producto "Masas"
-    let [masaProduct] = await db.select().from(productos).where(eq(productos.nombre, 'Masas'));
-    
+    // 1. Obtener producto "Masas", último turno, lista de sabores y turnos recientes en paralelo
+    const [masaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw] = await Promise.all([
+        db.select().from(productos).where(eq(productos.nombre, 'Masas')),
+        db.select({
+            id: turnos.id,
+            porcionesSobrantes: turnos.porcionesSobrantes
+        }).from(turnos).orderBy(desc(turnos.id)).limit(1),
+        db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true)),
+        db.select({
+            id: turnos.id,
+            fecha: turnos.fecha,
+            monto: turnos.monto,
+            transferencias: turnos.transferencias,
+            descripcion: turnos.descripcion,
+            masasIniciales: turnos.masasIniciales,
+            masasSobrantes: turnos.masasSobrantes,
+            porcionesVendidas: turnos.porcionesVendidasCalculado,
+            porcionesMermadas: turnos.porcionesMermadas,
+            porcionesSobrantes: turnos.porcionesSobrantes,
+        }).from(turnos).orderBy(desc(turnos.id)).limit(20)
+    ]);
+
+    let masaProduct = masaRows[0];
     if (!masaProduct) {
         const [nuevo] = await db.insert(productos).values({
             nombre: 'Masas',
@@ -18,49 +38,47 @@ export const load: PageServerLoad = async () => {
         masaProduct = nuevo;
     }
 
-    // 2. Obtener las porciones que sobraron en el último turno
-    const [ultimoTurno] = await db.select({
-        id: turnos.id,
-        porcionesSobrantes: turnos.porcionesSobrantes
-    })
-    .from(turnos)
-    .orderBy(desc(turnos.id))
-    .limit(1);
-
+    const ultimoTurno = ultimosTurnoRows[0];
     const ultimoTurnoId = ultimoTurno?.id;
     const porcionesAyer = ultimoTurno?.porcionesSobrantes || 0;
     const masasActuales = masaProduct.stockActual || 0;
 
-    const sabores = await db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true));
+    const turnoIds = ultimosTurnosRaw.map(t => t.id);
 
-    let sobrasAyer: { saborId: number; cantidad: number }[] = [];
-    if (ultimoTurnoId) {
-        sobrasAyer = await db.select({
-            saborId: pizzaSobras.saborId,
-            cantidad: pizzaSobras.cantidad
-        }).from(pizzaSobras).where(eq(pizzaSobras.turnoId, ultimoTurnoId));
+    // Consultar sobras de ayer, transacciones y gastos en 1 solo viaje por lote
+    const [sobrasAyer, todasTransacciones, todosGastos] = await Promise.all([
+        ultimoTurnoId
+            ? db.select({
+                saborId: pizzaSobras.saborId,
+                cantidad: pizzaSobras.cantidad
+            }).from(pizzaSobras).where(eq(pizzaSobras.turnoId, ultimoTurnoId))
+            : Promise.resolve([]),
+        turnoIds.length > 0
+            ? db.select().from(transaccionesTurno).where(inArray(transaccionesTurno.turnoId, turnoIds))
+            : Promise.resolve([]),
+        turnoIds.length > 0
+            ? db.select().from(gastos).where(inArray(gastos.turnoId, turnoIds))
+            : Promise.resolve([])
+    ]);
+
+    // Mapear transacciones y gastos a sus respectivos turnos en memoria (O(N) instantáneo)
+    const transaccionesPorTurno: Record<number, typeof todasTransacciones> = {};
+    for (const tr of todasTransacciones) {
+        if (!transaccionesPorTurno[tr.turnoId]) transaccionesPorTurno[tr.turnoId] = [];
+        transaccionesPorTurno[tr.turnoId].push(tr);
     }
 
-    // 3. Obtener historial detallado de los últimos turnos (fecha, hora, efectivo, nequi, gastos, masas, porciones)
-    const ultimosTurnosRaw = await db.select({
-        id: turnos.id,
-        fecha: turnos.fecha,
-        monto: turnos.monto,
-        transferencias: turnos.transferencias,
-        descripcion: turnos.descripcion,
-        masasIniciales: turnos.masasIniciales,
-        masasSobrantes: turnos.masasSobrantes,
-        porcionesVendidas: turnos.porcionesVendidasCalculado,
-        porcionesMermadas: turnos.porcionesMermadas,
-        porcionesSobrantes: turnos.porcionesSobrantes,
-    })
-    .from(turnos)
-    .orderBy(desc(turnos.id))
-    .limit(20);
+    const gastosPorTurno: Record<number, typeof todosGastos> = {};
+    for (const g of todosGastos) {
+        if (g.turnoId) {
+            if (!gastosPorTurno[g.turnoId]) gastosPorTurno[g.turnoId] = [];
+            gastosPorTurno[g.turnoId].push(g);
+        }
+    }
 
-    const ultimosTurnos = await Promise.all(ultimosTurnosRaw.map(async (t) => {
-        const transacciones = await db.select().from(transaccionesTurno).where(eq(transaccionesTurno.turnoId, t.id));
-        const gastosTurno = await db.select().from(gastos).where(eq(gastos.turnoId, t.id));
+    const ultimosTurnos = ultimosTurnosRaw.map((t) => {
+        const transacciones = transaccionesPorTurno[t.id] || [];
+        const gastosTurno = gastosPorTurno[t.id] || [];
         const totalGastosTurno = gastosTurno.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0);
         return {
             ...t,
@@ -69,7 +87,7 @@ export const load: PageServerLoad = async () => {
             totalGastos: totalGastosTurno,
             totalIngresado: (parseFloat(t.monto) || 0) + (parseFloat(t.transferencias || '0') || 0)
         };
-    }));
+    });
 
     return { 
         inventario: { masasActuales, porcionesAyer, precioPorcion: 7000 },
