@@ -68,7 +68,7 @@
           <span class="font-bold text-emerald-600">${bebida.precio}</span>
         </div>
         <div class="text-sm text-slate-600 bg-slate-50 p-2 rounded-lg inline-block self-start">
-          Stock actual: <span class="font-bold {bebida.stockActual > 0 ? 'text-slate-800' : 'text-red-500'}">{bebida.stockActual}</span>
+          Stock actual: <span class="font-bold {(bebida.stockActual ?? 0) > 0 ? 'text-slate-800' : 'text-red-500'}">{bebida.stockActual ?? 0}</span>
         </div>
         <div class="flex justify-end gap-2 mt-2 pt-3 border-t border-slate-100">
           <button 
@@ -107,8 +107,8 @@
             <td class="p-4 font-medium text-slate-800">{bebida.nombre}</td>
             <td class="p-4 text-emerald-600 font-medium">${bebida.precio}</td>
             <td class="p-4">
-              <span class="px-3 py-1 rounded-full text-sm font-medium {bebida.stockActual > 0 ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'}">
-                {bebida.stockActual} unidades
+              <span class="px-3 py-1 rounded-full text-sm font-medium {(bebida.stockActual ?? 0) > 0 ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'}">
+                {bebida.stockActual ?? 0} unidades
               </span>
             </td>
             <td class="p-4 flex justify-end gap-2">

@@ -1,6 +1,21 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { fade, slide } from 'svelte/transition';
+  import { 
+    Boxes, 
+    Pizza, 
+    Flame, 
+    Calculator, 
+    CheckCircle2, 
+    AlertTriangle, 
+    Banknote, 
+    Smartphone, 
+    Receipt, 
+    LockKeyhole, 
+    History,
+    Sparkles,
+    Lightbulb
+  } from '@lucide/svelte';
   let { data, form } = $props();
 
   let gastos = $state<{ id: number; descripcion: string; monto: string }[]>([]);
@@ -64,26 +79,26 @@
         <p class="text-xs font-bold text-orange-800 uppercase tracking-wider mb-1">Venta Esperada</p>
         <p class="text-4xl font-black text-orange-600">${granTotalEsperado.toLocaleString('es-CO')}</p>
         <div class="text-xs text-orange-700 mt-3 space-y-1 bg-white/60 p-3 rounded-xl border border-orange-100">
-          <p class="flex justify-between"><span>📦 Masas Usadas:</span> <span class="font-bold text-slate-800">{masasUsadas}</span></p>
-          <p class="flex justify-between"><span>🍕 Porciones Vendidas:</span> <span class="font-bold text-slate-800">{porcionesVendidas}</span></p>
+          <p class="flex justify-between"><span>Masas Crudas Usadas:</span> <span class="font-bold text-slate-800">{masasUsadas} masas</span></p>
+          <p class="flex justify-between"><span>Porciones Totales Vendidas:</span> <span class="font-bold text-slate-800">{porcionesVendidas} porc.</span></p>
         </div>
       </div>
     </div>
   </div>
 
   {#if form?.success}
-    <div  class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl mb-6 shadow-sm border border-emerald-200 flex items-center gap-3">
-      <span class="text-2xl">✨</span>
+    <div class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl mb-6 shadow-sm border border-emerald-200 flex items-center gap-3">
+      <CheckCircle2 size={24} class="text-emerald-600 shrink-0" />
       <div>
-        <span class="font-bold block">¡Éxito!</span>
+        <span class="font-bold block">Operación exitosa</span>
         <span class="text-sm">{form.message}</span>
       </div>
     </div>
   {/if}
 
   {#if form?.error}
-    <div  class="bg-red-50 text-red-800 p-5 rounded-2xl mb-6 shadow-sm border border-red-200 flex items-center gap-3">
-      <span class="text-2xl">⚠️</span>
+    <div class="bg-red-50 text-red-800 p-5 rounded-2xl mb-6 shadow-sm border border-red-200 flex items-center gap-3">
+      <AlertTriangle size={24} class="text-red-600 shrink-0" />
       <div>
         <span class="font-bold block">Error</span>
         <span class="text-sm">{form.error}</span>
@@ -103,7 +118,7 @@
     <!-- Sección de Inventario -->
     <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
       <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl">📦</span> Inventario Físico
+        <span class="bg-orange-100 p-2 rounded-xl text-orange-600"><Boxes size={20} /></span> Inventario Físico
       </h2>
       
       <!-- Campos ocultos para enviar al backend -->
@@ -111,8 +126,13 @@
       <input type="hidden" name="porciones_ayer" value={porcionesAyer} />
 
       <div class="grid grid-cols-1 gap-6">
-        <div>
-          <label for="masas_sobrantes" class="block text-sm font-bold text-slate-600 mb-2">Masas Crudas Sobrantes</label>
+        <div class="p-4 bg-amber-50/50 border border-amber-100 rounded-2xl">
+          <label for="masas_sobrantes" class="block text-sm font-bold text-slate-700 mb-1">
+            Masas Crudas Sobrantes en Nevera/Bodega
+          </label>
+          <p class="text-xs text-slate-500 mb-3">
+            Bolas de masa sin hornear que quedaron guardadas. Con esto el sistema sabe cuántas masas crudas se gastaron en el turno.
+          </p>
           <div class="flex items-center gap-4">
             <input 
               type="number" 
@@ -123,14 +143,26 @@
               min="0"
               step="0.5"
               placeholder="Ej. 12"
-              class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
+              class="w-full md:w-1/2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
             />
-            <span class="text-sm bg-slate-100 text-slate-500 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} iniciales</span>
+            <span class="text-sm bg-amber-100/80 text-amber-800 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} masas iniciales</span>
           </div>
         </div>
 
-        <div>
-          <label for="porciones_sobrantes" class="block text-sm font-bold text-slate-600 mb-2">Porciones Buenas Sobrantes (Vitrina para mañana)</label>
+        <div class="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
+          <div class="flex items-center justify-between mb-1">
+            <label for="porciones_sobrantes" class="block text-sm font-bold text-slate-700">
+              🍕 Porciones Horneadas Sobrantes en Vitrina (Quedan para mañana)
+            </label>
+            {#if porcionesAyer > 0}
+              <span class="text-xs bg-orange-200 text-orange-900 font-bold px-2.5 py-1 rounded-lg">
+                Recibidas de ayer: {porcionesAyer} porc.
+              </span>
+            {/if}
+          </div>
+          <p class="text-xs text-slate-500 mb-3">
+            Porciones ya preparadas en vitrina al cierre. Ten en cuenta que las porciones que venían de ayer ({porcionesAyer}) se venden de primero (rotación), sumadas a las porciones nuevas horneadas de las masas de hoy.
+          </p>
           <input 
             type="number" 
             id="porciones_sobrantes" 
@@ -140,9 +172,8 @@
             min="0"
             step="1"
             placeholder="Ej. 3"
-            class="w-full md:w-1/2 px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
+            class="w-full md:w-1/2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
           />
-          <p class="text-xs text-slate-400 mt-1">Porciones en perfecto estado que quedan disponibles para el inicio del siguiente turno.</p>
         </div>
 
         <div>
@@ -162,13 +193,45 @@
             ⚠️ <strong>Importante:</strong> Las porciones quemadas se descuentan de la venta esperada. Es decir, el sistema <strong>no</strong> exigirá el dinero de estas porciones en caja, pero registrará la pérdida en el inventario.
           </p>
         </div>
+
+        <!-- Tarjeta dinámica de desglose matemático para el operador -->
+        <div class="p-5 bg-gradient-to-br from-slate-50 to-orange-50/40 border border-orange-200/60 rounded-2xl">
+          <h3 class="text-xs font-black uppercase tracking-wider text-orange-950 mb-3 flex items-center gap-1.5">
+            <span>🧮</span> Desglose Automático del Turno en Vivo
+          </h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+              <span class="text-[11px] font-bold text-slate-400 block uppercase">De Ayer (Vitrina)</span>
+              <p class="text-lg font-black text-slate-800">{porcionesAyer} <span class="text-xs text-slate-400">porc.</span></p>
+              <span class="text-[10px] text-emerald-600 font-semibold">Salen de primero</span>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+              <span class="text-[11px] font-bold text-slate-400 block uppercase">Nuevas de Hoy</span>
+              <p class="text-lg font-black text-slate-800">{porcionesNuevas} <span class="text-xs text-slate-400">porc.</span></p>
+              <span class="text-[10px] text-slate-500 font-medium">({masasUsadas} masas × 8)</span>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+              <span class="text-[11px] font-bold text-slate-400 block uppercase">Sobraron para Mañana</span>
+              <p class="text-lg font-black text-amber-700">{porcionesSobrantes} <span class="text-xs text-slate-400">porc.</span></p>
+              <span class="text-[10px] text-amber-600 font-medium">En vitrina</span>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-orange-200 shadow-sm">
+              <span class="text-[11px] font-bold text-orange-600 block uppercase">Vendidas Reales</span>
+              <p class="text-xl font-black text-orange-600">{porcionesVendidas} <span class="text-xs text-orange-400">porc.</span></p>
+              <span class="text-[10px] text-orange-700 font-bold">${granTotalEsperado.toLocaleString('es-CO')}</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-3 text-center">
+            Fórmula exacta: <strong>({porcionesAyer} de ayer + {porcionesNuevas} de hoy) - {porcionesSobrantes} sobras - {porcionesMermadas} mermas = {porcionesVendidas} porciones vendidas</strong>
+          </p>
+        </div>
       </div>
     </div>
 
     <!-- Sección de Desglose de Sabores -->
     <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
       <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl">🍕</span> Desglose por Sabores y Mermas
+        <span class="bg-orange-100 p-2 rounded-xl text-orange-600"><Pizza class="w-5 h-5" /></span> Desglose por Sabores y Mermas
       </h2>
       <p class="text-sm font-medium text-slate-500 mb-6">Detalla cuántas ruedas preparaste, cuántas porciones buenas sobraron en vitrina y si hubo porciones quemadas o dañadas por sabor:</p>
       
@@ -227,14 +290,16 @@
     <!-- Sección de Caja Desglosada -->
     <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
       <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl">💳</span> Medios de Pago
+        <span class="bg-orange-100 p-2 rounded-xl text-orange-600"><Banknote class="w-5 h-5" /></span> Medios de Pago
       </h2>
       <p class="text-sm font-medium text-slate-500 mb-6">Detalla el dinero recibido en cada plataforma. El sistema sumará todo para el cuadre.</p>
 
       <div class="space-y-5">
         <!-- Efectivo -->
         <div class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl">
-          <label for="monto" class="block text-sm font-black text-emerald-800 mb-2">💵 Efectivo Físico en Caja</label>
+          <label for="monto" class="flex items-center gap-2 text-sm font-black text-emerald-800 mb-2">
+            <Banknote class="w-4 h-4 text-emerald-600" /> Efectivo Físico en Caja
+          </label>
           <div class="relative">
             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-black">$</span>
             <input type="number" id="monto" name="monto" bind:value={montoFisico}
@@ -246,7 +311,9 @@
 
         <!-- Nequi -->
         <div class="p-5 bg-purple-50 border border-purple-200 rounded-2xl space-y-3">
-          <label class="block text-sm font-black text-purple-800">📱 Nequi</label>
+          <label class="flex items-center gap-2 text-sm font-black text-purple-800">
+            <Smartphone class="w-4 h-4 text-purple-600" /> Nequi
+          </label>
           <div class="flex flex-col md:flex-row gap-4">
             <div class="relative flex-1">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-purple-700 font-black">$</span>
@@ -261,8 +328,6 @@
             />
           </div>
         </div>
-
-
 
         <!-- Mini resumen de transferencias -->
         {#if totalTransferencias > 0}
@@ -287,7 +352,7 @@
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <span>🧾</span> Gastos del Turno
+          <span class="text-amber-600"><Receipt class="w-5 h-5" /></span> Gastos del Turno
         </h2>
         <button 
           type="button" 
@@ -354,7 +419,7 @@
         <div class="border-b border-slate-100 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
           <div>
             <h2 class="text-xl font-black text-slate-800 flex items-center gap-3">
-              <span class="bg-blue-100 p-2 rounded-xl">⚖️</span> Balance y Cuadre de Turno
+              <span class="bg-blue-100 p-2 rounded-xl text-blue-600"><Calculator class="w-5 h-5" /></span> Balance y Cuadre de Turno
             </h2>
             <p class="text-xs text-slate-400 mt-1">Comparación exacta entre el dinero recibido (físico + digital) y las porciones vendidas.</p>
           </div>
@@ -426,7 +491,7 @@
 
         {#if diferencia > 0}
           <div class="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3">
-            <span class="text-blue-600 text-2xl">💡</span>
+            <Lightbulb class="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
             <div>
               <p class="text-sm font-bold text-blue-900">Sobrante de dinero (+${diferencia.toLocaleString('es-CO')})</p>
               <p class="text-xs text-blue-800 mt-1">
@@ -436,7 +501,7 @@
           </div>
         {:else if diferencia < 0}
           <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
-            <span class="text-rose-600 text-2xl">⚠️</span>
+            <AlertTriangle class="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
             <div>
               <p class="text-sm font-bold text-rose-900">Faltante de dinero (-${Math.abs(diferencia).toLocaleString('es-CO')})</p>
               <p class="text-xs text-rose-800 mt-1">
@@ -446,7 +511,7 @@
           </div>
         {:else}
           <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
-            <span class="text-emerald-600 text-2xl">🎉</span>
+            <CheckCircle2 class="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
             <div>
               <p class="text-sm font-bold text-emerald-900">¡Caja perfectamente balanceada!</p>
               <p class="text-xs text-emerald-800 mt-1">
@@ -464,7 +529,7 @@
         type="submit" 
         class="w-full py-5 px-8 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-xl flex justify-center items-center gap-3 cursor-pointer transform active:scale-98"
       >
-        <span class="text-2xl">🔒</span> Guardar y Cerrar Turno
+        <LockKeyhole class="w-6 h-6" /> Guardar y Cerrar Turno
       </button>
     </div>
     
@@ -476,7 +541,7 @@
       <div class="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div class="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold mb-2">
-            <span>🕒</span> Auditoría y Trazabilidad
+            <History class="w-3.5 h-3.5" /> Auditoría y Trazabilidad
           </div>
           <h2 class="text-2xl font-black text-slate-900 tracking-tight">Historial de Turnos y Entradas de Caja</h2>
           <p class="text-sm text-slate-500 mt-1">
@@ -495,9 +560,9 @@
               <th class="p-4 pl-6">Fecha y Hora</th>
               <th class="p-4 text-center">Porciones Vendidas</th>
               <th class="p-4 text-center text-rose-500">Mermas</th>
-              <th class="p-4 text-right">💵 Efectivo</th>
-              <th class="p-4 text-right text-purple-600">📱 Nequi</th>
-              <th class="p-4 text-right text-amber-600">🧾 Gastos</th>
+              <th class="p-4 text-right">Efectivo</th>
+              <th class="p-4 text-right text-purple-600">Nequi</th>
+              <th class="p-4 text-right text-amber-600">Gastos</th>
               <th class="p-4 text-right pr-6 font-black text-slate-900">Total Producido</th>
             </tr>
           </thead>
@@ -527,7 +592,7 @@
                 <td class="p-4 text-center">
                   {#if (turno.porcionesMermadas ?? 0) > 0}
                     <span class="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-md text-xs font-bold">
-                      🔥 {turno.porcionesMermadas}
+                      {turno.porcionesMermadas} mermas
                     </span>
                   {:else}
                     <span class="text-xs text-slate-300">-</span>

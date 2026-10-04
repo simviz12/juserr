@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { cierresDia, cortesSemanales } from '$lib/server/schema';
+import { turnos, cierresDia, cortesSemanales } from '$lib/server/schema';
 import { sql, and, gte, lte, desc } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';

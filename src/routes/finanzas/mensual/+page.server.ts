@@ -6,7 +6,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
     const mesParam = url.searchParams.get('mes');
-    let dataCortes = [];
+    let dataCortes: (typeof cortesSemanales.$inferSelect)[] = [];
     let monthLabel = '';
 
     if (mesParam) {

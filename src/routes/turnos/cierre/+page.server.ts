@@ -5,9 +5,9 @@ import type { Actions, PageServerLoad } from './$types';
 import { eq, desc, inArray } from 'drizzle-orm';
 
 export const load: PageServerLoad = async () => {
-    // 1. Obtener producto "Masas", último turno, lista de sabores y turnos recientes en paralelo
+    // 1. Obtener producto "Masa" (o "Masas"), último turno, lista de sabores y turnos recientes en paralelo
     const [masaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw] = await Promise.all([
-        db.select().from(productos).where(eq(productos.nombre, 'Masas')),
+        db.select().from(productos).where(eq(productos.nombre, 'Masa')),
         db.select({
             id: turnos.id,
             porcionesSobrantes: turnos.porcionesSobrantes
@@ -29,13 +29,18 @@ export const load: PageServerLoad = async () => {
 
     let masaProduct = masaRows[0];
     if (!masaProduct) {
-        const [nuevo] = await db.insert(productos).values({
-            nombre: 'Masas',
-            unidadMedida: 'unidad',
-            stockActual: 0,
-            precio: '0'
-        }).returning();
-        masaProduct = nuevo;
+        const [fallback] = await db.select().from(productos).where(eq(productos.nombre, 'Masas'));
+        if (fallback) {
+            masaProduct = fallback;
+        } else {
+            const [nuevo] = await db.insert(productos).values({
+                nombre: 'Masa',
+                unidadMedida: 'unidad',
+                stockActual: 0,
+                precio: '0'
+            }).returning();
+            masaProduct = nuevo;
+        }
     }
 
     const ultimoTurno = ultimosTurnoRows[0];
@@ -62,13 +67,13 @@ export const load: PageServerLoad = async () => {
     ]);
 
     // Mapear transacciones y gastos a sus respectivos turnos en memoria (O(N) instantáneo)
-    const transaccionesPorTurno: Record<number, typeof todasTransacciones> = {};
+    const transaccionesPorTurno: Record<number, (typeof todasTransacciones[number])[]> = {};
     for (const tr of todasTransacciones) {
         if (!transaccionesPorTurno[tr.turnoId]) transaccionesPorTurno[tr.turnoId] = [];
         transaccionesPorTurno[tr.turnoId].push(tr);
     }
 
-    const gastosPorTurno: Record<number, typeof todosGastos> = {};
+    const gastosPorTurno: Record<number, (typeof todosGastos[number])[]> = {};
     for (const g of todosGastos) {
         if (g.turnoId) {
             if (!gastosPorTurno[g.turnoId]) gastosPorTurno[g.turnoId] = [];
@@ -198,10 +203,10 @@ export const actions: Actions = {
                     );
                 }
 
-                // 4. Actualizar stock de Masas
+                // 4. Actualizar stock de Masa
                 await db.update(productos)
                     .set({ stockActual: masasSobrantes })
-                    .where(eq(productos.nombre, 'Masas'));
+                    .where(eq(productos.nombre, 'Masa'));
 
                 // 5. Guardar métricas de pizzas por sabor
                 for (const sabor of sabores) {

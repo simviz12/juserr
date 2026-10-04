@@ -18,8 +18,8 @@
       startY: 30,
       head: [['Fecha', 'Rango', 'Esperado', 'Físico', 'Diferencia']],
       body: data.cortes.map(c => [
-        new Date(c.fechaCorte).toLocaleDateString(),
-        `${new Date(c.rangoInicio).toLocaleDateString()} a ${new Date(c.rangoFin).toLocaleDateString()}`,
+        c.fechaCorte ? new Date(c.fechaCorte).toLocaleDateString() : '-',
+        `${c.rangoInicio ? new Date(c.rangoInicio).toLocaleDateString() : '-'} a ${c.rangoFin ? new Date(c.rangoFin).toLocaleDateString() : '-'}`,
         `$${Number(c.totalCalculado).toFixed(2)}`,
         `$${Number(c.totalReal).toFixed(2)}`,
         `$${Number(c.diferencia).toFixed(2)}`
@@ -116,10 +116,10 @@
               {#each data.cortes as corte}
                 <tr class="hover:bg-slate-50 transition-colors">
                   <td class="p-4 font-medium text-slate-800">
-                    {new Date(corte.fechaCorte).toLocaleDateString()}
+                    {corte.fechaCorte ? new Date(corte.fechaCorte).toLocaleDateString() : '-'}
                   </td>
                   <td class="p-4 text-slate-600 text-sm">
-                    {new Date(corte.rangoInicio).toLocaleDateString()} a {new Date(corte.rangoFin).toLocaleDateString()}
+                    {corte.rangoInicio ? new Date(corte.rangoInicio).toLocaleDateString() : '-'} a {corte.rangoFin ? new Date(corte.rangoFin).toLocaleDateString() : '-'}
                   </td>
                   <td class="p-4 text-right font-medium text-slate-700">${Number(corte.totalCalculado).toFixed(2)}</td>
                   <td class="p-4 text-right font-black text-slate-800">${Number(corte.totalReal).toFixed(2)}</td>

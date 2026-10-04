@@ -2,6 +2,8 @@
   import Chart from 'chart.js/auto';
   import jsPDF from 'jspdf';
   import autoTable from 'jspdf-autotable';
+  import * as XLSX from 'xlsx';
+  import { FileText, FileSpreadsheet, Sparkles } from '@lucide/svelte';
   let { data } = $props();
 
   let vistaActiva = $state<'diario' | 'semanal'>('diario');
@@ -11,7 +13,7 @@
     
     doc.setFontSize(20);
     doc.setTextColor(30, 41, 59);
-    doc.text('Reporte Financiero - JuanchoPizza', 14, 22);
+    doc.text('Reporte Financiero y Auditoría - JuanchoPizza', 14, 22);
     
     doc.setFontSize(10);
     doc.setTextColor(100);
@@ -19,7 +21,7 @@
     
     doc.setFontSize(13);
     doc.setTextColor(15, 23, 42);
-    doc.text('1. Consolidado General', 14, 42);
+    doc.text('1. Consolidado Financiero', 14, 42);
     
     autoTable(doc, {
       startY: 46,
@@ -35,9 +37,38 @@
       headStyles: { fillColor: [249, 115, 22] }
     });
     
-    doc.text('2. Historial de Días Detallado', 14, (doc as any).lastAutoTable.finalY + 12);
+    // 2. Auditoría Operativa de Porciones y Masas por Turno
+    if (data.turnosDetallados && data.turnosDetallados.length > 0) {
+      doc.text('2. Auditoría Operativa de Turnos (Masas y Porciones)', 14, (doc as any).lastAutoTable.finalY + 12);
+      
+      const bodyAuditoria = (data.turnosDetallados || []).map((t: any) => {
+        const fechaStr = t.fecha ? new Date(t.fecha).toLocaleDateString('es-CO') : '-';
+        const horaStr = t.fecha ? new Date(t.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
+        const masasUsadas = Math.max(0, (t.masasIniciales || 0) - (t.masasSobrantes || 0));
+        return [
+          `${fechaStr} ${horaStr}`,
+          `${t.porcionesAyer || 0}`,
+          `${masasUsadas} (${masasUsadas * 8}p)`,
+          `${t.porcionesSobrantes || 0}`,
+          `${t.porcionesMermadas || 0}`,
+          `${t.porcionesVendidasCalculado || 0}`,
+          `$${Number(t.monto).toLocaleString('es-CO')}`,
+          `$${Number(t.transferencias || 0).toLocaleString('es-CO')}`
+        ];
+      });
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 16,
+        head: [['Fecha Turno', 'Ayer (Vitrina)', 'Masas Usadas', 'Sobras Hoy', 'Mermas', 'Vendidas', 'Efectivo', 'Nequi']],
+        body: bodyAuditoria,
+        theme: 'striped',
+        headStyles: { fillColor: [234, 88, 12] }
+      });
+    }
+
+    doc.text('3. Historial Consolidado por Días', 14, (doc as any).lastAutoTable.finalY + 12);
     
-    const bodyDias = (data.historialDias || []).map(d => [
+    const bodyDias = (data.historialDias || []).map((d: any) => [
       d.fecha,
       `$${d.ventasBrutas.toLocaleString('es-CO')}`,
       `$${d.efectivo.toLocaleString('es-CO')}`,
@@ -54,7 +85,30 @@
       headStyles: { fillColor: [30, 41, 59] }
     });
     
-    doc.save(`JuanchoPizza_Finanzas_${data.inicio || 'Historico'}.pdf`);
+    doc.save(`JuanchoPizza_Reporte_${data.inicio || 'Historico'}.pdf`);
+  }
+
+  function exportComprasToExcel() {
+    if (!data.comprasHistorial || data.comprasHistorial.length === 0) {
+      alert('No se encontraron compras ni movimientos registrados para exportar.');
+      return;
+    }
+
+    const rows = data.comprasHistorial.map((m: any) => ({
+      'Fecha': m.fecha ? new Date(m.fecha).toLocaleDateString('es-CO') : '-',
+      'Hora': m.fecha ? new Date(m.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-',
+      'Tipo': m.tipo === 'entrada' ? 'Compra (Entrada Insumo)' : 'Ajuste de Stock Físico',
+      'Producto / Insumo': m.productoNombre,
+      'Unidad': m.unidadMedida,
+      'Cantidad Adquirida': m.cantidad,
+      'Costo Unitario ($)': Number(m.costoUnitario || 0),
+      'Inversión Total ($)': Number(m.costoTotal || 0)
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial General de Compras');
+    XLSX.writeFile(workbook, `JuanchoPizza_Compras_Historial_Completo_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
   function renderChart(node: HTMLCanvasElement, params: { semanas: any[], dias: any[] }) {
@@ -125,20 +179,30 @@
   <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
     <div>
       <div class="inline-flex items-center gap-2 px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-bold mb-2">
-        <span>✨</span> Panel Ejecutivo de Finanzas
+        <Sparkles class="w-3.5 h-3.5" /> Panel Ejecutivo de Finanzas
       </div>
       <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Rendimiento y Caja</h1>
       <p class="text-slate-500 text-sm mt-1">Monitorea el flujo de dinero, desglose de pagos e historial diario de turnos.</p>
     </div>
 
-    {#if data.historialDias && data.historialDias.length > 0}
+    <div class="flex flex-wrap items-center gap-3">
       <button 
-        onclick={exportToPDF}
-        class="py-4 px-7 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-2xl transition-all shadow-lg hover:shadow-xl flex items-center gap-2.5 text-base cursor-pointer transform active:scale-98"
+        onclick={exportComprasToExcel}
+        class="py-3.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all shadow-sm hover:shadow flex items-center gap-2 text-sm cursor-pointer transform active:scale-98"
+        title="Descargar archivo Excel con todo el historial de compras de insumos por fecha"
       >
-        <span class="text-xl">📄</span> Descargar Informe PDF
+        <FileSpreadsheet class="w-4 h-4" /> Exportar Compras (Excel)
       </button>
-    {/if}
+
+      {#if data.historialDias && data.historialDias.length > 0}
+        <button 
+          onclick={exportToPDF}
+          class="py-3.5 px-6 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-2xl transition-all shadow-md hover:shadow-lg flex items-center gap-2 text-sm cursor-pointer transform active:scale-98"
+        >
+          <FileText class="w-4 h-4" /> Informe Auditoría (PDF)
+        </button>
+      {/if}
+    </div>
   </div>
 
   <!-- Filtro de Rango -->

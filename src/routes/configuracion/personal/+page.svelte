@@ -85,7 +85,7 @@
                 </span>
               </td>
               <td class="p-4 text-sm text-slate-500">
-                {new Date(user.createdAt).toLocaleDateString()}
+                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}
               </td>
               <td class="p-4 flex justify-end gap-2">
                 <button 

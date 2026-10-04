@@ -12,7 +12,9 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
-		"test": "vitest"
+		"test": "vitest",
+		"db:seed": "tsx src/lib/server/seed.ts",
+		"db:reset-counts": "tsx src/lib/server/reset-counts.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -43,6 +45,7 @@
 		"vitest": "^5.0.0"
 	},
 	"dependencies": {
+		"@lucide/svelte": "^1.41.0",
 		"@neondatabase/serverless": "^1.1.0",
 		"@node-rs/argon2": "^2.0.2",
 		"@oslojs/crypto": "^1.0.1",
@@ -51,6 +54,6 @@
 		"drizzle-orm": "^0.45.2",
 		"jspdf": "^4.2.1",
 		"jspdf-autotable": "^5.0.8",
-		"@lucide/svelte": "^1.41.0"
+		"xlsx": "^0.18.5"
 	}
 }

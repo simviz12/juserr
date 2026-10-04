@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
-import { turnos, cierresDia, transaccionesTurno, gastos } from '$lib/server/schema';
-import { sql, and, gte, lte, desc } from 'drizzle-orm';
+import { turnos, cierresDia, transaccionesTurno, gastos, movimientosInventario, productos } from '$lib/server/schema';
+import { sql, and, gte, lte, desc, eq } from 'drizzle-orm';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -19,14 +19,20 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     const start = new Date(inicioParam + 'T00:00:00');
     const end = new Date(finParam + 'T23:59:59');
 
-    // 1, 2, 3. Obtener turnos, gastos y pagos por desglose en paralelo en una sola ronda de red
-    const [turnosRango, gastosRango, pagosDesglose] = await Promise.all([
+    // 1, 2, 3, 4. Obtener turnos, gastos, pagos por desglose e historial completo de compras
+    const [turnosRango, gastosRango, pagosDesglose, comprasHistorial] = await Promise.all([
         db.select({
             id: turnos.id,
             fecha: turnos.fecha,
             monto: turnos.monto,
             transferencias: turnos.transferencias,
-            descripcion: turnos.descripcion
+            descripcion: turnos.descripcion,
+            masasIniciales: turnos.masasIniciales,
+            masasSobrantes: turnos.masasSobrantes,
+            porcionesAyer: turnos.porcionesAyer,
+            porcionesSobrantes: turnos.porcionesSobrantes,
+            porcionesMermadas: turnos.porcionesMermadas,
+            porcionesVendidasCalculado: turnos.porcionesVendidasCalculado
         })
         .from(turnos)
         .where(and(gte(turnos.fecha, start), lte(turnos.fecha, end)))
@@ -43,7 +49,22 @@ export const load: PageServerLoad = async ({ url, locals }) => {
         })
         .from(transaccionesTurno)
         .where(and(gte(transaccionesTurno.fecha, start), lte(transaccionesTurno.fecha, end)))
-        .groupBy(transaccionesTurno.plataforma)
+        .groupBy(transaccionesTurno.plataforma),
+
+        // Historial completo de compras de insumos para el jefe
+        db.select({
+            id: movimientosInventario.id,
+            productoNombre: productos.nombre,
+            unidadMedida: productos.unidadMedida,
+            tipo: movimientosInventario.tipo,
+            cantidad: movimientosInventario.cantidad,
+            costoUnitario: movimientosInventario.costoUnitario,
+            costoTotal: movimientosInventario.costoTotal,
+            fecha: movimientosInventario.fecha
+        })
+        .from(movimientosInventario)
+        .innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
+        .orderBy(desc(movimientosInventario.fecha))
     ]);
 
     // 4. Agrupar turnos y gastos por fecha calendario (Día)
@@ -154,6 +175,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     return {
         semanas,
         historialDias,
+        turnosDetallados: turnosRango,
+        comprasHistorial,
         granTotal,
         promedioDiario,
         pagosDesglose,

@@ -49,12 +49,12 @@ async function seed() {
     { nombre: 'Margarita', precioPorcion: '3500', precioRueda: '28000' },
   ]);
 
-  // Insertar Bebidas
-  console.log('Inserting beverages...');
+  // Insertar Bebidas (stock inicial en 0)
+  console.log('Inserting beverages with 0 stock...');
   await db.insert(bebidas).values([
-    { nombre: 'Coca Cola 400ml', precio: '3000', stockActual: 24 },
-    { nombre: 'Jugo de Mora', precio: '4000', stockActual: 10 },
-    { nombre: 'Agua Manantial', precio: '2500', stockActual: 15 },
+    { nombre: 'Coca Cola 400ml', precio: '3000', stockActual: 0 },
+    { nombre: 'Jugo de Mora', precio: '4000', stockActual: 0 },
+    { nombre: 'Agua Manantial', precio: '2500', stockActual: 0 },
   ]);
 
   // Insertar Categorias
@@ -66,12 +66,13 @@ async function seed() {
     { nombre: 'Insumos Generales' }
   ]).returning();
 
-  // Insertar Productos de Prueba
-  console.log('Inserting sample products...');
+  // Insertar Productos de Catálogo (stock inicial en 0)
+  console.log('Inserting initial catalog products with 0 stock...');
   await db.insert(productos).values([
-    { nombre: 'Queso Mozzarella', categoriaId: catInserted[0].id, unidadMedida: 'fraccion', stockActual: 5, precio: '0' },
-    { nombre: 'Pechuga de Pollo', categoriaId: catInserted[1].id, unidadMedida: 'pechuga', stockActual: 10, precio: '0' },
-    { nombre: 'Piña', categoriaId: catInserted[2].id, unidadMedida: 'fraccion', stockActual: 2, precio: '0' },
+    { nombre: 'Masas', categoriaId: catInserted[3].id, unidadMedida: 'unidad', stockActual: 0, precio: '0' },
+    { nombre: 'Queso Mozzarella', categoriaId: catInserted[0].id, unidadMedida: 'fraccion', stockActual: 0, precio: '0' },
+    { nombre: 'Pechuga de Pollo', categoriaId: catInserted[1].id, unidadMedida: 'pechuga', stockActual: 0, precio: '0' },
+    { nombre: 'Piña', categoriaId: catInserted[2].id, unidadMedida: 'fraccion', stockActual: 0, precio: '0' },
   ]);
 
   console.log('Database seeding completed successfully!');

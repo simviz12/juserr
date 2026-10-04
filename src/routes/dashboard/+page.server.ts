@@ -26,7 +26,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         saboresVendidosResult,
         saboresDesperdicioResult
     ] = await Promise.all([
-        db.select().from(productos).where(eq(productos.nombre, 'Masas')),
+        db.select().from(productos).where(sql`${productos.nombre} IN ('Masa', 'Masas')`),
         db.select({ 
             efectivo: sql<number>`COALESCE(SUM(CAST(${turnos.monto} AS NUMERIC)), 0)`,
             transferencias: sql<number>`COALESCE(SUM(CAST(${turnos.transferencias} AS NUMERIC)), 0)`,
@@ -53,7 +53,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         .from(movimientosInventario)
         .innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
         .where(and(
-            eq(productos.nombre, 'Masas'),
+            sql`${productos.nombre} IN ('Masa', 'Masas')`,
             eq(movimientosInventario.tipo, 'entrada'),
             gte(movimientosInventario.fecha, fechaInicio), 
             lt(movimientosInventario.fecha, fechaFin)

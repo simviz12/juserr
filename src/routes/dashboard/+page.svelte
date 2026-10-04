@@ -1,7 +1,24 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { BarChart2, Bell, Calendar, TrendingUp, DollarSign, PieChart, ShoppingBag, Flame, Layers } from '@lucide/svelte';
+  import { 
+    BarChart2, 
+    Bell, 
+    Calendar, 
+    TrendingUp, 
+    DollarSign, 
+    PieChart, 
+    ShoppingBag, 
+    Flame, 
+    Layers,
+    Pizza,
+    Boxes,
+    Wallet,
+    Banknote,
+    Smartphone,
+    Receipt,
+    CheckCircle2
+  } from '@lucide/svelte';
   let { data } = $props();
 
   let rangoSeleccionado = $derived(data.rangoActual || 'diario');
@@ -62,7 +79,9 @@
   <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
     <div>
       <div class="flex items-center gap-2">
-        <span class="p-2 bg-orange-100 text-orange-600 rounded-xl text-lg">📊</span>
+        <span class="p-2 bg-orange-100 text-orange-600 rounded-xl">
+          <BarChart2 size={24} />
+        </span>
         <div>
           <h1 class="text-2xl font-black text-slate-900 tracking-tight">Estadísticas y Ventas</h1>
           <p class="text-xs text-slate-500 font-medium">Control en tiempo real de ventas, inventario y rendimiento por período.</p>
@@ -139,7 +158,7 @@
           <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Venta Bruta {etiquetaPeriodo}</span>
           <p class="text-2xl font-black text-slate-900 mt-0.5">${data.ventasBrutas.toLocaleString('es-CO')}</p>
           <span class="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
-            <span>📈</span> {data.cantidadTurnos} {data.cantidadTurnos === 1 ? 'turno cerrado' : 'turnos cerrados'}
+            <TrendingUp size={14} /> {data.cantidadTurnos} {data.cantidadTurnos === 1 ? 'turno cerrado' : 'turnos cerrados'}
           </span>
         </div>
       </div>
@@ -154,36 +173,36 @@
           Menos <strong class="text-white font-bold">${data.gastosPeriodo.toLocaleString('es-CO')}</strong> en gastos
         </span>
       </div>
-      <div class="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-3xl">
-        💰
+      <div class="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-white">
+        <DollarSign size={28} />
       </div>
     </div>
 
-    <!-- Porciones Vendidas y Masas -->
+    <!-- Pizzas y Porciones Vendidas -->
     <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between">
       <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Porciones Vendidas</span>
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Pizzas y Porciones Vendidas</span>
         <p class="text-2xl font-black text-slate-900 mt-1">{data.totalPorcionesVendidas} <span class="text-sm font-bold text-slate-400">porc.</span></p>
         <p class="text-xs text-slate-500 font-medium mt-1">
-          Equivalente a <strong class="text-slate-800 font-bold">{masasUsadas} pizzas</strong> preparadas
+          Equivalente a <strong class="text-slate-800 font-bold">{masasUsadas} pizzas completas</strong> (8 porc/pizza)
         </p>
       </div>
-      <div class="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center text-2xl font-bold">
-        🍕
+      <div class="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center" title="Pizzas horneadas y vendidas">
+        <Pizza size={28} />
       </div>
     </div>
 
-    <!-- Masas en Bodega y Mermas -->
+    <!-- Masas Crudas en Bodega y Mermas -->
     <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between">
       <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Stock Masas en Bodega</span>
-        <p class="text-2xl font-black text-slate-900 mt-1">{masasDisponibles} <span class="text-sm font-bold text-slate-400">crudas</span></p>
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Masas Crudas en Bodega</span>
+        <p class="text-2xl font-black text-slate-900 mt-1">{masasDisponibles} <span class="text-sm font-bold text-slate-400">unid. crudas</span></p>
         <p class="text-xs text-rose-600 font-medium mt-1 flex items-center gap-1">
-          <span>🔥</span> Mermas: <strong>{data.totalMermas} porciones quemadas</strong>
+          Mermas: <strong>{data.totalMermas} porciones quemadas</strong>
         </p>
       </div>
-      <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center text-2xl">
-        📦
+      <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center" title="Inventario físico de bolas/masas crudas">
+        <Boxes size={28} />
       </div>
     </div>
   </section>
@@ -191,46 +210,46 @@
   <!-- Desglose de Canales de Pago del Período -->
   <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
     <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
-      <span>💳</span> Desglose de Canales de Pago {etiquetaPeriodo}
+      <Wallet size={16} class="text-slate-500" /> Desglose de Canales de Pago {etiquetaPeriodo}
     </h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <!-- Efectivo -->
       <div class="p-4 bg-blue-50/70 border border-blue-200/70 rounded-2xl flex items-center justify-between">
         <div>
-          <span class="text-xs font-bold uppercase text-blue-800 tracking-wider block">💵 Efectivo en Caja</span>
+          <span class="text-xs font-bold uppercase text-blue-800 tracking-wider block">Efectivo en Caja</span>
           <p class="text-xl font-black text-blue-900 mt-1">${data.totalEfectivo.toLocaleString('es-CO')}</p>
           <span class="text-[11px] text-blue-600 font-semibold">
             {data.ventasBrutas > 0 ? Math.round((data.totalEfectivo / data.ventasBrutas) * 100) : 0}% de las ventas
           </span>
         </div>
         <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 font-bold">
-          💵
+          <Banknote size={20} />
         </div>
       </div>
 
       <!-- Nequi -->
       <div class="p-4 bg-purple-50/70 border border-purple-200/70 rounded-2xl flex items-center justify-between">
         <div>
-          <span class="text-xs font-bold uppercase text-purple-800 tracking-wider block">📱 Nequi (Bancarizado)</span>
+          <span class="text-xs font-bold uppercase text-purple-800 tracking-wider block">Nequi (Transferencias)</span>
           <p class="text-xl font-black text-purple-900 mt-1">${data.totalTransferencias.toLocaleString('es-CO')}</p>
           <span class="text-[11px] text-purple-600 font-semibold">
             {data.ventasBrutas > 0 ? Math.round((data.totalTransferencias / data.ventasBrutas) * 100) : 0}% de las ventas
           </span>
         </div>
         <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 font-bold">
-          📱
+          <Smartphone size={20} />
         </div>
       </div>
 
       <!-- Gastos -->
       <div class="p-4 bg-rose-50/70 border border-rose-200/70 rounded-2xl flex items-center justify-between">
         <div>
-          <span class="text-xs font-bold uppercase text-rose-800 tracking-wider block">🧾 Gastos Pagados</span>
+          <span class="text-xs font-bold uppercase text-rose-800 tracking-wider block">Gastos Pagados</span>
           <p class="text-xl font-black text-rose-900 mt-1">-${data.gastosPeriodo.toLocaleString('es-CO')}</p>
           <span class="text-[11px] text-rose-600 font-semibold">Compras menores del período</span>
         </div>
         <div class="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600 font-bold">
-          🧾
+          <Receipt size={20} />
         </div>
       </div>
     </div>
@@ -273,7 +292,7 @@
           </div>
         {:else}
           <div class="text-center py-12 text-slate-400">
-            <span class="text-4xl block mb-2">🍕</span>
+            <Pizza size={40} class="mx-auto mb-2 text-slate-300" />
             <p class="font-medium text-slate-600 text-sm">No hay registros de ventas procesados {etiquetaPeriodo.toLowerCase()}.</p>
             <p class="text-xs text-slate-400 mt-1">Al cerrar turnos en esta fecha, aquí verás qué sabor es el más vendido.</p>
           </div>
@@ -316,7 +335,7 @@
           </div>
         {:else}
           <div class="text-center py-12 text-slate-400">
-            <span class="text-4xl block mb-2">✅</span>
+            <CheckCircle2 size={40} class="mx-auto mb-2 text-emerald-500" />
             <p class="font-bold text-emerald-700 text-sm">Inventario en niveles óptimos</p>
             <p class="text-xs text-slate-400 mt-1">Todos los ingredientes y masas superan el stock mínimo de seguridad.</p>
           </div>

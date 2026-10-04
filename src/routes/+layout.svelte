@@ -2,15 +2,28 @@
   import './layout.css';
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
+  import { 
+    LayoutDashboard, 
+    LockKeyhole, 
+    Boxes, 
+    DollarSign, 
+    UtensilsCrossed, 
+    Users, 
+    LogOut, 
+    Bell, 
+    Menu, 
+    X,
+    Pizza
+  } from '@lucide/svelte';
   let { children, data } = $props();
   
   const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: '📈', roles: ['jefe'] },
-    { name: 'Cierre de Turno', path: '/turnos/cierre', icon: '🔒', roles: ['jefe', 'empleado', 'cajero', 'bodeguero'] },
-    { name: 'Bodega e Insumos', path: '/bodega', icon: '📦', roles: ['jefe', 'empleado', 'bodeguero'] },
-    { name: 'Finanzas', path: '/finanzas/resumen', icon: '💼', roles: ['jefe'] },
-    { name: 'Productos', path: '/productos', icon: '🍕', roles: ['jefe'] },
-    { name: 'Personal', path: '/configuracion/personal', icon: '👥', roles: ['jefe'] },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['jefe'] },
+    { name: 'Cierre de Turno', path: '/turnos/cierre', icon: LockKeyhole, roles: ['jefe', 'empleado', 'cajero', 'bodeguero'] },
+    { name: 'Bodega e Insumos', path: '/bodega', icon: Boxes, roles: ['jefe', 'empleado', 'bodeguero'] },
+    { name: 'Finanzas', path: '/finanzas/resumen', icon: DollarSign, roles: ['jefe'] },
+    { name: 'Productos', path: '/productos', icon: Pizza, roles: ['jefe'] },
+    { name: 'Personal', path: '/configuracion/personal', icon: Users, roles: ['jefe'] },
   ];
 
   let visibleNavItems = $derived(navItems.filter(item => data.user && item.roles.includes(data.user.rol)));
@@ -22,8 +35,8 @@
     <!-- Desktop Sidebar Navigation -->
     <aside class="hidden md:flex flex-col w-72 h-full bg-white shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 border-r border-slate-100">
       <div class="p-8 pb-4 flex items-center gap-3">
-        <div class="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30 text-white text-xl">
-          🍕
+        <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30 text-white">
+          <Pizza size={22} />
         </div>
         <h1 class="text-2xl font-black tracking-tight text-slate-900">JuanchoPizza</h1>
       </div>
@@ -34,11 +47,12 @@
 
       <nav class="flex-1 px-4 space-y-1.5 overflow-y-auto pb-4 custom-scrollbar">
       {#each visibleNavItems as item}
+        {@const Icon = item.icon}
         <a 
           href={item.path} 
-          class="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-200 font-bold text-base {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}"
+          class="flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all duration-200 font-bold text-sm {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}"
         >
-          <span class="text-2xl { $page.url.pathname.startsWith(item.path) ? 'opacity-100' : 'opacity-70' }">{item.icon}</span>
+          <Icon size={20} class="{$page.url.pathname.startsWith(item.path) ? 'text-orange-600' : 'text-slate-400'}" />
           <span>{item.name}</span>
         </a>
       {/each}
@@ -55,8 +69,8 @@
           </div>
         </div>
         <form action="/logout" method="POST">
-          <button type="submit" class="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-5 py-3.5 rounded-2xl transition-all font-bold text-base shadow-sm">
-            <span>🚪</span> Cerrar sesión
+          <button type="submit" class="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-5 py-3 rounded-2xl transition-all font-bold text-sm shadow-sm cursor-pointer">
+            <LogOut size={16} /> Cerrar sesión
           </button>
         </form>
       </div>
@@ -67,19 +81,24 @@
       <div class="md:hidden fixed inset-0 z-50 flex flex-col bg-white text-slate-800">
         <div class="flex justify-between items-center p-6 border-b border-slate-100">
           <div class="flex items-center gap-3">
-             <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-sm">🍕</div>
+             <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-sm">
+               <Pizza size={18} />
+             </div>
              <h1 class="text-xl font-black text-slate-900">JuanchoPizza</h1>
           </div>
-          <button onclick={() => mobileMenuOpen = false} class="text-3xl text-slate-400 p-2">×</button>
+          <button onclick={() => mobileMenuOpen = false} class="p-2 text-slate-400 hover:text-slate-700">
+            <X size={24} />
+          </button>
         </div>
         <nav class="flex-1 overflow-y-auto p-4 space-y-2">
           {#each visibleNavItems as item}
+            {@const Icon = item.icon}
             <a 
               href={item.path} 
               onclick={() => mobileMenuOpen = false}
-              class="flex items-center gap-4 px-4 py-4 rounded-2xl transition-all font-medium text-lg {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600' : 'text-slate-600'}"
+              class="flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-medium text-base {$page.url.pathname.startsWith(item.path) ? 'bg-orange-50 text-orange-600' : 'text-slate-600'}"
             >
-              <span class="text-2xl">{item.icon}</span>
+              <Icon size={20} />
               <span>{item.name}</span>
             </a>
           {/each}
@@ -94,20 +113,20 @@
     <!-- Header -->
     <header class="h-20 bg-white/80 backdrop-blur-md z-10 sticky top-0 flex items-center justify-between px-8 border-b border-slate-100">
       <div class="flex items-center gap-4 md:hidden">
-        <button onclick={() => mobileMenuOpen = true} class="text-slate-700 text-2xl p-2 bg-slate-50 rounded-xl">
-          ☰
+        <button onclick={() => mobileMenuOpen = true} class="text-slate-700 p-2 bg-slate-50 rounded-xl">
+          <Menu size={20} />
         </button>
       </div>
       
       <!-- Greeting / Breadcrumb placeholder -->
       <div class="hidden md:block">
-        <h2 class="text-lg font-bold text-slate-800">¡Hola, {data.user.nombre}! 👋</h2>
+        <h2 class="text-lg font-bold text-slate-800">¡Hola, {data.user.nombre}!</h2>
         <p class="text-sm text-slate-500">Bienvenido al sistema de gestión</p>
       </div>
 
       <div class="flex items-center gap-4 ml-auto">
-        <div class="bg-white p-2 rounded-full shadow-sm border border-slate-100 cursor-pointer hover:bg-slate-50">
-           <span class="text-xl">🔔</span>
+        <div class="bg-white p-2.5 rounded-full shadow-sm border border-slate-100 cursor-pointer hover:bg-slate-50 text-slate-600">
+           <Bell size={18} />
         </div>
       </div>
     </header>

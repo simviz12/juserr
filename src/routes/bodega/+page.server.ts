@@ -11,10 +11,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 
     const allProducts = await db.select().from(productos);
     
-    let masaProduct = allProducts.find(p => p.nombre === 'Masas');
+    let masaProduct = allProducts.find(p => p.nombre === 'Masa' || p.nombre === 'Masas');
     if (!masaProduct) {
         const [nuevo] = await db.insert(productos).values({
-            nombre: 'Masas',
+            nombre: 'Masa',
             unidadMedida: 'unidad',
             stockActual: 0,
             precio: '0'
@@ -23,7 +23,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         allProducts.push(nuevo);
     }
 
-    // Movimientos recientes con nombre de producto
+    // Historial de compras y movimientos con nombre de producto
     const historialMovimientos = await db.select({
         id: movimientosInventario.id,
         productoNombre: productos.nombre,
@@ -36,8 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     })
     .from(movimientosInventario)
     .innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
-    .orderBy(desc(movimientosInventario.fecha))
-    .limit(20);
+    .orderBy(desc(movimientosInventario.fecha));
 
     return { 
         stockMasas: masaProduct.stockActual || 0,
