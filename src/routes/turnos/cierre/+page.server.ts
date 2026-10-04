@@ -3,6 +3,7 @@ import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizz
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { eq, desc, inArray } from 'drizzle-orm';
+import { parseFraction } from '$lib/utils/fractions';
 
 export const load: PageServerLoad = async () => {
     // 1. Obtener producto "Masa" (o "Masas"), último turno, lista de sabores y turnos recientes en paralelo
@@ -128,7 +129,8 @@ export const actions: Actions = {
         }
 
         // ── Inventario ────────────────────────────────────────────────────
-        const masasSobrantes   = parseFloat(formData.get('masas_sobrantes')?.toString()   || '0');
+        const masasSobrantesStr = formData.get('masas_sobrantes')?.toString() || '0';
+        const masasSobrantes   = parseFraction(masasSobrantesStr) || 0;
         const porcionesSobrantes = parseInt(formData.get('porciones_sobrantes')?.toString() || '0');
         const porcionesMermadas  = parseInt(formData.get('porciones_mermadas')?.toString()  || '0');
         const masasIniciales     = parseFloat(formData.get('masas_iniciales')?.toString()   || '0');

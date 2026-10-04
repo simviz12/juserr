@@ -45,6 +45,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     };
 };
 
+import { parseFraction } from '$lib/utils/fractions';
+
 export const actions: Actions = {
     default: async ({ request, locals }) => {
         if (!locals.user) return fail(401, { error: 'No autorizado' });
@@ -53,13 +55,13 @@ export const actions: Actions = {
         const tipoOperacion = formData.get('tipo_operacion')?.toString() || 'entrada';
         const productoIdStr = formData.get('tipo_insumo')?.toString();
         const productoId = parseInt(productoIdStr || '0');
-        const cantidadStr = formData.get('cantidad')?.toString();
-        const cantidad = parseFloat(cantidadStr || '0');
+        const cantidadStr = formData.get('cantidad')?.toString() || '';
+        const cantidad = parseFraction(cantidadStr);
         const precioTotalStr = formData.get('precioTotalCompra')?.toString();
         const precioTotal = isNaN(parseFloat(precioTotalStr || "0")) ? 0 : parseFloat(precioTotalStr || "0");
 
         if (isNaN(cantidad) || cantidad < 0) {
-            return fail(400, { error: 'Cantidad inválida.' });
+            return fail(400, { error: 'Cantidad inválida. Ingresa un número o fracción (ej: 6 1/4, 2 1/2, 3/4).' });
         }
         if (isNaN(productoId) || productoId <= 0) {
             return fail(400, { error: 'Producto no válido.' });

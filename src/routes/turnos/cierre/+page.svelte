@@ -16,6 +16,7 @@
     Sparkles,
     Lightbulb
   } from '@lucide/svelte';
+  import { parseFraction } from '$lib/utils/fractions';
   let { data, form } = $props();
 
   let gastos = $state<{ id: number; descripcion: string; monto: string }[]>([]);
@@ -46,7 +47,7 @@
   let masasIniciales   = $derived(data.inventario.masasActuales);
   let porcionesAyer    = $derived(data.inventario.porcionesAyer);
   let precioPorcion    = $derived(data.inventario.precioPorcion);
-  let masasSobrantes   = $derived(parseFloat(masasSobrantesStr)   || 0);
+  let masasSobrantes   = $derived(parseFraction(masasSobrantesStr) || 0);
   let porcionesSobrantes = $derived(parseInt(porcionesSobrantesStr)  || 0);
   let porcionesMermadas  = $derived(parseInt(porcionesMermadasStr)   || 0);
   let masasUsadas      = $derived(Math.max(0, masasIniciales - masasSobrantes));
@@ -133,16 +134,14 @@
           <p class="text-xs text-slate-500 mb-3">
             Bolas de masa sin hornear que quedaron guardadas. Con esto el sistema sabe cuántas masas crudas se gastaron en el turno.
           </p>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-3">
             <input 
-              type="number" 
+              type="text" 
               id="masas_sobrantes" 
               name="masas_sobrantes" 
               bind:value={masasSobrantesStr}
               required 
-              min="0"
-              step="0.5"
-              placeholder="Ej. 12"
+              placeholder="Ej. 12 o 11 1/2"
               class="w-full md:w-1/2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
             />
             <span class="text-sm bg-amber-100/80 text-amber-800 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} masas iniciales</span>
@@ -151,8 +150,8 @@
 
         <div class="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
           <div class="flex items-center justify-between mb-1">
-            <label for="porciones_sobrantes" class="block text-sm font-bold text-slate-700">
-              🍕 Porciones Horneadas Sobrantes en Vitrina (Quedan para mañana)
+            <label for="porciones_sobrantes" class="flex items-center gap-1.5 text-sm font-bold text-slate-700">
+              <Pizza class="w-4 h-4 text-orange-600" /> Porciones Horneadas Sobrantes en Vitrina (Quedan para mañana)
             </label>
             {#if porcionesAyer > 0}
               <span class="text-xs bg-orange-200 text-orange-900 font-bold px-2.5 py-1 rounded-lg">
