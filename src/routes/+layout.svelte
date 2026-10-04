@@ -13,7 +13,10 @@
     Bell, 
     Menu, 
     X,
-    Pizza
+    Pizza,
+    AlertTriangle,
+    CheckCircle2,
+    ArrowRight
   } from '@lucide/svelte';
   let { children, data } = $props();
   
@@ -28,6 +31,10 @@
 
   let visibleNavItems = $derived(navItems.filter(item => data.user && item.roles.includes(data.user.rol)));
   let mobileMenuOpen = $state(false);
+  let notificacionesOpen = $state(false);
+
+  let alertas = $derived(data.alertas || []);
+  let conteoAlertas = $derived(alertas.length);
 </script>
 
 <div class="flex h-screen w-full text-slate-800 bg-slate-50 overflow-hidden font-sans">
@@ -124,10 +131,85 @@
         <p class="text-sm text-slate-500">Bienvenido al sistema de gestión</p>
       </div>
 
-      <div class="flex items-center gap-4 ml-auto">
-        <div class="bg-white p-2.5 rounded-full shadow-sm border border-slate-100 cursor-pointer hover:bg-slate-50 text-slate-600">
-           <Bell size={18} />
-        </div>
+      <div class="flex items-center gap-4 ml-auto relative">
+        <!-- Botón de Campana con Badge Dinámico -->
+        <button 
+          type="button"
+          onclick={() => notificacionesOpen = !notificacionesOpen}
+          class="relative bg-white p-2.5 rounded-full shadow-sm border border-slate-200 cursor-pointer hover:bg-slate-50 transition-all text-slate-600 focus:ring-2 focus:ring-orange-500/30"
+          title="Notificaciones y Alertas de Inventario"
+        >
+          <Bell size={18} />
+          {#if conteoAlertas > 0}
+            <span class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white font-black text-[10px] rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+              {conteoAlertas}
+            </span>
+          {/if}
+        </button>
+
+        <!-- Panel Desplegable de Notificaciones -->
+        {#if notificacionesOpen}
+          <div 
+            class="absolute right-0 top-12 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+          >
+            <!-- Cabecera de Notificaciones -->
+            <div class="p-4 bg-slate-900 text-white flex justify-between items-center">
+              <div class="flex items-center gap-2">
+                <Bell size={16} class="text-orange-400" />
+                <span class="font-extrabold text-sm">Centro de Notificaciones</span>
+              </div>
+              <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold">
+                {conteoAlertas} {conteoAlertas === 1 ? 'pendiente' : 'pendientes'}
+              </span>
+            </div>
+
+            <!-- Lista de Alertas -->
+            <div class="max-h-96 overflow-y-auto divide-y divide-slate-100 p-2">
+              {#if alertas.length === 0}
+                <div class="py-8 px-4 text-center">
+                  <CheckCircle2 size={36} class="text-emerald-500 mx-auto mb-2" />
+                  <p class="font-bold text-slate-800 text-sm">¡Todo está al día!</p>
+                  <p class="text-xs text-slate-400 mt-1">No hay ingredientes agotados ni insumos críticos pendientes de reposición.</p>
+                </div>
+              {:else}
+                {#each alertas as alerta}
+                  <div class="p-3.5 hover:bg-slate-50/80 rounded-2xl transition-colors flex items-start gap-3">
+                    <div class="p-2 rounded-xl shrink-0 {alerta.nivel === 'urgente' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700'}">
+                      <AlertTriangle size={16} />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between gap-1">
+                        <h4 class="font-bold text-slate-900 text-xs truncate">{alerta.titulo}</h4>
+                        <span class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded {alerta.nivel === 'urgente' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-700'}">
+                          {alerta.nivel === 'urgente' ? 'Agotado' : 'Bajo'}
+                        </span>
+                      </div>
+                      <p class="text-xs text-slate-500 mt-0.5 leading-snug">{alerta.detalle}</p>
+                    </div>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+
+            <!-- Pie de Notificaciones con Enlace Directo -->
+            <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs">
+              <a 
+                href="/bodega" 
+                onclick={() => notificacionesOpen = false}
+                class="font-extrabold text-orange-600 hover:text-orange-700 flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-orange-50 transition-colors"
+              >
+                Ir a Bodega para reponer stock <ArrowRight size={14} />
+              </a>
+              <button 
+                type="button" 
+                onclick={() => notificacionesOpen = false}
+                class="text-slate-400 hover:text-slate-700 font-bold px-2 py-1"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        {/if}
       </div>
     </header>
     {/if}
