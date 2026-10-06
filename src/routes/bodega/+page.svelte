@@ -41,26 +41,11 @@
     return parseFloat(clean.replace(',', '.')) || 0;
   }
 
-  // Formateador visual para mostrar números en formato de enteros y fracciones amigables
+  import { parseFraction, formatFraction, displayStock } from '$lib/utils/fractions';
+
   function formatCantidadFraccion(val: number | null | undefined): string {
     if (val === null || val === undefined || isNaN(val)) return '0';
-    const num = Number(val);
-    if (num === 0) return '0';
-    const entero = Math.floor(num);
-    const decimal = Number((num - entero).toFixed(3));
-
-    let fraccionStr = '';
-    if (Math.abs(decimal - 0.25) < 0.05) fraccionStr = '1/4';
-    else if (Math.abs(decimal - 0.5) < 0.05) fraccionStr = '1/2';
-    else if (Math.abs(decimal - 0.75) < 0.05) fraccionStr = '3/4';
-    else if (Math.abs(decimal - 0.33) < 0.05) fraccionStr = '1/3';
-    else if (Math.abs(decimal - 0.66) < 0.05) fraccionStr = '2/3';
-    else if (decimal > 0) return num.toLocaleString('es-CO', { maximumFractionDigits: 2 });
-
-    if (entero > 0 && fraccionStr) return `${entero} ${fraccionStr}`;
-    if (entero > 0) return `${entero}`;
-    if (fraccionStr) return fraccionStr;
-    return '0';
+    return formatFraction(Number(val));
   }
   
   let cantidadNum = $derived(parseCantidadFraccion(cantidadInput));

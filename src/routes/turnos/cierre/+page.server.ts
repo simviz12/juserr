@@ -2,13 +2,15 @@ import { db } from '$lib/server/db';
 import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno } from '$lib/server/schema';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, desc, inArray, sql } from 'drizzle-orm';
 import { parseFraction } from '$lib/utils/fractions';
 
 export const load: PageServerLoad = async () => {
     // 1. Obtener producto "Masa" (o "Masas"), último turno, lista de sabores y turnos recientes en paralelo
-    const [masaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw] = await Promise.all([
+    // 1. Obtener producto "Masa", producto "Pizza (Porciones)", último turno, lista de sabores y turnos recientes en paralelo
+    const [masaRows, pizzaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw] = await Promise.all([
         db.select().from(productos).where(eq(productos.nombre, 'Masa')),
+        db.select().from(productos).where(sql`${productos.nombre} ILIKE 'Pizza%'`),
         db.select({
             id: turnos.id,
             porcionesSobrantes: turnos.porcionesSobrantes
@@ -44,9 +46,11 @@ export const load: PageServerLoad = async () => {
         }
     }
 
+    const pizzaProduct = pizzaRows[0];
     const ultimoTurno = ultimosTurnoRows[0];
     const ultimoTurnoId = ultimoTurno?.id;
-    const porcionesAyer = ultimoTurno?.porcionesSobrantes || 0;
+    // Las porciones que quedaron en vitrina provienen del stock actual de Bodega (si fue ajustado) o del último turno
+    const porcionesAyer = pizzaProduct ? Number(pizzaProduct.stockActual || 0) : (ultimoTurno?.porcionesSobrantes || 0);
     const masasActuales = masaProduct.stockActual || 0;
 
     const turnoIds = ultimosTurnosRaw.map(t => t.id);
@@ -205,10 +209,14 @@ export const actions: Actions = {
                     );
                 }
 
-                // 4. Actualizar stock de Masa
+                // 4. Actualizar stock de Masa y de Pizza (Porciones) en Bodega
                 await db.update(productos)
                     .set({ stockActual: masasSobrantes })
                     .where(eq(productos.nombre, 'Masa'));
+
+                await db.update(productos)
+                    .set({ stockActual: porcionesSobrantes })
+                    .where(sql`${productos.nombre} ILIKE 'Pizza%'`);
 
                 // 5. Guardar métricas de pizzas por sabor
                 for (const sabor of sabores) {

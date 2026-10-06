@@ -149,8 +149,16 @@
 
         <!-- Panel Desplegable de Notificaciones -->
         {#if notificacionesOpen}
+          <!-- Backdrop transparente para cerrar al hacer clic afuera -->
           <div 
-            class="absolute right-0 top-12 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+            class="fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" 
+            onclick={() => notificacionesOpen = false}
+            aria-hidden="true"
+          ></div>
+
+          <div 
+            class="absolute right-0 top-12 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200"
+            style="background-color: #ffffff;"
           >
             <!-- Cabecera de Notificaciones -->
             <div class="p-4 bg-slate-900 text-white flex justify-between items-center">
@@ -164,16 +172,16 @@
             </div>
 
             <!-- Lista de Alertas -->
-            <div class="max-h-96 overflow-y-auto divide-y divide-slate-100 p-2">
+            <div class="max-h-96 overflow-y-auto divide-y divide-slate-100 p-2 bg-white">
               {#if alertas.length === 0}
-                <div class="py-8 px-4 text-center">
+                <div class="py-8 px-4 text-center bg-white">
                   <CheckCircle2 size={36} class="text-emerald-500 mx-auto mb-2" />
                   <p class="font-bold text-slate-800 text-sm">¡Todo está al día!</p>
                   <p class="text-xs text-slate-400 mt-1">No hay ingredientes agotados ni insumos críticos pendientes de reposición.</p>
                 </div>
               {:else}
                 {#each alertas as alerta}
-                  <div class="p-3.5 hover:bg-slate-50/80 rounded-2xl transition-colors flex items-start gap-3">
+                  <div class="p-3.5 hover:bg-slate-50 rounded-2xl transition-colors flex items-start gap-3 bg-white">
                     <div class="p-2 rounded-xl shrink-0 {alerta.nivel === 'urgente' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700'}">
                       <AlertTriangle size={16} />
                     </div>
@@ -203,7 +211,7 @@
               <button 
                 type="button" 
                 onclick={() => notificacionesOpen = false}
-                class="text-slate-400 hover:text-slate-700 font-bold px-2 py-1"
+                class="text-slate-400 hover:text-slate-700 font-bold px-2 py-1 cursor-pointer"
               >
                 Cerrar
               </button>

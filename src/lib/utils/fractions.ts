@@ -1,19 +1,23 @@
 export function formatFraction(value: number): string {
-  if (value === 0) return '0';
+  if (value === 0 || isNaN(value)) return '0';
   
   const whole = Math.floor(value);
-  const decimal = value - whole;
+  const decimal = Number((value - whole).toFixed(4));
   
   // Margen de tolerancia para punto flotante
-  const tolerance = 0.01;
+  const tolerance = 0.02;
   
   let fractionString = '';
   
-  if (Math.abs(decimal - 0.25) < tolerance) fractionString = '¼';
-  else if (Math.abs(decimal - 0.5) < tolerance) fractionString = '½';
-  else if (Math.abs(decimal - 0.75) < tolerance) fractionString = '¾';
-  else if (Math.abs(decimal - 0.33) < tolerance) fractionString = '⅓';
-  else if (Math.abs(decimal - 0.66) < tolerance) fractionString = '⅔';
+  if (Math.abs(decimal - 0.125) < tolerance) fractionString = '1/8';
+  else if (Math.abs(decimal - 0.25) < tolerance) fractionString = '1/4';
+  else if (Math.abs(decimal - 0.333) < tolerance || Math.abs(decimal - 0.33) < tolerance) fractionString = '1/3';
+  else if (Math.abs(decimal - 0.375) < tolerance) fractionString = '3/8';
+  else if (Math.abs(decimal - 0.5) < tolerance) fractionString = '1/2';
+  else if (Math.abs(decimal - 0.625) < tolerance) fractionString = '5/8';
+  else if (Math.abs(decimal - 0.666) < tolerance || Math.abs(decimal - 0.66) < tolerance) fractionString = '2/3';
+  else if (Math.abs(decimal - 0.75) < tolerance) fractionString = '3/4';
+  else if (Math.abs(decimal - 0.875) < tolerance) fractionString = '7/8';
   else if (decimal > tolerance) {
       // Si no es una fracción conocida, lo dejamos con hasta 2 decimales
       return value.toLocaleString('es-CO', { maximumFractionDigits: 2 });

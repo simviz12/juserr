@@ -90,45 +90,47 @@
     </div>
 
     <!-- Botonera de Períodos y Fecha -->
-    <div class="flex flex-wrap items-center gap-3">
-      <!-- Selector de Pestañas: Día / Semana / Mes / Año -->
-      <div class="bg-slate-100 p-1.5 rounded-2xl flex items-center gap-1.5 border border-slate-200/80 shadow-inner">
+    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full lg:w-auto">
+      <!-- Selector de Pestañas: Día / Semana / Mes / Año (Responsive scroll / wrap) -->
+      <div class="bg-slate-100 p-1 rounded-2xl flex items-center justify-between sm:justify-start gap-1 border border-slate-200/80 shadow-inner overflow-x-auto max-w-full">
         <button
           onclick={() => cambiarRango('diario')}
-          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'diario' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
+          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'diario' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
-          Hoy (Día)
+          Hoy
         </button>
         <button
           onclick={() => cambiarRango('semanal')}
-          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'semanal' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
+          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'semanal' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
-          Esta Semana
+          Semana
         </button>
         <button
           onclick={() => cambiarRango('mensual')}
-          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'mensual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
+          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'mensual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
-          Este Mes
+          Mes
         </button>
         <button
           onclick={() => cambiarRango('anual')}
-          class="px-5 py-3 rounded-xl text-sm font-extrabold transition-all {rangoSeleccionado === 'anual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
+          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'anual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
         >
-          Este Año
+          Año
         </button>
       </div>
 
       <!-- Selector de Fecha Específica (Opcional) -->
-      <div class="flex items-center gap-3 bg-slate-50 p-2 px-4 rounded-2xl border border-slate-200">
-        <Calendar size="20" class="text-slate-500" />
-        <input
-          type="date"
-          bind:value={fechaInput}
-          onchange={filtrarFecha}
-          class="bg-transparent text-sm font-bold text-slate-800 outline-none cursor-pointer py-1"
-          title="Selecciona una fecha de referencia"
-        />
+      <div class="flex items-center justify-between gap-2 bg-slate-50 p-2 px-3 sm:px-4 rounded-2xl border border-slate-200 w-full sm:w-auto">
+        <div class="flex items-center gap-2">
+          <Calendar size="18" class="text-slate-500 shrink-0" />
+          <input
+            type="date"
+            bind:value={fechaInput}
+            onchange={filtrarFecha}
+            class="bg-transparent text-xs sm:text-sm font-bold text-slate-800 outline-none cursor-pointer py-1"
+            title="Selecciona una fecha de referencia"
+          />
+        </div>
         {#if fechaInput}
           <button
             onclick={limpiarFecha}
