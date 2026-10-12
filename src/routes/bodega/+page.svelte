@@ -77,19 +77,38 @@
     XLSX.writeFile(workbook, `JuanchoPizza_Historial_Compras_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-  // Paginación y filtro de búsqueda para el Historial
+  // Paginación y filtros de búsqueda y fecha para el Historial
   let historialSearch = $state('');
+  let fechaInicio = $state('');
+  let fechaFin = $state('');
   let historialPage = $state(1);
   const itemsPerPage = 8;
 
   let historialFiltrado = $derived.by(() => {
-    const list = data.historialMovimientos || [];
-    if (!historialSearch.trim()) return list;
-    const term = historialSearch.toLowerCase();
-    return list.filter((m: any) => 
-      (m.productoNombre && m.productoNombre.toLowerCase().includes(term)) ||
-      (m.tipo && m.tipo.toLowerCase().includes(term))
-    );
+    let list = data.historialMovimientos || [];
+    
+    // Filtro por texto
+    if (historialSearch.trim()) {
+      const term = historialSearch.toLowerCase();
+      list = list.filter((m: any) => 
+        (m.productoNombre && m.productoNombre.toLowerCase().includes(term)) ||
+        (m.tipo && m.tipo.toLowerCase().includes(term))
+      );
+    }
+
+    // Filtro por fecha inicio
+    if (fechaInicio) {
+      const inicio = new Date(`${fechaInicio}T00:00:00`);
+      list = list.filter((m: any) => m.fecha && new Date(m.fecha) >= inicio);
+    }
+
+    // Filtro por fecha fin
+    if (fechaFin) {
+      const fin = new Date(`${fechaFin}T23:59:59`);
+      list = list.filter((m: any) => m.fecha && new Date(m.fecha) <= fin);
+    }
+
+    return list;
   });
 
   let totalPages = $derived(Math.max(1, Math.ceil(historialFiltrado.length / itemsPerPage)));
@@ -97,6 +116,12 @@
     const start = (historialPage - 1) * itemsPerPage;
     return historialFiltrado.slice(start, start + itemsPerPage);
   });
+
+  function limpiarFiltrosFecha() {
+    fechaInicio = '';
+    fechaFin = '';
+    historialPage = 1;
+  }
 </script>
 
 <div class="max-w-5xl mx-auto space-y-8 pb-12">
@@ -354,17 +379,48 @@
         <p class="text-xs text-slate-400 mt-0.5">Registro compacto de compras y modificaciones manuales en bodega.</p>
       </div>
 
-      {#if data.historialMovimientos && data.historialMovimientos.length > 0}
-        <div class="w-full sm:w-64">
+      <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div class="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+          <span class="text-[10px] font-black uppercase text-slate-400 pl-2">Fecha:</span>
           <input 
-            type="text" 
-            bind:value={historialSearch}
-            oninput={() => historialPage = 1}
-            placeholder="🔍 Buscar insumo o tipo..."
-            class="w-full px-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-medium"
+            type="date" 
+            bind:value={fechaInicio}
+            onchange={() => historialPage = 1}
+            title="Desde fecha"
+            class="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 outline-none font-semibold"
           />
+          <span class="text-xs text-slate-400 font-bold">-</span>
+          <input 
+            type="date" 
+            bind:value={fechaFin}
+            onchange={() => historialPage = 1}
+            title="Hasta fecha"
+            class="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 outline-none font-semibold"
+          />
+          {#if fechaInicio || fechaFin}
+            <button 
+              type="button" 
+              onclick={limpiarFiltrosFecha}
+              class="px-2 py-1 text-[11px] font-black text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+              title="Quitar filtro de fecha"
+            >
+              ✕
+            </button>
+          {/if}
         </div>
-      {/if}
+
+        {#if data.historialMovimientos && data.historialMovimientos.length > 0}
+          <div class="w-full sm:w-52">
+            <input 
+              type="text" 
+              bind:value={historialSearch}
+              oninput={() => historialPage = 1}
+              placeholder="🔍 Insumo o tipo..."
+              class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-medium"
+            />
+          </div>
+        {/if}
+      </div>
     </div>
 
     <div class="overflow-x-auto">
