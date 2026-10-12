@@ -39,6 +39,22 @@
   function closeModal() {
     isModalOpen = false;
   }
+
+  // Búsqueda y filtrado compacto
+  let prodSearch = $state('');
+  let prodCatFilter = $state('');
+
+  let productosFiltrados = $derived.by(() => {
+    let prods = data.products || [];
+    if (prodCatFilter) {
+      prods = prods.filter(p => String(p.categoriaId) === String(prodCatFilter));
+    }
+    if (prodSearch.trim()) {
+      const q = prodSearch.toLowerCase();
+      prods = prods.filter(p => p.nombre.toLowerCase().includes(q));
+    }
+    return prods;
+  });
 </script>
 
 <div class="max-w-6xl mx-auto">
@@ -58,7 +74,31 @@
     </div>
   {/if}
 
-  <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
+  <!-- Barra de Filtros y Búsqueda -->
+  <div class="bg-white p-4 rounded-2xl border border-slate-200 mb-6 flex flex-col sm:flex-row gap-3 items-center justify-between shadow-sm">
+    <div class="w-full sm:w-72">
+      <input 
+        type="text" 
+        bind:value={prodSearch}
+        placeholder="🔍 Buscar producto..."
+        class="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-medium"
+      />
+    </div>
+    <div class="w-full sm:w-auto flex items-center gap-2">
+      <span class="text-xs font-bold text-slate-400 uppercase">Categoría:</span>
+      <select 
+        bind:value={prodCatFilter}
+        class="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-semibold text-slate-700"
+      >
+        <option value="">Todas las categorías</option>
+        {#each data.categorias as cat}
+          <option value={cat.id}>{cat.nombre}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
     <div class="overflow-x-auto">
       <table class="w-full text-left border-collapse">
         <thead>
@@ -73,20 +113,20 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          {#each data.products as prod}
+          {#each productosFiltrados as prod}
             <tr class="hover:bg-slate-50 transition-colors">
-              <td class="p-4 font-medium text-slate-800">{prod.nombre}</td>
+              <td class="p-4 font-bold text-slate-800">{prod.nombre}</td>
               <td class="p-4 text-slate-600">
-                <span class="inline-block px-2 py-1 bg-slate-100 rounded-md text-xs">{prod.categoriaNombre}</span>
+                <span class="inline-block px-2 py-1 bg-slate-100 rounded-md text-xs font-semibold">{prod.categoriaNombre}</span>
               </td>
               <td class="p-4 text-slate-600 capitalize">{prod.unidadMedida}</td>
-              <td class="p-4 font-black text-slate-900 text-lg">{prod.stockActual || 0}</td>
-              <td class="p-4 font-bold text-red-500">{prod.stockMinimo}</td>
-              <td class="p-4 text-slate-600">${prod.precio}</td>
+              <td class="p-4 font-black text-slate-900 text-base">{displayStock(prod.stockActual || 0)}</td>
+              <td class="p-4 font-bold text-red-500">{displayStock(prod.stockMinimo || 0)}</td>
+              <td class="p-4 font-semibold text-slate-700">${Number(prod.precio || 0).toLocaleString('es-CO')}</td>
               <td class="p-4 flex justify-end gap-2">
                 <button 
                   onclick={() => openEditModal(prod)}
-                  class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded transition-colors text-sm"
+                  class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold cursor-pointer"
                 >
                   Editar
                 </button>
@@ -94,7 +134,7 @@
                   <input type="hidden" name="id" value={prod.id} />
                   <button 
                     type="submit"
-                    class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1 rounded transition-colors text-sm"
+                    class="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold cursor-pointer"
                   >
                     Eliminar
                   </button>
@@ -103,8 +143,8 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="7" class="p-8 text-center text-slate-500">
-                No hay productos registrados. Haz clic en "Nuevo Producto".
+              <td colspan="7" class="p-8 text-center text-slate-400 text-sm">
+                No se encontraron productos que coincidan con la búsqueda.
               </td>
             </tr>
           {/each}

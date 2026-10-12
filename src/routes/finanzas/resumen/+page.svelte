@@ -8,24 +8,35 @@
 
   let vistaActiva = $state<'diario' | 'semanal'>('diario');
 
+  let chartCanvasElement: HTMLCanvasElement | null = null;
+
   function exportToPDF() {
     const doc = new jsPDF();
     
-    doc.setFontSize(20);
+    // Encabezado Premium
+    doc.setFillColor(249, 115, 22); // Orange JuanchoPizza
+    doc.rect(0, 0, 210, 15, 'F');
+    
+    doc.setFontSize(18);
     doc.setTextColor(30, 41, 59);
-    doc.text('Reporte Financiero y Auditoría - JuanchoPizza', 14, 22);
+    doc.text('Reporte Financiero y Auditoría - JuanchoPizza', 14, 28);
     
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Rango evaluado: ${data.inicio || 'Inicio'} hasta ${data.fin || 'Fin'}`, 14, 30);
+    doc.text(`Período evaluado: ${data.inicio || 'Inicio'} hasta ${data.fin || 'Fin'}  |  Generado: ${new Date().toLocaleDateString('es-CO')}`, 14, 35);
     
-    doc.setFontSize(13);
+    // Estadísticas clave / KPIs
+    doc.setFontSize(12);
     doc.setTextColor(15, 23, 42);
-    doc.text('1. Consolidado Financiero', 14, 42);
-    
+    doc.text('1. Métricas Clave de Negocio', 14, 45);
+
+    const ticketPromedio = data.historialDias && data.historialDias.length > 0 
+      ? Math.round(data.granTotal.ventasBrutas / data.historialDias.length) 
+      : 0;
+
     autoTable(doc, {
-      startY: 46,
-      head: [['Ventas Brutas', 'Efectivo', 'Transferencias (Nequi)', 'Gastos Turnos', 'Utilidad Neta']],
+      startY: 49,
+      head: [['Ventas Brutas', 'Efectivo en Caja', 'Nequi / Transferencias', 'Gastos Totales', 'Utilidad Neta']],
       body: [[
         `$${data.granTotal.ventasBrutas.toLocaleString('es-CO')}`,
         `$${data.granTotal.efectivo.toLocaleString('es-CO')}`,
@@ -34,12 +45,37 @@
         `$${data.granTotal.utilidadNeta.toLocaleString('es-CO')}`
       ]],
       theme: 'grid',
-      headStyles: { fillColor: [249, 115, 22] }
+      headStyles: { fillColor: [249, 115, 22] },
+      styles: { halign: 'center', fontStyle: 'bold' }
     });
-    
-    // 2. Auditoría Operativa de Porciones y Masas por Turno
+
+    let currentY = (doc as any).lastAutoTable.finalY + 10;
+
+    // Insertar gráfico de tendencias si está renderizado en el DOM
+    if (chartCanvasElement) {
+      try {
+        const chartImg = chartCanvasElement.toDataURL('image/png', 1.0);
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text('2. Gráfica Estadística de Tendencias (Ventas vs Gastos vs Libre)', 14, currentY);
+        // Ancho 180mm, Alto 65mm
+        doc.addImage(chartImg, 'PNG', 15, currentY + 4, 180, 65);
+        currentY = currentY + 75;
+      } catch (err) {
+        console.warn('No se pudo convertir el canvas para el PDF:', err);
+      }
+    }
+
+    // 3. Auditoría Operativa de Porciones y Masas por Turno
     if (data.turnosDetallados && data.turnosDetallados.length > 0) {
-      doc.text('2. Auditoría Operativa de Turnos (Masas y Porciones)', 14, (doc as any).lastAutoTable.finalY + 12);
+      if (currentY > 230) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text('3. Auditoría de Turnos y Porciones (Masas y Sobras de Vitrina)', 14, currentY);
       
       const bodyAuditoria = (data.turnosDetallados || []).map((t: any) => {
         const fechaStr = t.fecha ? new Date(t.fecha).toLocaleDateString('es-CO') : '-';
@@ -58,15 +94,25 @@
       });
 
       autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 16,
+        startY: currentY + 4,
         head: [['Fecha Turno', 'Ayer (Vitrina)', 'Masas Usadas', 'Sobras Hoy', 'Mermas', 'Vendidas', 'Efectivo', 'Nequi']],
         body: bodyAuditoria,
         theme: 'striped',
         headStyles: { fillColor: [234, 88, 12] }
       });
+
+      currentY = (doc as any).lastAutoTable.finalY + 10;
     }
 
-    doc.text('3. Historial Consolidado por Días', 14, (doc as any).lastAutoTable.finalY + 12);
+    // 4. Historial Consolidado por Días
+    if (currentY > 230) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text('4. Historial Consolidado Día por Día', 14, currentY);
     
     const bodyDias = (data.historialDias || []).map((d: any) => [
       d.fecha,
@@ -78,14 +124,14 @@
     ]);
 
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 16,
+      startY: currentY + 4,
       head: [['Fecha', 'Venta Bruta', 'Efectivo', 'Nequi', 'Gastos', 'Libre']],
       body: bodyDias,
       theme: 'striped',
       headStyles: { fillColor: [30, 41, 59] }
     });
     
-    doc.save(`JuanchoPizza_Reporte_${data.inicio || 'Historico'}.pdf`);
+    doc.save(`JuanchoPizza_Reporte_Estadistico_${data.inicio || 'Historico'}.pdf`);
   }
 
   function exportComprasToExcel() {
@@ -112,6 +158,7 @@
   }
 
   function renderChart(node: HTMLCanvasElement, params: { semanas: any[], dias: any[] }) {
+    chartCanvasElement = node;
     let chartInstance = new Chart(node, {
       type: 'bar',
       data: {

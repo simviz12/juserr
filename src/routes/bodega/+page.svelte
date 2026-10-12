@@ -76,6 +76,27 @@
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial Compras e Insumos');
     XLSX.writeFile(workbook, `JuanchoPizza_Historial_Compras_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
+
+  // Paginación y filtro de búsqueda para el Historial
+  let historialSearch = $state('');
+  let historialPage = $state(1);
+  const itemsPerPage = 8;
+
+  let historialFiltrado = $derived.by(() => {
+    const list = data.historialMovimientos || [];
+    if (!historialSearch.trim()) return list;
+    const term = historialSearch.toLowerCase();
+    return list.filter((m: any) => 
+      (m.productoNombre && m.productoNombre.toLowerCase().includes(term)) ||
+      (m.tipo && m.tipo.toLowerCase().includes(term))
+    );
+  });
+
+  let totalPages = $derived(Math.max(1, Math.ceil(historialFiltrado.length / itemsPerPage)));
+  let historialPaginado = $derived.by(() => {
+    const start = (historialPage - 1) * itemsPerPage;
+    return historialFiltrado.slice(start, start + itemsPerPage);
+  });
 </script>
 
 <div class="max-w-5xl mx-auto space-y-8 pb-12">
@@ -327,15 +348,33 @@
 
   <!-- Historial de Entradas y Salidas de Bodega -->
   <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-    <div class="p-6 border-b border-slate-100">
-      <h2 class="text-lg font-black text-slate-900">Historial de Entradas y Ajustes</h2>
-      <p class="text-xs text-slate-400 mt-0.5">Registro de cada compra o modificación manual realizada en bodega.</p>
+    <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-black text-slate-900">Historial de Entradas y Ajustes</h2>
+        <p class="text-xs text-slate-400 mt-0.5">Registro compacto de compras y modificaciones manuales en bodega.</p>
+      </div>
+
+      {#if data.historialMovimientos && data.historialMovimientos.length > 0}
+        <div class="w-full sm:w-64">
+          <input 
+            type="text" 
+            bind:value={historialSearch}
+            oninput={() => historialPage = 1}
+            placeholder="🔍 Buscar insumo o tipo..."
+            class="w-full px-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-medium"
+          />
+        </div>
+      {/if}
     </div>
 
     <div class="overflow-x-auto">
       {#if !data.historialMovimientos || data.historialMovimientos.length === 0}
         <div class="p-10 text-center text-slate-400 text-sm">
           No hay movimientos registrados en bodega aún.
+        </div>
+      {:else if historialFiltrado.length === 0}
+        <div class="p-10 text-center text-slate-400 text-sm">
+          No se encontraron movimientos que coincidan con la búsqueda.
         </div>
       {:else}
         <table class="w-full text-left border-collapse">
@@ -349,7 +388,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 text-sm">
-            {#each data.historialMovimientos as mov}
+            {#each historialPaginado as mov}
               <tr class="hover:bg-slate-50/70 transition-colors">
                 <td class="p-4 pl-6 font-bold text-slate-700 text-xs">
                   {mov.fecha ? new Date(mov.fecha).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
@@ -363,7 +402,7 @@
                   {mov.productoNombre}
                 </td>
                 <td class="p-4 text-right font-black {mov.cantidad > 0 ? 'text-emerald-600' : 'text-slate-700'}">
-                  {mov.cantidad > 0 ? `+${mov.cantidad}` : mov.cantidad} {mov.unidadMedida}
+                  {mov.cantidad > 0 ? `+${formatCantidadFraccion(mov.cantidad)}` : formatCantidadFraccion(mov.cantidad)} {mov.unidadMedida}
                 </td>
                 <td class="p-4 text-right pr-6 font-semibold text-slate-700">
                   {Number(mov.costoTotal || 0) > 0 ? `$${Number(mov.costoTotal).toLocaleString('es-CO')}` : '—'}
@@ -372,6 +411,31 @@
             {/each}
           </tbody>
         </table>
+
+        <!-- Paginación compacta -->
+        {#if totalPages > 1}
+          <div class="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
+            <span>Página <strong>{historialPage}</strong> de <strong>{totalPages}</strong> ({historialFiltrado.length} registros)</span>
+            <div class="flex items-center gap-2">
+              <button 
+                type="button"
+                disabled={historialPage <= 1}
+                onclick={() => historialPage = Math.max(1, historialPage - 1)}
+                class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              >
+                ← Anterior
+              </button>
+              <button 
+                type="button"
+                disabled={historialPage >= totalPages}
+                onclick={() => historialPage = Math.min(totalPages, historialPage + 1)}
+                class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              >
+                Siguiente →
+              </button>
+            </div>
+          </div>
+        {/if}
       {/if}
     </div>
   </div>
