@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { productos, movimientosInventario } from '$lib/server/schema';
+import { productos, movimientosInventario, categorias } from '$lib/server/schema';
 import { eq, desc } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -9,8 +9,17 @@ export const load: PageServerLoad = async ({ locals }) => {
         throw redirect(302, '/');
     }
 
+    // Asegurar categoría de Bebidas en catálogo
+    let allCats = await db.select().from(categorias);
+    let catBebidas = allCats.find(c => c.nombre.toLowerCase().includes('bebida'));
+    if (!catBebidas) {
+        const [nuevaCat] = await db.insert(categorias).values({ nombre: 'Bebidas' }).returning();
+        catBebidas = nuevaCat;
+    }
+
     const allProducts = await db.select().from(productos);
     
+    // Asegurar Masa
     let masaProduct = allProducts.find(p => p.nombre === 'Masa' || p.nombre === 'Masas');
     if (!masaProduct) {
         const [nuevo] = await db.insert(productos).values({
@@ -21,6 +30,28 @@ export const load: PageServerLoad = async ({ locals }) => {
         }).returning();
         masaProduct = nuevo;
         allProducts.push(nuevo);
+    }
+
+    // Asegurar que las bebidas principales existan en productos de bodega
+    const bebidasIniciales = [
+        { nombre: 'Coca Cola 400ml', precio: '3500' },
+        { nombre: 'Jugo Hit Mora', precio: '3000' },
+        { nombre: 'Agua Cristal 600ml', precio: '2500' }
+    ];
+
+    for (const b of bebidasIniciales) {
+        if (!allProducts.some(p => p.nombre.toLowerCase() === b.nombre.toLowerCase())) {
+            const [nuevo] = await db.insert(productos).values({
+                nombre: b.nombre,
+                categoriaId: catBebidas.id,
+                unidadMedida: 'unidad',
+                stockActual: 0,
+                stockMinimo: 5,
+                precio: b.precio,
+                precioCosto: '1500'
+            }).returning();
+            allProducts.push(nuevo);
+        }
     }
 
     // Historial de compras y movimientos con nombre de producto

@@ -199,24 +199,15 @@
               {/if}
             </div>
 
-            <!-- Pie de Notificaciones con Enlaces Directos -->
-            <div class="p-3 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-2 justify-between items-center text-xs">
-              <div class="flex items-center gap-2">
-                <a 
-                  href="/bodega" 
-                  onclick={() => notificacionesOpen = false}
-                  class="font-extrabold text-orange-600 hover:text-orange-700 flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-orange-50 transition-colors"
-                >
-                  Bodega <ArrowRight size={12} />
-                </a>
-                <a 
-                  href="/bebidas" 
-                  onclick={() => notificacionesOpen = false}
-                  class="font-extrabold text-blue-600 hover:text-blue-700 flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-blue-50 transition-colors"
-                >
-                  Bebidas <ArrowRight size={12} />
-                </a>
-              </div>
+            <!-- Pie de Notificaciones con Enlace Directo -->
+            <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs">
+              <a 
+                href="/bodega" 
+                onclick={() => notificacionesOpen = false}
+                class="font-extrabold text-orange-600 hover:text-orange-700 flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-orange-50 transition-colors"
+              >
+                Ir a Bodega para reponer stock <ArrowRight size={14} />
+              </a>
               <button 
                 type="button" 
                 onclick={() => notificacionesOpen = false}
