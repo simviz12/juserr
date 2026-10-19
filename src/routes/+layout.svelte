@@ -42,14 +42,17 @@
     <!-- Desktop Sidebar Navigation -->
     <aside class="hidden md:flex flex-col w-72 h-full bg-white shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 border-r border-slate-100">
       <div class="p-8 pb-4 flex items-center gap-3">
-        <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30 text-white">
-          <Pizza size={22} />
+        <div class="w-11 h-11 bg-gradient-to-br from-orange-500 via-amber-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/25 text-white">
+          <UtensilsCrossed size={22} />
         </div>
-        <h1 class="text-2xl font-black tracking-tight text-slate-900">JuanchoPizza</h1>
+        <div>
+          <h1 class="text-xl font-black tracking-tight text-slate-900 leading-none">ChuzoOS</h1>
+          <span class="text-[10px] font-extrabold uppercase tracking-wider text-orange-600">GastroFlow Pro</span>
+        </div>
       </div>
       
       <div class="px-6 py-2">
-        <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Menú Principal</p>
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Menú Operativo</p>
       </div>
 
       <nav class="flex-1 px-4 space-y-1.5 overflow-y-auto pb-4 custom-scrollbar">
@@ -88,10 +91,13 @@
       <div class="md:hidden fixed inset-0 z-50 flex flex-col bg-white text-slate-800">
         <div class="flex justify-between items-center p-6 border-b border-slate-100">
           <div class="flex items-center gap-3">
-             <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-sm">
-               <Pizza size={18} />
+             <div class="w-9 h-9 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center text-white text-sm shadow-md">
+               <UtensilsCrossed size={18} />
              </div>
-             <h1 class="text-xl font-black text-slate-900">JuanchoPizza</h1>
+             <div>
+               <h1 class="text-lg font-black text-slate-900 leading-tight">ChuzoOS</h1>
+               <span class="text-[9px] font-bold text-orange-600 block -mt-0.5">GastroFlow</span>
+             </div>
           </div>
           <button onclick={() => mobileMenuOpen = false} class="p-2 text-slate-400 hover:text-slate-700">
             <X size={24} />

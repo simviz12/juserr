@@ -66,6 +66,75 @@
   let diferencia          = $derived(totalDeclarado - granTotalEsperado);
 
   let hayDatos = $derived(montoFisico !== '' || nequi !== '' || gastos.length > 0);
+
+  // ── Botones rápidos de efectivo (Billetes de Colombia) ──
+  function addEfectivo(valor: number) {
+    const actual = parseFloat(montoFisico) || 0;
+    montoFisico = (actual + valor).toString();
+  }
+  function setEfectivoExacto() {
+    // Si la venta esperada existe, poner el saldo restante esperado en efectivo
+    const restante = Math.max(0, granTotalEsperado - nequiNum - totalGastos);
+    montoFisico = restante.toString();
+  }
+  function resetEfectivo() {
+    montoFisico = '0';
+  }
+
+  // ── Antifraude Comprobantes Nequi ──
+  // Detectar si la referencia ya fue registrada en turnos anteriores
+  let todasRefsPrevias = $derived.by(() => {
+    const setRefs = new Set<string>();
+    if (data.historialTurnos) {
+      for (const t of data.historialTurnos) {
+        if (t.transacciones) {
+          for (const tr of t.transacciones) {
+            if (tr.referencias) {
+              tr.referencias.split(/[,;\s]+/).forEach((r: string) => {
+                const clean = r.trim().toLowerCase();
+                if (clean.length >= 4) setRefs.add(clean);
+              });
+            }
+          }
+        }
+      }
+    }
+    return setRefs;
+  });
+
+  let referenciaDuplicadaDetectada = $derived.by(() => {
+    if (!refNequi.trim()) return null;
+    const tokens = refNequi.split(/[,;\s]+/).map(t => t.trim().toLowerCase()).filter(t => t.length >= 4);
+    for (const tok of tokens) {
+      if (todasRefsPrevias.has(tok)) {
+        return tok;
+      }
+    }
+    return null;
+  });
+
+  // ── Generador de Reporte WhatsApp Nocturno para el Dueño ──
+  let whatsappUrl = $derived.by(() => {
+    const fechaStr = new Date().toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+    const horaStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    const texto = 
+`🍢 *REPORTE DE CIERRE - CHUZOOS / GASTROFLOW* 🍢
+📅 *Fecha:* ${fechaStr} - ${horaStr}
+---------------------------------
+💰 *Efectivo en Cajón:* $${efectivoNum.toLocaleString('es-CO')}
+📱 *Nequi Recibido:* $${nequiNum.toLocaleString('es-CO')}
+📉 *Gastos del Turno:* $${totalGastos.toLocaleString('es-CO')}
+💵 *TOTAL DECLARADO:* $${totalDeclarado.toLocaleString('es-CO')}
+---------------------------------
+📦 *Venta Esperada x Inventario:* $${granTotalEsperado.toLocaleString('es-CO')}
+📊 *Porciones / Pinchos Vendidos:* ${porcionesVendidas}
+🔥 *Mermas / Quemadas:* ${porcionesMermadas}
+⚖️ *Diferencia / Balance:* ${diferencia >= 0 ? '+' : ''}$${diferencia.toLocaleString('es-CO')} (${diferencia === 0 ? 'CUADRADO EXACTO ✅' : diferencia > 0 ? 'SOBRANTE 🟢' : 'FALTANTE 🔴'})
+${refNequi ? `🔖 *Refs Nequi:* ${refNequi}\n` : ''}---------------------------------
+_Auditado con ChuzoOS Engine 🚀_`;
+
+    return `https://wa.me/?text=${encodeURIComponent(texto)}`;
+  });
 </script>
 
 <div class="max-w-4xl mx-auto">
@@ -294,38 +363,80 @@
       <p class="text-sm font-medium text-slate-500 mb-6">Detalla el dinero recibido en cada plataforma. El sistema sumará todo para el cuadre.</p>
 
       <div class="space-y-5">
-        <!-- Efectivo -->
+        <!-- Efectivo con Botonera Rápida para Puestos Callejeros -->
         <div class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl">
-          <label for="monto" class="flex items-center gap-2 text-sm font-black text-emerald-800 mb-2">
-            <Banknote class="w-4 h-4 text-emerald-600" /> Efectivo Físico en Caja
-          </label>
+          <div class="flex justify-between items-center mb-2">
+            <label for="monto" class="flex items-center gap-2 text-sm font-black text-emerald-800">
+              <Banknote class="w-4 h-4 text-emerald-600" /> Efectivo Físico en Gaveta / Canguro
+            </label>
+            <div class="flex gap-2">
+              <button 
+                type="button" 
+                onclick={setEfectivoExacto}
+                class="text-xs bg-emerald-200 hover:bg-emerald-300 text-emerald-900 font-extrabold px-3 py-1 rounded-lg transition-colors cursor-pointer"
+                title="Poner el valor exacto para cuadrar"
+              >
+                ⚡ Cuadre Exacto
+              </button>
+              <button 
+                type="button" 
+                onclick={resetEfectivo}
+                class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                title="Limpiar efectivo"
+              >
+                Borrar
+              </button>
+            </div>
+          </div>
+
           <div class="relative">
             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-black">$</span>
             <input type="number" id="monto" name="monto" bind:value={montoFisico}
               required min="0" step="100" placeholder="0"
-              class="w-full md:w-1/2 pl-10 pr-4 py-3.5 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-slate-800"
+              class="w-full pl-10 pr-4 py-3.5 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-black text-xl text-slate-800"
             />
+          </div>
+
+          <!-- Botones Táctiles Rápidos de Billetes de Colombia -->
+          <div class="mt-3 pt-3 border-t border-emerald-200/60">
+            <p class="text-[11px] font-bold text-emerald-700 mb-1.5 uppercase tracking-wider">Sumar billetes al instante:</p>
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              <button type="button" onclick={() => addEfectivo(2000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$2.000</button>
+              <button type="button" onclick={() => addEfectivo(5000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$5.000</button>
+              <button type="button" onclick={() => addEfectivo(10000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$10.000</button>
+              <button type="button" onclick={() => addEfectivo(20000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$20.000</button>
+              <button type="button" onclick={() => addEfectivo(50000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$50.000</button>
+              <button type="button" onclick={() => addEfectivo(100000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$100.000</button>
+            </div>
           </div>
         </div>
 
-        <!-- Nequi -->
+        <!-- Nequi con Antifraude -->
         <div class="p-5 bg-purple-50 border border-purple-200 rounded-2xl space-y-3">
           <label class="flex items-center gap-2 text-sm font-black text-purple-800">
-            <Smartphone class="w-4 h-4 text-purple-600" /> Nequi
+            <Smartphone class="w-4 h-4 text-purple-600" /> Nequi / Daviplata Digital
           </label>
           <div class="flex flex-col md:flex-row gap-4">
             <div class="relative flex-1">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-purple-700 font-black">$</span>
               <input type="number" name="nequi" bind:value={nequi}
                 min="0" step="100" placeholder="0"
-                class="w-full pl-10 pr-4 py-3.5 bg-white border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-800"
+                class="w-full pl-10 pr-4 py-3.5 bg-white border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-black text-xl text-slate-800"
               />
             </div>
             <input type="text" name="ref_nequi" bind:value={refNequi}
-              placeholder="Referencias (Ej: Cel 313..., Cel 310...)"
+              placeholder="Referencias / Comprobantes (Ej: M1234, C8901)"
               class="flex-1 md:flex-[2] px-4 py-3.5 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none text-sm font-medium text-slate-700"
             />
           </div>
+
+          <!-- Alerta Antifraude en Tiempo Real -->
+          {#if referenciaDuplicadaDetectada}
+            <div class="p-3 bg-red-100 border border-red-300 rounded-xl flex items-center gap-2 text-red-800 text-xs font-bold animate-pulse">
+              <AlertTriangle class="w-4 h-4 text-red-600 shrink-0" />
+              <span>⚠️ ALERTA ANTIFRAUDE: La referencia "<strong>{referenciaDuplicadaDetectada}</strong>" ya fue registrada en un turno anterior. ¡Verifica el pantallazo del cliente!</span>
+            </div>
+          {/if}
         </div>
 
         <!-- Mini resumen de transferencias -->
@@ -522,14 +633,24 @@
       </div>
     {/if}
 
-    <!-- Botón de Envío -->
-    <div class="pt-6">
+    <!-- Botones de Envío y WhatsApp -->
+    <div class="pt-6 flex flex-col sm:flex-row gap-4">
       <button 
         type="submit" 
-        class="w-full py-5 px-8 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-xl flex justify-center items-center gap-3 cursor-pointer transform active:scale-98"
+        class="flex-1 py-5 px-8 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-xl flex justify-center items-center gap-3 cursor-pointer transform active:scale-98"
       >
         <LockKeyhole class="w-6 h-6" /> Guardar y Cerrar Turno
       </button>
+
+      <a 
+        href={whatsappUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="sm:w-auto px-6 py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-lg hover:shadow-xl text-lg flex justify-center items-center gap-3 cursor-pointer text-center"
+        title="Enviar reporte instantáneo al WhatsApp del dueño"
+      >
+        <Smartphone class="w-6 h-6" /> Enviar a WhatsApp
+      </a>
     </div>
     
   </form>

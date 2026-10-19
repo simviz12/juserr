@@ -120,8 +120,8 @@
                 <span class="inline-block px-2 py-1 bg-slate-100 rounded-md text-xs font-semibold">{prod.categoriaNombre}</span>
               </td>
               <td class="p-4 text-slate-600 capitalize">{prod.unidadMedida}</td>
-              <td class="p-4 font-black text-slate-900 text-base">{displayStock(prod.stockActual || 0)}</td>
-              <td class="p-4 font-bold text-red-500">{displayStock(prod.stockMinimo || 0)}</td>
+              <td class="p-4 font-black text-slate-900 text-base">{displayStock(prod.stockActual || 0, prod.unidadMedida)}</td>
+              <td class="p-4 font-bold text-red-500">{displayStock(prod.stockMinimo || 0, prod.unidadMedida)}</td>
               <td class="p-4 font-semibold text-slate-700">${Number(prod.precio || 0).toLocaleString('es-CO')}</td>
               <td class="p-4 flex justify-end gap-2">
                 <button 
@@ -192,10 +192,12 @@
 
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Tipo de conteo (Unidad de Medida)</label>
-          <select name="unidadMedida" bind:value={formUnidadMedida} required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white">
-            <option value="unidad">Unidad (ej: Lata, Botella)</option>
-            <option value="fraccion">Fracción (ej: 1/4, 1/2, Kilos)</option>
-            <option value="pechuga">Pechuga</option>
+          <select name="unidadMedida" bind:value={formUnidadMedida} required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white font-medium">
+            <option value="unidad">Unidad (ej: Pinchos ensartados, Lata, Arepa)</option>
+            <option value="fraccion">Fracción / Kilos (ej: 1/4, 1/2, 2.5 Kg de Carne)</option>
+            <option value="pechuga">Pechuga / Presas</option>
+            <option value="kilo">Kilogramos (Kg)</option>
+            <option value="bulto">Bulto / Paquete (ej: Carbón vegetal)</option>
           </select>
         </div>
 

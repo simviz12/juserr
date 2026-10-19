@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   app:
     build: .
-    container_name: pizza_system
+    container_name: chuzoos_pro_system
     ports:
-      - "3000:3000"
+      - "3001:3000"
     env_file:
       - .env
     environment:
-      - ORIGIN=http://localhost:3000
+      - ORIGIN=http://localhost:3001
     restart: unless-stopped

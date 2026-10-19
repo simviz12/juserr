@@ -6,11 +6,14 @@
 <div class="flex items-center justify-center min-h-screen bg-slate-50">
   <div class="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl">
     <div class="text-center mb-8 flex flex-col items-center">
-      <img src="/logo.png" alt="JuanchoPizza Logo" class="h-20 w-auto mb-4 rounded-2xl shadow-md" />
-      <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500">
-        JuanchoPizza
+      <div class="w-16 h-16 bg-gradient-to-br from-orange-500 via-amber-500 to-red-600 rounded-2xl flex items-center justify-center shadow-xl shadow-orange-500/25 text-white mb-3 text-3xl">
+        🍢
+      </div>
+      <h1 class="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-orange-500 via-amber-600 to-red-600">
+        ChuzoOS
       </h1>
-      <p class="text-slate-500 mt-2">Inicia sesión para continuar</p>
+      <span class="text-xs font-black uppercase tracking-widest text-orange-600">GastroFlow Pro · Pasto</span>
+      <p class="text-slate-500 mt-2 text-sm">Control Operativo, Auditoría Anti-Robo e Inventario</p>
     </div>
 
     {#if form?.message}

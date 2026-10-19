@@ -180,30 +180,30 @@
       </div>
     </div>
 
-    <!-- Pizzas y Porciones Vendidas -->
+    <!-- Pinchos / Porciones y Unidades Vendidas -->
     <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between">
       <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Pizzas y Porciones Vendidas</span>
-        <p class="text-2xl font-black text-slate-900 mt-1">{data.totalPorcionesVendidas} <span class="text-sm font-bold text-slate-400">porc.</span></p>
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Pinchos / Porciones Vendidas</span>
+        <p class="text-2xl font-black text-slate-900 mt-1">{data.totalPorcionesVendidas} <span class="text-sm font-bold text-slate-400">unid.</span></p>
         <p class="text-xs text-slate-500 font-medium mt-1">
-          Equivalente a <strong class="text-slate-800 font-bold">{masasUsadas} pizzas completas</strong> (8 porc/pizza)
+          Equivalente a <strong class="text-slate-800 font-bold">{masasUsadas} tandas / pizzas</strong>
         </p>
       </div>
-      <div class="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center" title="Pizzas horneadas y vendidas">
-        <Pizza size={28} />
+      <div class="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center text-2xl" title="Pinchos o porciones despachadas">
+        🍢
       </div>
     </div>
 
-    <!-- Masas Crudas en Bodega y Mermas -->
+    <!-- Insumos Crudos en Bodega y Mermas -->
     <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between">
       <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Masas Crudas en Bodega</span>
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Insumos Base en Bodega</span>
         <p class="text-2xl font-black text-slate-900 mt-1">{masasDisponibles} <span class="text-sm font-bold text-slate-400">unid. crudas</span></p>
         <p class="text-xs text-rose-600 font-medium mt-1 flex items-center gap-1">
-          Mermas: <strong>{data.totalMermas} porciones quemadas</strong>
+          Mermas: <strong>{data.totalMermas} quemadas/dañadas</strong>
         </p>
       </div>
-      <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center" title="Inventario físico de bolas/masas crudas">
+      <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center" title="Inventario físico de materia prima">
         <Boxes size={28} />
       </div>
     </div>
