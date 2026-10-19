@@ -633,11 +633,11 @@ _Auditado con ChuzoOS Engine 🚀_`;
       </div>
     {/if}
 
-    <!-- Botones de Envío y WhatsApp -->
-    <div class="pt-6 flex flex-col sm:flex-row gap-4">
+    <!-- Botones de Envío, WhatsApp y Comprobante Térmico POS -->
+    <div class="pt-6 flex flex-col sm:flex-row gap-3">
       <button 
         type="submit" 
-        class="flex-1 py-5 px-8 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-xl flex justify-center items-center gap-3 cursor-pointer transform active:scale-98"
+        class="flex-1 py-5 px-6 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-lg flex justify-center items-center gap-2.5 cursor-pointer transform active:scale-98"
       >
         <LockKeyhole class="w-6 h-6" /> Guardar y Cerrar Turno
       </button>
@@ -646,11 +646,20 @@ _Auditado con ChuzoOS Engine 🚀_`;
         href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
-        class="sm:w-auto px-6 py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-lg hover:shadow-xl text-lg flex justify-center items-center gap-3 cursor-pointer text-center"
+        class="sm:w-auto px-5 py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-lg hover:shadow-xl text-base flex justify-center items-center gap-2 cursor-pointer text-center"
         title="Enviar reporte instantáneo al WhatsApp del dueño"
       >
-        <Smartphone class="w-6 h-6" /> Enviar a WhatsApp
+        <Smartphone class="w-5 h-5" /> Enviar a WhatsApp
       </a>
+
+      <button 
+        type="button" 
+        onclick={() => window.print()}
+        class="sm:w-auto px-5 py-5 bg-slate-800 hover:bg-slate-900 text-white font-black rounded-2xl transition-all shadow-lg text-base flex justify-center items-center gap-2 cursor-pointer text-center"
+        title="Imprimir comprobante físico para tirilla POS / Bluetooth"
+      >
+        <Receipt class="w-5 h-5" /> Imprimir Tirilla
+      </button>
     </div>
     
   </form>
