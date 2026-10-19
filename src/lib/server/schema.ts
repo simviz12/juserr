@@ -175,3 +175,20 @@ export const itemsLinea = pgTable('items_linea', {
   activo: boolean('activo').default(true),
 });
 
+// ── GESTIÓN SAAS (Suscripciones, Planes, Facturación y Límites de Negocio) ──
+export const saasSuscripciones = pgTable('saas_suscripciones', {
+  id: serial('id').primaryKey(),
+  planCodigo: text('plan_codigo').notNull().default('pro'), // 'basico' ($39k), 'pro' ($69k), 'restobar' ($119k), 'franquicia' ($189k)
+  planNombre: text('plan_nombre').notNull().default('Pro Gastronómico'),
+  montoMensual: numeric('monto_mensual', { precision: 10, scale: 2 }).notNull().default('69000'),
+  cicloFacturacion: text('ciclo_facturacion').notNull().default('mensual'), // 'mensual', 'trimestral', 'semestral', 'anual'
+  estado: text('estado').notNull().default('activo'), // 'activo', 'trial', 'vencido', 'pendiente'
+  diasRestantes: integer('dias_restantes').default(30),
+  fechaRenovacion: timestamp('fecha_renovacion'),
+  limiteUsuarios: integer('limite_usuarios').default(3),
+  soporteWhatsApp: boolean('soporte_whatsapp').default(true),
+  antiFraudeActivo: boolean('antifraude_activo').default(true),
+  actualizadoEn: timestamp('actualizado_en').defaultNow(),
+});
+
+

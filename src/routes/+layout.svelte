@@ -25,6 +25,7 @@
     { name: 'Cierre de Turno', path: '/turnos/cierre', icon: LockKeyhole, roles: ['jefe', 'empleado', 'cajero', 'bodeguero'] },
     { name: 'Bodega e Insumos', path: '/bodega', icon: Boxes, roles: ['jefe', 'empleado', 'bodeguero'] },
     { name: 'Multi-Rubro & Combos', path: '/configuracion/rubros', icon: UtensilsCrossed, roles: ['jefe'] },
+    { name: 'Membresía SaaS', path: '/saas/suscripcion', icon: DollarSign, roles: ['jefe'] },
     { name: 'Finanzas', path: '/finanzas/resumen', icon: DollarSign, roles: ['jefe'] },
     { name: 'Productos', path: '/productos', icon: Pizza, roles: ['jefe'] },
     { name: 'Personal', path: '/configuracion/personal', icon: Users, roles: ['jefe'] },
