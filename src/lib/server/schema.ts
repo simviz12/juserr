@@ -142,3 +142,36 @@ export const cortesSemanales = pgTable('cortes_semanales', {
   rangoInicio: timestamp('rango_inicio'),
   rangoFin: timestamp('rango_fin'),
 });
+
+// ── SISTEMA MULTI-RUBRO INTEGRADO (Chuzos, Asaderos, Hamburgueserías, Pizzerías, Lasañas) ──
+export const rubrosConfig = pgTable('rubros_config', {
+  id: serial('id').primaryKey(),
+  nombreNegocio: text('nombre_negocio').notNull().default('Mi Gastro-Negocio'),
+  rubroPrincipal: text('rubro_principal').notNull().default('mixto'), // chuzos, hamburguesas, pizzas, lasanas, carnes, mixto
+  habilitarPizzas: boolean('habilitar_pizzas').default(true),
+  habilitarChuzos: boolean('habilitar_chuzos').default(true),
+  habilitarHamburguesas: boolean('habilitar_hamburguesas').default(true),
+  habilitarLasanas: boolean('habilitar_lasanas').default(true),
+  habilitarCarnes: boolean('habilitar_carnes').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const lineasGastronomicas = pgTable('lineas_gastronomicas', {
+  id: serial('id').primaryKey(),
+  codigo: text('codigo').notNull().unique(), // 'chuzo', 'pizza', 'burger', 'lasana', 'carne'
+  nombre: text('nombre').notNull(), // Ej: 'Parrilla & Chuzos', 'Pizzas Artesanales', 'Hamburguesas & Combos', 'Lasañas al Horno'
+  icono: text('icono').default('UtensilsCrossed'),
+  unidadPorcion: text('unidad_porcion').notNull().default('unidad'), // pincho, porcion, combo, bandeja, libra
+  precioPromedio: numeric('precio_promedio', { precision: 10, scale: 2 }).default('0'),
+  activo: boolean('activo').default(true),
+});
+
+export const itemsLinea = pgTable('items_linea', {
+  id: serial('id').primaryKey(),
+  lineaId: integer('linea_id').references(() => lineasGastronomicas.id).notNull(),
+  nombre: text('nombre').notNull(), // Ej: 'Chuzo de Pollo y Tocineta', 'Hamburguesa Clásica Artesanal', 'Lasaña Mixta Especial'
+  precioVenta: numeric('precio_venta', { precision: 10, scale: 2 }).notNull().default('0'),
+  precioCosto: numeric('precio_costo', { precision: 10, scale: 2 }).default('0'),
+  activo: boolean('activo').default(true),
+});
+
