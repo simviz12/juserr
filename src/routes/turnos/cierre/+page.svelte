@@ -56,6 +56,11 @@
   let porcionesVendidas  = $derived(Math.max(0, totalPorcionesDisp - porcionesSobrantes - porcionesMermadas));
   let granTotalEsperado  = $derived(porcionesVendidas * precioPorcion);
 
+  // Terminología multi-rubro dinámica
+  let esModoChuzo = $derived(data.rubroConfig?.rubroPrincipal === 'chuzos' || data.rubroConfig?.rubroPrincipal === 'mixto');
+  let nombreMateriaPrima = $derived(esModoChuzo ? 'Insumos / Masas Crudas' : 'Masas Crudas');
+  let nombreProductoTerminado = $derived(esModoChuzo ? 'Pinchos / Porciones en Parrilla y Vitrina' : 'Porciones Horneadas en Vitrina');
+
   // ── Derivados de caja y transferencias ────────────────────────────────────
   let efectivoNum   = $derived(parseFloat(montoFisico) || 0);
   let nequiNum      = $derived(parseFloat(nequi)       || 0);
@@ -198,10 +203,10 @@ _Auditado con ChuzoOS Engine 🚀_`;
       <div class="grid grid-cols-1 gap-6">
         <div class="p-4 bg-amber-50/50 border border-amber-100 rounded-2xl">
           <label for="masas_sobrantes" class="block text-sm font-bold text-slate-700 mb-1">
-            Masas Crudas Sobrantes en Nevera/Bodega
+            {nombreMateriaPrima} Sobrantes en Nevera/Bodega
           </label>
           <p class="text-xs text-slate-500 mb-3">
-            Bolas de masa sin hornear que quedaron guardadas. Con esto el sistema sabe cuántas masas crudas se gastaron en el turno.
+            Insumos base o masas sin cocinar que quedaron guardados. Con esto el sistema deduce el gasto exacto del turno.
           </p>
           <div class="flex items-center gap-3">
             <input 
@@ -213,18 +218,18 @@ _Auditado con ChuzoOS Engine 🚀_`;
               placeholder="Ej. 12 o 11 1/2"
               class="w-full md:w-1/2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
             />
-            <span class="text-sm bg-amber-100/80 text-amber-800 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} masas iniciales</span>
+            <span class="text-sm bg-amber-100/80 text-amber-800 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} iniciales</span>
           </div>
         </div>
 
         <div class="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
           <div class="flex items-center justify-between mb-1">
             <label for="porciones_sobrantes" class="flex items-center gap-1.5 text-sm font-bold text-slate-700">
-              <Pizza class="w-4 h-4 text-orange-600" /> Porciones Horneadas Sobrantes en Vitrina (Quedan para mañana)
+              <Pizza class="w-4 h-4 text-orange-600" /> {nombreProductoTerminado} (Quedan para mañana)
             </label>
             {#if porcionesAyer > 0}
               <span class="text-xs bg-orange-200 text-orange-900 font-bold px-2.5 py-1 rounded-lg">
-                Recibidas de ayer: {porcionesAyer} porc.
+                Recibidas de ayer: {porcionesAyer} unid.
               </span>
             {/if}
           </div>

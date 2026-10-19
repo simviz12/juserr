@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno } from '$lib/server/schema';
+import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno, rubrosConfig } from '$lib/server/schema';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { eq, desc, inArray, sql } from 'drizzle-orm';
@@ -99,11 +99,22 @@ export const load: PageServerLoad = async () => {
         };
     });
 
+    const [rubroConfig] = await db.select().from(rubrosConfig).limit(1);
+
     return { 
         inventario: { masasActuales, porcionesAyer, precioPorcion: 7000 },
         sabores,
         sobrasAyer,
-        historialTurnos: ultimosTurnos
+        historialTurnos: ultimosTurnos,
+        rubroConfig: rubroConfig || {
+            nombreNegocio: 'ChuzoOS Gourmet Pasto',
+            rubroPrincipal: 'mixto',
+            habilitarPizzas: true,
+            habilitarChuzos: true,
+            habilitarHamburguesas: true,
+            habilitarLasanas: true,
+            habilitarCarnes: true
+        }
     };
 };
 
