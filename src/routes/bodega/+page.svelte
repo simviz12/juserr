@@ -266,11 +266,11 @@
 					<option value="entrada">Compras</option>
 					<option value="ajuste">Conteos</option>
 				</select>
-				<div class="flex h-9 items-center gap-1.5 rounded-md border border-input bg-card px-2 shadow-sm">
+				<div class="flex h-9 w-full items-center gap-1.5 rounded-md border border-input bg-card px-2 shadow-sm sm:w-auto">
 					<CalendarDays size={14} class="text-muted-foreground" />
-					<input type="date" bind:value={desde} aria-label="Desde" class="bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
+					<input type="date" bind:value={desde} aria-label="Desde" class="min-w-0 flex-1 bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
 					<span class="text-muted-foreground">–</span>
-					<input type="date" bind:value={hasta} aria-label="Hasta" class="bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
+					<input type="date" bind:value={hasta} aria-label="Hasta" class="min-w-0 flex-1 bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
 					{#if desde || hasta}
 						<button type="button" class="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-accent" aria-label="Quitar fechas" onclick={() => { desde = ''; hasta = ''; }}><X size={13} /></button>
 					{/if}

@@ -19,7 +19,7 @@
 		<p class="text-sm text-muted-foreground">Conciliación de caja, cortes y reportes del negocio.</p>
 	</div>
 
-	<nav class="-mb-px flex gap-1 overflow-x-auto border-b border-border custom-scrollbar" aria-label="Secciones de finanzas">
+	<nav class="no-scrollbar -mb-px flex gap-1 overflow-x-auto border-b border-border" aria-label="Secciones de finanzas">
 		{#each tabs as tab (tab.path)}
 			{@const Icon = tab.icon}
 			{@const active = page.url.pathname === tab.path}

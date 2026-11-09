@@ -108,17 +108,17 @@
 
 <div class="flex flex-col gap-6">
 	<div class="flex flex-wrap items-center justify-between gap-3">
-		<div class="flex items-center gap-1">
+		<div class="flex flex-wrap items-center gap-1">
 			<button type="button" class={cn(btn.base, 'h-9 w-9 border border-input bg-card text-foreground shadow-sm hover:bg-accent')} onclick={() => mover(-1)} aria-label="Mes anterior"><ChevronLeft size={16} /></button>
 			<input
 				type="month"
 				value={data.mes}
 				onchange={(e) => e.currentTarget.value && goto(`?mes=${e.currentTarget.value}`, { noScroll: true, keepFocus: true })}
 				aria-label="Mes"
-				class="h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm dark:[color-scheme:dark]"
+				class="h-9 min-w-0 rounded-md border border-input bg-card px-3 text-sm shadow-sm dark:[color-scheme:dark]"
 			/>
 			<button type="button" class={cn(btn.base, 'h-9 w-9 border border-input bg-card text-foreground shadow-sm hover:bg-accent')} onclick={() => mover(1)} aria-label="Mes siguiente"><ChevronRight size={16} /></button>
-			<h2 class="ml-2 text-lg font-semibold tracking-tight">{data.monthLabel}</h2>
+			<h2 class="ml-1 w-full text-lg font-semibold tracking-tight sm:ml-2 sm:w-auto">{data.monthLabel}</h2>
 		</div>
 		<button type="button" class={cn(btn.base, btn.primary)} onclick={pdf} disabled={busy || loading || s.turnos === 0}>
 			{#if busy}<LoaderCircle size={15} class="animate-spin" />{:else}<FileText size={15} />{/if} Descargar PDF

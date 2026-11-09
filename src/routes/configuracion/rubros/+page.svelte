@@ -122,16 +122,17 @@
 					{#each LINE_TOGGLES as t (t.field)}
 						{@const Icon = iconFor(t.codigo)}
 						<li
-							class="flex items-start gap-3 rounded-lg border p-3 transition-colors {flags[t.field]
+							class="flex flex-col gap-2 rounded-lg border p-3 transition-colors {flags[t.field]
 								? 'border-border bg-card'
 								: 'border-dashed border-border bg-muted/40 opacity-70'}"
 						>
-							<span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted"><Icon size={16} /></span>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-medium">{t.label}</p>
-								<p class="text-xs text-muted-foreground">{t.description}</p>
+							<!-- Ícono, nombre e interruptor arriba; la descripción usa todo el ancho (legible en móvil) -->
+							<div class="flex items-center gap-3">
+								<span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted"><Icon size={16} /></span>
+								<p class="min-w-0 flex-1 text-sm font-medium">{t.label}</p>
+								<Switch name={t.form} label={`Activar ${t.label}`} bind:checked={flags[t.field]} />
 							</div>
-							<Switch name={t.form} label={`Activar ${t.label}`} bind:checked={flags[t.field]} />
+							<p class="text-xs text-muted-foreground">{t.description}</p>
 						</li>
 					{/each}
 				</ul>
@@ -156,7 +157,7 @@
 				? activos.reduce((a, i) => a + (itemEconomics(Number(i.precioVenta), Number(i.precioCosto ?? 0)).foodCost ?? 0), 0) / activos.length
 				: null}
 			<Card class={linea.activo ? '' : 'opacity-60'} bodyClass="p-0">
-				<header class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+				<header class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
 					<div class="flex min-w-0 items-center gap-3">
 						<span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted"><Icon size={17} /></span>
 						<div class="min-w-0">
@@ -177,7 +178,7 @@
 
 				{#if linea.codigo !== 'pizza' && linea.activo}
 					{@const control = controlDe(linea.productoControlId)}
-					<form method="POST" action="?/actualizarControl" use:enhance={() => async ({ update }) => update({ reset: false })} class="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-5 py-2.5 text-xs">
+					<form method="POST" action="?/actualizarControl" use:enhance={() => async ({ update }) => update({ reset: false })} class="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs sm:px-5">
 						<input type="hidden" name="linea_id" value={linea.id} />
 						<span class="text-muted-foreground">En el cierre se cuenta:</span>
 						<select
@@ -185,7 +186,7 @@
 							value={linea.productoControlId ?? ''}
 							onchange={(e) => e.currentTarget.form?.requestSubmit()}
 							aria-label={`Insumo de control de ${linea.nombre}`}
-							class="h-7 rounded border border-input bg-card px-2 text-xs"
+							class="h-7 min-w-36 max-w-full flex-1 rounded border border-input bg-card px-2 text-xs sm:flex-none"
 						>
 							{#each data.insumos as p (p.id)}<option value={p.id}>{p.nombre}</option>{/each}
 						</select>
@@ -202,13 +203,13 @@
 						{#each items as item (item.id)}
 							{@const venta = Number(item.precioVenta)}
 							{@const eco = itemEconomics(venta, Number(item.precioCosto ?? 0))}
-							<li class="flex items-center gap-3 px-5 py-3 {item.activo ? '' : 'opacity-50'}">
-								<div class="min-w-0 flex-1">
+							<li class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:flex-nowrap sm:px-5 {item.activo ? '' : 'opacity-50'}">
+								<div class="min-w-0 flex-1 basis-full sm:basis-auto">
 									<p class="truncate text-sm font-medium">{item.nombre}{#if !item.activo}<span class="ml-2 text-xs font-normal text-muted-foreground">(pausado)</span>{/if}</p>
 									<p class="text-xs text-muted-foreground tabular-nums">Costo {formatCOP(Number(item.precioCosto ?? 0))} · margen {formatCOP(eco.margen)}</p>
 								</div>
 								<Badge variant={fcVariant(eco.foodCost)}>{formatPct(eco.foodCost, 0)}</Badge>
-								<span class="w-20 text-right text-sm font-semibold tabular-nums">{formatCOP(venta)}</span>
+								<span class="ml-auto text-right text-sm font-semibold tabular-nums sm:ml-0 sm:w-20">{formatCOP(venta)}</span>
 								<div class="flex">
 									<button type="button" class={cn(btn.base, btn.icon)} aria-label={`Editar ${item.nombre}`} onclick={() => openEdit(item)}><Pencil size={14} /></button>
 									<form method="POST" action="?/toggleItem" use:enhance>

@@ -186,3 +186,7 @@
 .dark :where(input, select, textarea) { background-color: var(--muted); color: var(--foreground); border-color: var(--input); }
 .dark .hover\:bg-slate-50:hover,
 .dark .hover\:bg-slate-100:hover { background-color: var(--accent); }
+
+/* Contenedores con scroll horizontal sin barra visible (controles segmentados en móvil) */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

@@ -51,11 +51,11 @@
 <div class="mx-auto flex max-w-6xl flex-col gap-6">
 	<PageHeader title="Producción" description="Masas usadas, porciones vendidas y desperdicio por día.">
 		{#snippet actions()}
-			<div class="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm">
+			<div class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm sm:w-auto">
 				<CalendarRange size={15} class="text-muted-foreground" />
-				<input type="date" bind:value={inicio} aria-label="Desde" class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<input type="date" bind:value={inicio} aria-label="Desde" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
 				<span class="text-muted-foreground">–</span>
-				<input type="date" bind:value={fin} aria-label="Hasta" class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<input type="date" bind:value={fin} aria-label="Hasta" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
 			</div>
 			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => goto(`?inicio=${inicio}&fin=${fin}`, { noScroll: true, keepFocus: true })}>Aplicar</button>
 			<button type="button" class={cn(btn.base, btn.outline)} onclick={exportar} disabled={data.produccion.length === 0}><Download size={15} /> Excel</button>

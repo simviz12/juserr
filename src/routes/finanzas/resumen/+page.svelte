@@ -204,20 +204,20 @@
 	<!-- Filtros + exportación -->
 	<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
 		<div class="flex flex-wrap items-end gap-2">
-			<div class="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm">
+			<div class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm sm:w-auto">
 				<CalendarRange size={15} class="text-muted-foreground" />
-				<input type="date" bind:value={inicio} aria-label="Desde" class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<input type="date" bind:value={inicio} aria-label="Desde" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
 				<span class="text-muted-foreground">–</span>
-				<input type="date" bind:value={fin} aria-label="Hasta" class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<input type="date" bind:value={fin} aria-label="Hasta" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
 			</div>
 			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => aplicar()} disabled={inicio === data.inicio && fin === data.fin}>Aplicar</button>
-			<div class="flex gap-1">
+			<div class="flex flex-wrap gap-1">
 				{#each [{ k: 'mes', l: 'Este mes' }, { k: 'anterior', l: 'Mes anterior' }, { k: '7', l: '7 días' }, { k: '30', l: '30 días' }] as p (p.k)}
 					<button type="button" class={cn(btn.base, btn.ghost, btn.sm)} onclick={() => preset(p.k as 'mes')}>{p.l}</button>
 				{/each}
 			</div>
 		</div>
-		<div class="flex gap-2">
+		<div class="flex flex-wrap gap-2">
 			<button type="button" class={cn(btn.base, btn.outline)} onclick={excel} disabled={busy !== null}>
 				{#if busy === 'xlsx'}<LoaderCircle size={15} class="animate-spin" />{:else}<FileSpreadsheet size={15} />{/if} Excel
 			</button>
