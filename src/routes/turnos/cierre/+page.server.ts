@@ -1,15 +1,19 @@
 import { db } from '$lib/server/db';
-import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno, rubrosConfig } from '$lib/server/schema';
-import { fail } from '@sveltejs/kit';
+import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno } from '$lib/server/schema';
+
 import type { Actions, PageServerLoad } from './$types';
 import { eq, desc, inArray, sql } from 'drizzle-orm';
-import { parseFraction } from '$lib/utils/fractions';
+import { closeShiftAction } from '$lib/features/shifts/server/close-shift.action';
+import { getBusinessConfig } from '$lib/features/business/server/config';
+import { getLineasControl } from '$lib/features/shifts/server/lines';
+
+const PRECIO_PORCION_DEFAULT = 7000;
 
 export const load: PageServerLoad = async () => {
     // 1. Obtener producto "Masa" (o "Masas"), último turno, lista de sabores y turnos recientes en paralelo
     // 1. Obtener producto "Masa", producto "Pizza (Porciones)", último turno, lista de sabores y turnos recientes en paralelo
     const [masaRows, pizzaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw] = await Promise.all([
-        db.select().from(productos).where(eq(productos.nombre, 'Masa')),
+        db.select().from(productos).where(inArray(productos.nombre, ['Masa', 'Masas'])).limit(1),
         db.select().from(productos).where(sql`${productos.nombre} ILIKE 'Pizza%'`),
         db.select({
             id: turnos.id,
@@ -99,159 +103,25 @@ export const load: PageServerLoad = async () => {
         };
     });
 
-    const [rubroConfig] = await db.select().from(rubrosConfig).limit(1);
+    const rubroConfig = await getBusinessConfig();
+    const lineas = await getLineasControl(rubroConfig);
 
-    return { 
-        inventario: { masasActuales, porcionesAyer, precioPorcion: 7000 },
+    // Precio por porción: promedio de los sabores activos con precio; si no hay, 7.000 COP.
+    const preciosSabores = sabores.map((s) => Number(s.precioPorcion ?? 0)).filter((p) => p > 0);
+    const precioPorcion = preciosSabores.length
+        ? Math.round(preciosSabores.reduce((a, b) => a + b, 0) / preciosSabores.length)
+        : PRECIO_PORCION_DEFAULT;
+
+    return {
+        inventario: { masasActuales, porcionesAyer, precioPorcion, precioEsPromedio: preciosSabores.length > 0 },
         sabores,
         sobrasAyer,
-        historialTurnos: ultimosTurnos,
-        rubroConfig: rubroConfig || {
-            nombreNegocio: 'ChuzoOS Gourmet Pasto',
-            rubroPrincipal: 'mixto',
-            habilitarPizzas: true,
-            habilitarChuzos: true,
-            habilitarHamburguesas: true,
-            habilitarLasanas: true,
-            habilitarCarnes: true
-        }
+        historialTurnos: ultimosTurnos.map((t) => ({ ...t, fecha: t.fecha ? t.fecha.toISOString() : null })),
+        rubroConfig,
+        lineas
     };
 };
 
 export const actions: Actions = {
-    default: async ({ request, locals }) => {
-        if (!locals.user) return fail(401, { error: 'No autorizado' });
-
-        const formData = await request.formData();
-
-        // ── Datos básicos ────────────────────────────────────────────────────
-        const monto = parseFloat(formData.get('monto')?.toString() || '0');
-        const descripcionTurno = formData.get('descripcion')?.toString() || '';
-
-        // ── Desglose de plataformas de pago ───────────────────────────────
-        const nequi     = parseFloat(formData.get('nequi')?.toString()     || '0');
-        const refNequi     = formData.get('ref_nequi')?.toString()     || '';
-
-        const totalTransferencias = nequi;
-        const totalDeclarado = monto + totalTransferencias;
-
-        // ── Validaciones ──────────────────────────────────────────────────
-        if (isNaN(monto) || monto < 0) {
-            return fail(400, { error: 'El monto de efectivo es inválido.' });
-        }
-        if (isNaN(nequi) || nequi < 0) {
-            return fail(400, { error: 'El valor de Nequi es inválido.' });
-        }
-
-        // ── Inventario ────────────────────────────────────────────────────
-        const masasSobrantesStr = formData.get('masas_sobrantes')?.toString() || '0';
-        const masasSobrantes   = parseFraction(masasSobrantesStr) || 0;
-        const porcionesSobrantes = parseInt(formData.get('porciones_sobrantes')?.toString() || '0');
-        const porcionesMermadas  = parseInt(formData.get('porciones_mermadas')?.toString()  || '0');
-        const masasIniciales     = parseFloat(formData.get('masas_iniciales')?.toString()   || '0');
-        const porcionesAyer      = parseInt(formData.get('porciones_ayer')?.toString()      || '0');
-
-        const masasUsadas = Math.max(0, masasIniciales - masasSobrantes);
-        const porcionesVendidasCalculado = Math.max(0, (masasUsadas * 8 + porcionesAyer) - porcionesSobrantes - porcionesMermadas);
-
-        // ── Gastos dinámicos ──────────────────────────────────────────────
-        const gastosDescripciones = formData.getAll('gasto_descripcion') as string[];
-        const gastosMontosRaw     = formData.getAll('gasto_monto') as string[];
-        const gastosParsed: { descripcion: string; monto: string }[] = [];
-
-        for (let i = 0; i < gastosDescripciones.length; i++) {
-            const desc = gastosDescripciones[i].trim();
-            const val  = parseFloat(gastosMontosRaw[i]);
-            if (desc && !isNaN(val) && val > 0) {
-                gastosParsed.push({ descripcion: desc, monto: val.toString() });
-            }
-        }
-
-        // ── Sabores de pizza ──────────────────────────────────────────────
-        const sabores = await db.select().from(pizzaSabores).where(eq(pizzaSabores.activo, true));
-        // Obtener sobras del ÚLTIMO turno cerrado
-        const [ultimoTurno] = await db.select().from(turnos).orderBy(desc(turnos.id)).limit(1);
-        
-        let porcionesAyerData: { saborId: number; cantidad: number }[] = [];
-        let porcionesAyerSobrantes = 0;
-        if (ultimoTurno) {
-            porcionesAyerSobrantes = ultimoTurno.porcionesSobrantes || 0;
-            porcionesAyerData = await db.select({
-                saborId: pizzaSobras.saborId,
-                cantidad: pizzaSobras.cantidad
-            }).from(pizzaSobras).where(eq(pizzaSobras.turnoId, ultimoTurno.id));
-        }
-
-        try {
-            
-
-                // 1. Insertar turno con el total de transferencias calculado
-                const [nuevoTurno] = await db.insert(turnos).values({
-                    monto: monto.toString(),
-                    transferencias: totalTransferencias.toString(),
-                    descripcion: descripcionTurno,
-                    masasIniciales,
-                    masasSobrantes,
-                    porcionesAyer,
-                    porcionesSobrantes,
-                    porcionesMermadas,
-                    porcionesVendidasCalculado
-                }).returning({ id: turnos.id });
-
-                // 2. Insertar desglose de plataformas (solo las que tienen monto > 0)
-                const plataformas = [
-                    { plataforma: 'nequi',     monto: nequi,     refs: refNequi },
-                ];
-                for (const p of plataformas) {
-                    if (p.monto > 0) {
-                        await db.insert(transaccionesTurno).values({
-                            turnoId: nuevoTurno.id,
-                            plataforma: p.plataforma,
-                            monto: p.monto.toString(),
-                            referencias: p.refs || null,
-                        });
-                    }
-                }
-
-                // 3. Insertar gastos
-                if (gastosParsed.length > 0) {
-                    await db.insert(gastos).values(
-                        gastosParsed.map(g => ({ turnoId: nuevoTurno.id, descripcion: g.descripcion, monto: g.monto }))
-                    );
-                }
-
-                // 4. Actualizar stock de Masa y de Pizza (Porciones) en Bodega
-                await db.update(productos)
-                    .set({ stockActual: masasSobrantes })
-                    .where(eq(productos.nombre, 'Masa'));
-
-                await db.update(productos)
-                    .set({ stockActual: porcionesSobrantes })
-                    .where(sql`${productos.nombre} ILIKE 'Pizza%'`);
-
-                // 5. Guardar métricas de pizzas por sabor
-                for (const sabor of sabores) {
-                    const ruedas = parseInt(formData.get(`ruedas_${sabor.id}`)?.toString() || '0');
-                    const sobras = parseFloat(formData.get(`sobras_${sabor.id}`)?.toString() || '0');
-                    const quemadas = parseFloat(formData.get(`quemadas_${sabor.id}`)?.toString() || '0');
-                    if (ruedas > 0) await db.insert(pizzaRuedas).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidad: ruedas });
-                    if (sobras > 0) await db.insert(pizzaSobras).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidad: sobras });
-                    const sobrasAyerCant = porcionesAyerData.find(s => s.saborId === sabor.id)?.cantidad ?? 0;
-                    const vendidas = Math.max(0, (sobrasAyerCant + ruedas * 8) - sobras - quemadas);
-                    if (vendidas > 0) await db.insert(pizzaVentas).values({ saborId: sabor.id, turnoId: nuevoTurno.id, cantidadVendida: vendidas });
-                }
-
-                return {
-                    success: true,
-                    message: `Turno cerrado. Total declarado: $${totalDeclarado.toLocaleString('es-CO')} (Efectivo: $${monto.toLocaleString('es-CO')} | Nequi: $${nequi.toLocaleString('es-CO')}).`
-                };
-            } catch (err) {
-            console.error(err);
-            return fail(500, { error: 'Error interno al registrar el cierre de turno.' });
-        }
-    }
+    default: closeShiftAction
 };
-
-
-
-

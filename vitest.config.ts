@@ -1,10 +1,15 @@
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
+
 export default defineConfig({
-  test: {
-    include: ['tests/**/*.test.ts'],
-    globals: true,
-    environment: 'node',
-    coverage: { reporter: ['text','json','html'] }
-  }
+	resolve: {
+		alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) }
+	},
+	test: {
+		include: ['tests/**/*.test.ts'],
+		globals: true,
+		environment: 'node',
+		coverage: { reporter: ['text', 'json', 'html'] }
+	}
 });

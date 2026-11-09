@@ -1,499 +1,294 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import { Boxes, Download, PackagePlus, SlidersHorizontal, CheckCircle2, AlertTriangle } from '@lucide/svelte';
-  import * as XLSX from 'xlsx';
-  let { data, form } = $props();
+	import { enhance } from '$app/forms';
+	import { Download, PackagePlus, ClipboardCheck, Boxes, TriangleAlert, Coins, LoaderCircle, CalendarDays, X } from '@lucide/svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import StatTile from '$lib/components/ui/StatTile.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+	import DataTable from '$lib/components/data-table/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table/types';
+	import { inputClass, selectClass, btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { parseFraction, formatFraction } from '$lib/utils/fractions';
+	import { formatCOP, formatDateTime, formatNumber } from '$lib/utils/format';
+	import { exportExcel, todayStamp } from '$lib/utils/export';
+	import { businessDayKey } from '$lib/features/finance/domain/period';
 
-  let tipoOperacion = $state<'entrada' | 'ajuste'>('entrada');
-  let cantidadInput = $state('');
-  let precioTotalCompra = $state('');
-  let productoSeleccionadoId = $state(data.productos[0]?.id || 1);
+	let { data, form } = $props();
 
-  // Parser para soportar enteros con fracciones como "6 1/4", "2 1/2", "3/4" o decimales "6.25"
-  function parseCantidadFraccion(valor: string): number {
-    if (!valor) return 0;
-    const clean = valor.trim();
-    if (!clean) return 0;
+	type Producto = (typeof data.productos)[number];
+	type Movimiento = (typeof data.historialMovimientos)[number];
 
-    // Caso 1: Entero con fracción, ej: "6 1/4" o "6 1/2"
-    if (clean.includes(' ') && clean.includes('/')) {
-      const parts = clean.split(/\s+/);
-      const entero = parseFloat(parts[0]) || 0;
-      const fracParts = parts[1].split('/');
-      if (fracParts.length === 2) {
-        const num = parseFloat(fracParts[0]) || 0;
-        const den = parseFloat(fracParts[1]) || 1;
-        return entero + (den !== 0 ? num / den : 0);
-      }
-    }
+	// ── Resumen ───────────────────────────────────────────────
+	const estado = (p: Producto) => {
+		const s = p.stockActual ?? 0;
+		return s <= 0 ? 'agotado' : s <= (p.stockMinimo ?? 0) ? 'bajo' : 'ok';
+	};
+	let valorInventario = $derived(data.productos.reduce((a, p) => a + Math.max(0, p.stockActual ?? 0) * Number(p.precioCosto ?? 0), 0));
+	let criticos = $derived(data.productos.filter((p) => estado(p) !== 'ok').length);
+	let agotados = $derived(data.productos.filter((p) => estado(p) === 'agotado').length);
+	const fmtQty = (n: number | null | undefined) => formatFraction(Number(n ?? 0));
 
-    // Caso 2: Solo fracción, ej: "1/4", "3/4", "1/2"
-    if (clean.includes('/')) {
-      const fracParts = clean.split('/');
-      if (fracParts.length === 2) {
-        const num = parseFloat(fracParts[0]) || 0;
-        const den = parseFloat(fracParts[1]) || 1;
-        return den !== 0 ? num / den : 0;
-      }
-    }
+	// ── Formulario de movimiento ──────────────────────────────
+	let tipo = $state<'entrada' | 'ajuste'>('entrada');
+	let productoId = $state<number>(0);
+	$effect.pre(() => {
+		if (!data.productos.some((p) => p.id === productoId)) productoId = data.productos[0]?.id ?? 0;
+	});
+	let cantidad = $state('');
+	let precioTotal = $state('');
+	let submitting = $state(false);
 
-    // Caso 3: Número normal entero o decimal "6" o "6.25"
-    return parseFloat(clean.replace(',', '.')) || 0;
-  }
+	let seleccionado = $derived(data.productos.find((p) => p.id === Number(productoId)));
+	let cantidadNum = $derived(parseFraction(cantidad));
+	let cantidadValida = $derived(Number.isFinite(cantidadNum) && cantidadNum >= 0 && cantidad.trim() !== '');
+	let stockResultante = $derived(
+		!seleccionado || !cantidadValida ? null : tipo === 'entrada' ? (seleccionado.stockActual ?? 0) + cantidadNum : cantidadNum
+	);
+	let costoUnitario = $derived(cantidadValida && cantidadNum > 0 ? (Number(precioTotal) || 0) / cantidadNum : 0);
 
-  import { parseFraction, formatFraction, displayStock } from '$lib/utils/fractions';
+	function addFraction(frac: string) {
+		const c = cantidad.trim();
+		if (!c || c === '0') cantidad = frac;
+		else if (!c.includes('/')) cantidad = `${c} ${frac}`;
+	}
 
-  function formatCantidadFraccion(val: number | null | undefined): string {
-    if (val === null || val === undefined || isNaN(val)) return '0';
-    return formatFraction(Number(val));
-  }
-  
-  let cantidadNum = $derived(parseCantidadFraccion(cantidadInput));
-  let precioTotalNum = $derived(parseFloat(precioTotalCompra) || 0);
-  let precioUnitario = $derived(cantidadNum > 0 ? precioTotalNum / cantidadNum : 0);
+	function selectForCount(p: Producto) {
+		productoId = p.id;
+		tipo = 'ajuste';
+		cantidad = '';
+		document.getElementById('movimiento')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
 
-  let productoSeleccionado = $derived(data.productos.find(p => p.id === Number(productoSeleccionadoId)) || data.productos[0]);
+	// ── Inventario ────────────────────────────────────────────
+	let filtroEstado = $state<'todos' | 'criticos'>('todos');
+	let inventario = $derived(filtroEstado === 'criticos' ? data.productos.filter((p) => estado(p) !== 'ok') : data.productos);
+	const invColumns: Column<Producto>[] = [
+		{ id: 'nombre', header: 'Insumo', accessor: (p) => p.nombre },
+		{ id: 'categoria', header: 'Categoría', accessor: (p) => p.categoria ?? '', format: (v) => (v ? String(v) : '—'), hideOnMobile: true },
+		{ id: 'stock', header: 'Stock', accessor: (p) => p.stockActual ?? 0, align: 'right' },
+		{ id: 'minimo', header: 'Mínimo', accessor: (p) => p.stockMinimo ?? 0, format: (v) => fmtQty(Number(v)), align: 'right', hideOnMobile: true },
+		{ id: 'costo', header: 'Costo prom.', accessor: (p) => Number(p.precioCosto ?? 0), format: (v) => formatCOP(Number(v)), align: 'right', hideOnMobile: true },
+		{ id: 'estado', header: 'Estado', accessor: (p) => estado(p), sortable: false },
+		{ id: 'acciones', header: '', accessor: () => null, sortable: false }
+	];
 
-  function exportComprasToExcel() {
-    if (!data.historialMovimientos || data.historialMovimientos.length === 0) {
-      alert('No hay movimientos ni compras registradas para exportar.');
-      return;
-    }
+	// ── Historial ─────────────────────────────────────────────
+	let desde = $state('');
+	let hasta = $state('');
+	let tipoMov = $state<'todos' | 'entrada' | 'ajuste'>('todos');
+	let historial = $derived(
+		data.historialMovimientos.filter((m) => {
+			if (tipoMov !== 'todos' && m.tipo !== tipoMov) return false;
+			if (!m.fecha) return !desde && !hasta;
+			const k = businessDayKey(m.fecha);
+			return (!desde || k >= desde) && (!hasta || k <= hasta);
+		})
+	);
+	let totalCompras = $derived(historial.reduce((a, m) => a + (m.tipo === 'entrada' ? Number(m.costoTotal ?? 0) : 0), 0));
+	const histColumns: Column<Movimiento>[] = [
+		{ id: 'fecha', header: 'Fecha', accessor: (m) => m.fecha, format: (v) => formatDateTime(v as string | null) },
+		{ id: 'tipo', header: 'Tipo', accessor: (m) => m.tipo, sortable: false },
+		{ id: 'insumo', header: 'Insumo', accessor: (m) => m.productoNombre },
+		{ id: 'cantidad', header: 'Cantidad', accessor: (m) => m.cantidad, align: 'right' },
+		{ id: 'unitario', header: 'Costo unit.', accessor: (m) => Number(m.costoUnitario ?? 0), align: 'right', hideOnMobile: true },
+		{ id: 'total', header: 'Costo total', accessor: (m) => Number(m.costoTotal ?? 0), align: 'right' }
+	];
 
-    const rows = data.historialMovimientos.map((m: any) => ({
-      'Fecha': m.fecha ? new Date(m.fecha).toLocaleDateString('es-CO') : '-',
-      'Hora': m.fecha ? new Date(m.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-',
-      'Tipo de Operación': m.tipo === 'entrada' ? 'Compra (Entrada)' : 'Ajuste de Conteo Físico',
-      'Producto / Insumo': m.productoNombre,
-      'Unidad de Medida': m.unidadMedida,
-      'Cantidad': m.cantidad,
-      'Costo Unitario ($)': Number(m.costoUnitario || 0),
-      'Costo Total Invertido ($)': Number(m.costoTotal || 0)
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial Compras e Insumos');
-    XLSX.writeFile(workbook, `JuanchoPizza_Historial_Compras_${new Date().toISOString().split('T')[0]}.xlsx`);
-  }
-
-  // Paginación y filtros de búsqueda y fecha para el Historial
-  let historialSearch = $state('');
-  let fechaInicio = $state('');
-  let fechaFin = $state('');
-  let historialPage = $state(1);
-  const itemsPerPage = 8;
-
-  let historialFiltrado = $derived.by(() => {
-    let list = data.historialMovimientos || [];
-    
-    // Filtro por texto
-    if (historialSearch.trim()) {
-      const term = historialSearch.toLowerCase();
-      list = list.filter((m: any) => 
-        (m.productoNombre && m.productoNombre.toLowerCase().includes(term)) ||
-        (m.tipo && m.tipo.toLowerCase().includes(term))
-      );
-    }
-
-    // Filtro por fecha inicio
-    if (fechaInicio) {
-      const inicio = new Date(`${fechaInicio}T00:00:00`);
-      list = list.filter((m: any) => m.fecha && new Date(m.fecha) >= inicio);
-    }
-
-    // Filtro por fecha fin
-    if (fechaFin) {
-      const fin = new Date(`${fechaFin}T23:59:59`);
-      list = list.filter((m: any) => m.fecha && new Date(m.fecha) <= fin);
-    }
-
-    return list;
-  });
-
-  let totalPages = $derived(Math.max(1, Math.ceil(historialFiltrado.length / itemsPerPage)));
-  let historialPaginado = $derived.by(() => {
-    const start = (historialPage - 1) * itemsPerPage;
-    return historialFiltrado.slice(start, start + itemsPerPage);
-  });
-
-  function limpiarFiltrosFecha() {
-    fechaInicio = '';
-    fechaFin = '';
-    historialPage = 1;
-  }
+	let exporting = $state(false);
+	let exportMsg = $state('');
+	async function exportar() {
+		exporting = true;
+		exportMsg = '';
+		const ok = await exportExcel(`MesaCapital_Bodega_${todayStamp()}`, [
+			{
+				name: 'Inventario',
+				rows: data.productos.map((p) => ({
+					Insumo: p.nombre,
+					Categoría: p.categoria ?? '',
+					Unidad: p.unidadMedida,
+					Stock: Number(p.stockActual ?? 0),
+					Mínimo: Number(p.stockMinimo ?? 0),
+					'Costo promedio': Number(p.precioCosto ?? 0),
+					'Valor en bodega': Math.max(0, p.stockActual ?? 0) * Number(p.precioCosto ?? 0),
+					Estado: estado(p)
+				}))
+			},
+			{
+				name: 'Movimientos',
+				rows: historial.map((m) => ({
+					Fecha: formatDateTime(m.fecha),
+					Tipo: m.tipo === 'entrada' ? 'Compra' : 'Ajuste de conteo',
+					Insumo: m.productoNombre,
+					Unidad: m.unidadMedida,
+					Cantidad: m.cantidad,
+					'Costo unitario': Number(m.costoUnitario ?? 0),
+					'Costo total': Number(m.costoTotal ?? 0)
+				}))
+			}
+		]);
+		exporting = false;
+		if (!ok) exportMsg = 'No hay datos para exportar.';
+	}
 </script>
 
-<div class="max-w-5xl mx-auto space-y-8 pb-12">
-  <!-- Encabezado -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-    <div>
-      <div class="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold mb-2">
-        <Boxes size={14} /> Control de Materia Prima
-      </div>
-      <h1 class="text-3xl font-black tracking-tight text-slate-900">Bodega e Insumos</h1>
-      <p class="text-slate-500 font-medium mt-1">Registra compras de mercancía y audita el stock real de la pizzería.</p>
-    </div>
-    
-    <div>
-      <button 
-        onclick={exportComprasToExcel}
-        class="inline-flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-sm hover:shadow transition-all text-sm cursor-pointer"
-      >
-        <Download size={16} /> Descargar Historial en Excel (.xlsx)
-      </button>
-    </div>
-  </div>
+<svelte:head><title>Bodega · MesaCapital</title></svelte:head>
 
-  <!-- Tarjetas de Stock Actual -->
-  <div>
-    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Stock Actual en Bodega</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-      {#each data.productos as producto}
-        <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group hover:border-orange-200 transition-all">
-          <div class="absolute -right-4 -top-4 w-16 h-16 bg-orange-50/70 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-          <div class="relative z-10">
-            <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">
-              {producto.nombre}
-            </span>
-            <div class="flex items-baseline gap-2 mt-1">
-              <p class="text-3xl font-black text-slate-800">{formatCantidadFraccion(producto.stockActual)}</p>
-              <span class="text-xs font-bold text-orange-500">{producto.unidadMedida}</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-2 font-medium">
-              Costo Prom.: <strong class="text-slate-700">${Number(producto.precioCosto || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</strong>
-            </p>
-          </div>
-        </div>
-      {/each}
-    </div>
-  </div>
+<div class="mx-auto flex max-w-6xl flex-col gap-6">
+	<PageHeader title="Bodega e insumos" description="Registra compras, haz conteos físicos y controla el valor de tu inventario.">
+		{#snippet actions()}
+			<button type="button" class={cn(btn.base, btn.outline)} onclick={exportar} disabled={exporting}>
+				{#if exporting}<LoaderCircle size={15} class="animate-spin" />{:else}<Download size={15} />{/if}
+				Exportar Excel
+			</button>
+		{/snippet}
+	</PageHeader>
+	{#if exportMsg}<p class="-mt-3 text-sm text-muted-foreground">{exportMsg}</p>{/if}
 
-  <!-- Mensajes de feedback -->
-  {#if form?.success}
-    <div class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl shadow-sm border border-emerald-200 flex items-center gap-3">
-      <CheckCircle2 size={24} class="text-emerald-600 shrink-0" /> 
-      <div>
-        <p class="font-bold text-base">Operación completada con éxito</p>
-        <p class="text-sm text-emerald-700 mt-0.5">{form.message}</p>
-      </div>
-    </div>
-  {/if}
+	<section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<StatTile label="Insumos" value={formatNumber(data.productos.length)} icon={Boxes} />
+		<StatTile label="Valor en bodega" value={formatCOP(valorInventario)} icon={Coins} hint="stock × costo promedio" />
+		<StatTile label="Bajo mínimo" value={formatNumber(criticos)} icon={TriangleAlert} tone={criticos > 0 ? 'warning' : 'default'} />
+		<StatTile label="Agotados" value={formatNumber(agotados)} icon={TriangleAlert} tone={agotados > 0 ? 'danger' : 'default'} />
+	</section>
 
-  {#if form?.error}
-    <div class="bg-red-50 text-red-700 p-5 rounded-2xl shadow-sm border border-red-200 flex items-center gap-3">
-      <AlertTriangle size={24} class="text-red-600 shrink-0" /> 
-      <div>
-        <p class="font-bold text-base">Hubo un problema</p>
-        <p class="text-sm text-red-600 mt-0.5">{form.error}</p>
-      </div>
-    </div>
-  {/if}
+	<FormFeedback {form} />
 
-  <!-- Formulario Principal -->
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8">
-    <div class="border-b border-slate-100 pb-6 mb-6">
-      <h2 class="text-xl font-black text-slate-900">Registrar Movimiento en Bodega</h2>
-      <p class="text-xs text-slate-500 mt-1">
-        Selecciona la acción a realizar según lo que pasó en el local:
-      </p>
+	<!-- Movimiento -->
+	<div id="movimiento" class="scroll-mt-20">
+		<Card title="Registrar movimiento" description={tipo === 'entrada' ? 'Compra o pedido recibido: la cantidad se SUMA al stock y recalcula el costo promedio.' : 'Conteo físico: el stock queda EXACTAMENTE en la cantidad que cuentes.'}>
+			{#snippet actions()}
+				<SegmentedControl
+					label="Tipo de movimiento"
+					value={tipo}
+					onchange={(v) => (tipo = v)}
+					options={[
+						{ value: 'entrada', label: 'Compra' },
+						{ value: 'ajuste', label: 'Conteo físico' }
+					]}
+				/>
+			{/snippet}
 
-      <!-- Selector de Modo Sin Bug de Saltos -->
-      <div class="mt-4 p-2 bg-slate-100 rounded-2xl flex flex-col sm:flex-row gap-3 max-w-2xl">
-        <button 
-          type="button" 
-          onclick={() => tipoOperacion = 'entrada'}
-          class="flex-1 py-4 px-6 rounded-xl font-extrabold text-base transition-all flex items-center justify-center gap-3 cursor-pointer {tipoOperacion === 'entrada' ? 'bg-white text-orange-600 shadow-md ring-2 ring-orange-500/20' : 'text-slate-600 hover:text-slate-900'}"
-        >
-          <span class="text-xl">📥</span> Registrar Compras (Sumar)
-        </button>
-        <button 
-          type="button" 
-          onclick={() => tipoOperacion = 'ajuste'}
-          class="flex-1 py-4 px-6 rounded-xl font-extrabold text-base transition-all flex items-center justify-center gap-3 cursor-pointer {tipoOperacion === 'ajuste' ? 'bg-white text-blue-600 shadow-md ring-2 ring-blue-500/20' : 'text-slate-600 hover:text-slate-900'}"
-        >
-          <span class="text-xl">📋</span> Conteo Real (Sobreescribir)
-        </button>
-      </div>
+			<form
+				method="POST"
+				class="grid gap-4 md:grid-cols-3"
+				use:enhance={() => {
+					submitting = true;
+					return async ({ result, update }) => {
+						await update({ reset: false });
+						submitting = false;
+						if (result.type === 'success') {
+							cantidad = '';
+							precioTotal = '';
+						}
+					};
+				}}
+			>
+				<input type="hidden" name="tipo_operacion" value={tipo} />
+				<input type="hidden" name="cantidad" value={cantidadValida ? cantidadNum : ''} />
 
-      <!-- Explicación pedagógica de la acción seleccionada -->
-      <div class="mt-4 p-4 rounded-2xl border text-xs font-medium {tipoOperacion === 'entrada' ? 'bg-orange-50/70 border-orange-200 text-orange-900' : 'bg-blue-50/70 border-blue-200 text-blue-900'}">
-        {#if tipoOperacion === 'entrada'}
-          <p class="flex items-start gap-2">
-            <span class="text-base">💡</span>
-            <span>
-              <strong>Modo SUMAR:</strong> Úsalo cuando llegue un pedido del proveedor o vayas a la plaza a comprar insumos. La cantidad que pongas se <strong>sumará</strong> al stock que ya tienes y actualizará el costo promedio.
-            </span>
-          </p>
-        {:else}
-          <p class="flex items-start gap-2">
-            <span class="text-base">📋</span>
-            <span>
-              <strong>Modo SOBREESCRIBIR (Ajuste Físico):</strong> Úsalo cuando vayas a la nevera o estante, cuentes físicamente lo que hay en este instante y quieras que el sistema refleje <strong>exactamente esa cantidad</strong> (sustituye el número actual).
-            </span>
-          </p>
-        {/if}
-      </div>
-    </div>
+				<Field label="Insumo" for="tipo_insumo" hint={seleccionado ? `En sistema: ${fmtQty(seleccionado.stockActual)} ${seleccionado.unidadMedida}` : undefined}>
+					<select id="tipo_insumo" name="tipo_insumo" bind:value={productoId} class={selectClass}>
+						{#each data.productos as p (p.id)}<option value={p.id}>{p.nombre} ({p.unidadMedida})</option>{/each}
+					</select>
+				</Field>
 
-    <!-- Formulario POST -->
-    <form method="POST" use:enhance={() => {
-      return async ({ update }) => {
-        await update();
-        if (form?.success) {
-          cantidadInput = '';
-          precioTotalCompra = '';
-        }
-      };
-    }} class="space-y-6">
-      <!-- Input oculto para enviar el tipo seleccionado -->
-      <input type="hidden" name="tipo_operacion" value={tipoOperacion} />
-      <!-- Input oculto para enviar la cantidad numérica parseada al backend -->
-      <input type="hidden" name="cantidad" value={cantidadNum} />
+				<Field
+					label={tipo === 'entrada' ? 'Cantidad comprada' : 'Cantidad contada'}
+					for="cantidad"
+					error={cantidad.trim() && !cantidadValida ? 'Usa un número o fracción: 6, 2.5, 3/4, 6 1/4' : undefined}
+					hint={stockResultante !== null && seleccionado ? `Quedará en ${fmtQty(stockResultante)} ${seleccionado.unidadMedida}` : undefined}
+				>
+					<input id="cantidad" bind:value={cantidad} required inputmode="decimal" placeholder="Ej: 6 1/4" class={inputClass} />
+					<div class="flex gap-1">
+						{#each ['1/4', '1/2', '3/4'] as f (f)}
+							<button type="button" class="h-6 rounded border border-border px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground" onclick={() => addFraction(f)}>+{f}</button>
+						{/each}
+					</div>
+				</Field>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Insumo -->
-        <div>
-          <label for="tipo_insumo" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Insumo a Actualizar</label>
-          <div class="relative">
-            <select 
-              id="tipo_insumo" 
-              name="tipo_insumo" 
-              bind:value={productoSeleccionadoId}
-              class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-bold text-slate-800 appearance-none"
-            >
-              {#each data.productos as producto}
-                <option value={producto.id}>
-                  {producto.nombre} ({producto.unidadMedida})
-                </option>
-              {/each}
-            </select>
-            <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">▼</div>
-          </div>
-          {#if productoSeleccionado}
-            <span class="block text-xs text-slate-400 mt-1 font-semibold">
-              Stock actual en sistema: <strong>{formatCantidadFraccion(productoSeleccionado.stockActual)} {productoSeleccionado.unidadMedida}</strong>
-            </span>
-          {/if}
-        </div>
+				{#if tipo === 'entrada'}
+					<Field label="Costo total de la compra" for="precioTotalCompra" hint={costoUnitario > 0 && seleccionado ? `${formatCOP(costoUnitario)} por ${seleccionado.unidadMedida}` : 'Opcional, alimenta el food cost'}>
+						<input id="precioTotalCompra" name="precioTotalCompra" type="number" min="0" step="100" bind:value={precioTotal} placeholder="0" class={inputClass} />
+					</Field>
+				{:else}
+					<div class="hidden md:block"></div>
+				{/if}
 
-        <!-- Cantidad -->
-        <div>
-          <label for="cantidad_display" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-            {tipoOperacion === 'entrada' ? '¿Cuántas unidades se compraron / llegaron?' : '¿Cuántas unidades hay físicamente ahora?'}
-          </label>
-          <input 
-            type="text" 
-            id="cantidad_display" 
-            bind:value={cantidadInput}
-            required 
-            placeholder="Ej: 6 1/4, 2 1/2, 3/4 o 6"
-            class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-black text-slate-900 text-lg"
-          />
-          <!-- Botones rápidos de fracciones comunes -->
-          <div class="flex items-center gap-1.5 mt-2">
-            <span class="text-[11px] font-bold text-slate-400 mr-1">Atajos:</span>
-            {#each ['1/4', '1/2', '3/4'] as frac}
-              <button 
-                type="button" 
-                onclick={() => {
-                  const curr = cantidadInput.trim();
-                  if (!curr || curr === '0') {
-                    cantidadInput = frac;
-                  } else if (!curr.includes('/')) {
-                    cantidadInput = `${curr} ${frac}`;
-                  }
-                }}
-                class="px-2.5 py-1 bg-slate-100 hover:bg-orange-100 hover:text-orange-700 text-slate-600 rounded-lg text-xs font-black transition-colors"
-              >
-                +{frac}
-              </button>
-            {/each}
-            {#if cantidadInput}
-              <button 
-                type="button" 
-                onclick={() => cantidadInput = ''}
-                class="ml-auto text-[11px] text-slate-400 hover:text-rose-600 font-bold"
-              >
-                Limpiar
-              </button>
-            {/if}
-          </div>
+				<div class="flex justify-end md:col-span-3">
+					<button type="submit" class={cn(btn.base, btn.primary)} disabled={submitting || !cantidadValida}>
+						{#if submitting}<LoaderCircle size={15} class="animate-spin" />{:else if tipo === 'entrada'}<PackagePlus size={15} />{:else}<ClipboardCheck size={15} />{/if}
+						{tipo === 'entrada' ? 'Registrar compra' : 'Guardar conteo'}
+					</button>
+				</div>
+			</form>
+		</Card>
+	</div>
 
-          {#if tipoOperacion === 'entrada' && cantidadNum > 0 && productoSeleccionado}
-            <span class="block text-xs text-emerald-600 mt-2 font-bold">
-              Resultado: Pasará de {formatCantidadFraccion(productoSeleccionado.stockActual)} a {formatCantidadFraccion((productoSeleccionado.stockActual || 0) + cantidadNum)} {productoSeleccionado.unidadMedida} ({cantidadNum} numérico)
-            </span>
-          {:else if tipoOperacion === 'ajuste' && cantidadInput !== '' && productoSeleccionado}
-            <span class="block text-xs text-blue-600 mt-2 font-bold">
-              Resultado: El stock quedará exactamente en {formatCantidadFraccion(cantidadNum)} {productoSeleccionado.unidadMedida} ({cantidadNum} numérico)
-            </span>
-          {/if}
-        </div>
+	<!-- Inventario -->
+	<Card title="Inventario actual">
+		<DataTable rows={inventario} columns={invColumns} rowKey={(p) => p.id} searchPlaceholder="Buscar insumo…" initialSort={{ id: 'nombre', dir: 'asc' }} emptyTitle="Sin insumos">
+			{#snippet toolbar()}
+				<SegmentedControl
+					label="Filtrar inventario"
+					value={filtroEstado}
+					onchange={(v) => (filtroEstado = v)}
+					options={[
+						{ value: 'todos', label: 'Todos' },
+						{ value: 'criticos', label: `Críticos (${criticos})` }
+					]}
+				/>
+			{/snippet}
+			{#snippet cell(p, c)}
+				{#if c.id === 'stock'}
+					<span class="font-medium">{fmtQty(p.stockActual)}</span> <span class="text-xs text-muted-foreground">{p.unidadMedida}</span>
+				{:else if c.id === 'estado'}
+					{@const e = estado(p)}
+					<Badge variant={e === 'agotado' ? 'danger' : e === 'bajo' ? 'warning' : 'success'}>{e === 'agotado' ? 'Agotado' : e === 'bajo' ? 'Bajo' : 'OK'}</Badge>
+				{:else if c.id === 'acciones'}
+					<button type="button" class="text-xs font-medium text-muted-foreground hover:text-foreground" onclick={() => selectForCount(p)}>Contar</button>
+				{:else}
+					{c.format ? c.format(c.accessor(p), p) : c.accessor(p)}
+				{/if}
+			{/snippet}
+		</DataTable>
+	</Card>
 
-        <!-- Costo Total (Solo en compras) -->
-        {#if tipoOperacion === 'entrada'}
-          <div class="md:col-span-2">
-            <label for="precioTotalCompra" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Costo Total de la Compra en Pesos (Opcional)
-              <span class="text-slate-400 lowercase font-normal"> — Para promediar costos en finanzas</span>
-            </label>
-            <div class="relative max-w-md">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-lg">$</span>
-              <input 
-                type="number" 
-                id="precioTotalCompra" 
-                name="precioTotalCompra" 
-                bind:value={precioTotalCompra}
-                min="0"
-                step="100"
-                placeholder="Ej. 40000"
-                class="w-full pl-10 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-bold text-slate-800"
-              />
-            </div>
-            {#if precioUnitario > 0}
-              <div class="mt-2 text-xs font-bold text-orange-700 bg-orange-50 px-3 py-1.5 rounded-xl inline-block">
-                Cálculo unitario: ${precioUnitario.toLocaleString('es-CO', { maximumFractionDigits: 1 })} cada {productoSeleccionado?.unidadMedida}
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </div>
-
-      <div class="pt-6 border-t border-slate-100 flex justify-end">
-        <button 
-          type="submit" 
-          class="w-full sm:w-auto py-4 px-8 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm cursor-pointer"
-        >
-          {tipoOperacion === 'entrada' ? 'Registrar Compra e Incrementar Stock' : 'Guardar Conteo Físico (Ajustar Stock)'}
-        </button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Historial de Entradas y Salidas de Bodega -->
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-    <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-lg font-black text-slate-900">Historial de Entradas y Ajustes</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Registro compacto de compras y modificaciones manuales en bodega.</p>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-        <div class="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-          <span class="text-[10px] font-black uppercase text-slate-400 pl-2">Fecha:</span>
-          <input 
-            type="date" 
-            bind:value={fechaInicio}
-            onchange={() => historialPage = 1}
-            title="Desde fecha"
-            class="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 outline-none font-semibold"
-          />
-          <span class="text-xs text-slate-400 font-bold">-</span>
-          <input 
-            type="date" 
-            bind:value={fechaFin}
-            onchange={() => historialPage = 1}
-            title="Hasta fecha"
-            class="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 outline-none font-semibold"
-          />
-          {#if fechaInicio || fechaFin}
-            <button 
-              type="button" 
-              onclick={limpiarFiltrosFecha}
-              class="px-2 py-1 text-[11px] font-black text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
-              title="Quitar filtro de fecha"
-            >
-              ✕
-            </button>
-          {/if}
-        </div>
-
-        {#if data.historialMovimientos && data.historialMovimientos.length > 0}
-          <div class="w-full sm:w-52">
-            <input 
-              type="text" 
-              bind:value={historialSearch}
-              oninput={() => historialPage = 1}
-              placeholder="🔍 Insumo o tipo..."
-              class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-medium"
-            />
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    <div class="overflow-x-auto">
-      {#if !data.historialMovimientos || data.historialMovimientos.length === 0}
-        <div class="p-10 text-center text-slate-400 text-sm">
-          No hay movimientos registrados en bodega aún.
-        </div>
-      {:else if historialFiltrado.length === 0}
-        <div class="p-10 text-center text-slate-400 text-sm">
-          No se encontraron movimientos que coincidan con la búsqueda.
-        </div>
-      {:else}
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider font-extrabold border-b border-slate-100">
-              <th class="p-4 pl-6">Fecha y Hora</th>
-              <th class="p-4">Tipo</th>
-              <th class="p-4">Insumo</th>
-              <th class="p-4 text-right">Cantidad</th>
-              <th class="p-4 text-right pr-6">Costo Declarado</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 text-sm">
-            {#each historialPaginado as mov}
-              <tr class="hover:bg-slate-50/70 transition-colors">
-                <td class="p-4 pl-6 font-bold text-slate-700 text-xs">
-                  {mov.fecha ? new Date(mov.fecha).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
-                </td>
-                <td class="p-4">
-                  <span class="px-2.5 py-1 rounded-full text-xs font-bold {mov.tipo === 'entrada' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}">
-                    {mov.tipo === 'entrada' ? 'Compra' : 'Ajuste Físico'}
-                  </span>
-                </td>
-                <td class="p-4 font-bold text-slate-800">
-                  {mov.productoNombre}
-                </td>
-                <td class="p-4 text-right font-black {mov.cantidad > 0 ? 'text-emerald-600' : 'text-slate-700'}">
-                  {mov.cantidad > 0 ? `+${formatCantidadFraccion(mov.cantidad)}` : formatCantidadFraccion(mov.cantidad)} {mov.unidadMedida}
-                </td>
-                <td class="p-4 text-right pr-6 font-semibold text-slate-700">
-                  {Number(mov.costoTotal || 0) > 0 ? `$${Number(mov.costoTotal).toLocaleString('es-CO')}` : '—'}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-
-        <!-- Paginación compacta -->
-        {#if totalPages > 1}
-          <div class="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
-            <span>Página <strong>{historialPage}</strong> de <strong>{totalPages}</strong> ({historialFiltrado.length} registros)</span>
-            <div class="flex items-center gap-2">
-              <button 
-                type="button"
-                disabled={historialPage <= 1}
-                onclick={() => historialPage = Math.max(1, historialPage - 1)}
-                class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-              >
-                ← Anterior
-              </button>
-              <button 
-                type="button"
-                disabled={historialPage >= totalPages}
-                onclick={() => historialPage = Math.min(totalPages, historialPage + 1)}
-                class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-              >
-                Siguiente →
-              </button>
-            </div>
-          </div>
-        {/if}
-      {/if}
-    </div>
-  </div>
+	<!-- Historial -->
+	<Card title="Historial de movimientos" description={`Compras en la selección: ${formatCOP(totalCompras)}`}>
+		<DataTable rows={historial} columns={histColumns} rowKey={(m) => m.id} searchPlaceholder="Buscar insumo…" initialSort={{ id: 'fecha', dir: 'desc' }} emptyTitle="Sin movimientos">
+			{#snippet toolbar()}
+				<select bind:value={tipoMov} class="h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm" aria-label="Tipo de movimiento">
+					<option value="todos">Todos</option>
+					<option value="entrada">Compras</option>
+					<option value="ajuste">Conteos</option>
+				</select>
+				<div class="flex h-9 items-center gap-1.5 rounded-md border border-input bg-card px-2 shadow-sm">
+					<CalendarDays size={14} class="text-muted-foreground" />
+					<input type="date" bind:value={desde} aria-label="Desde" class="bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
+					<span class="text-muted-foreground">–</span>
+					<input type="date" bind:value={hasta} aria-label="Hasta" class="bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
+					{#if desde || hasta}
+						<button type="button" class="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-accent" aria-label="Quitar fechas" onclick={() => { desde = ''; hasta = ''; }}><X size={13} /></button>
+					{/if}
+				</div>
+			{/snippet}
+			{#snippet cell(m, c)}
+				{#if c.id === 'tipo'}
+					<Badge variant={m.tipo === 'entrada' ? 'success' : 'neutral'}>{m.tipo === 'entrada' ? 'Compra' : 'Conteo'}</Badge>
+				{:else if c.id === 'cantidad'}
+					<span class={m.cantidad > 0 ? 'text-success' : m.cantidad < 0 ? 'text-danger' : ''}>{m.cantidad > 0 ? '+' : ''}{fmtQty(m.cantidad)}</span>
+					<span class="text-xs text-muted-foreground">{m.unidadMedida}</span>
+				{:else if c.id === 'unitario' || c.id === 'total'}
+					{@const v = Number(c.accessor(m))}
+					{v > 0 ? formatCOP(v) : '—'}
+				{:else}
+					{c.format ? c.format(c.accessor(m), m) : c.accessor(m)}
+				{/if}
+			{/snippet}
+		</DataTable>
+	</Card>
 </div>
-

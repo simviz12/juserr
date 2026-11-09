@@ -1,758 +1,539 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import { fade, slide } from 'svelte/transition';
-  import { 
-    Boxes, 
-    Pizza, 
-    Flame, 
-    Calculator, 
-    CheckCircle2, 
-    AlertTriangle, 
-    Banknote, 
-    Smartphone, 
-    Receipt, 
-    LockKeyhole, 
-    History,
-    Sparkles,
-    Lightbulb
-  } from '@lucide/svelte';
-  import { parseFraction } from '$lib/utils/fractions';
-  let { data, form } = $props();
+	import { enhance } from '$app/forms';
+	import {
+		Banknote,
+		Smartphone,
+		Receipt,
+		LockKeyhole,
+		Printer,
+		Send,
+		Plus,
+		Trash2,
+		CircleCheck,
+		TriangleAlert,
+		CircleAlert,
+		LoaderCircle,
+		Package,
+		Pizza,
+		Info
+	} from '@lucide/svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import Alert from '$lib/components/ui/Alert.svelte';
+	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
+	import DataTable from '$lib/components/data-table/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table/types';
+	import { inputClass, textareaClass, btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { parseFraction } from '$lib/utils/fractions';
+	import { formatCOP, formatDateTime, formatNumber } from '$lib/utils/format';
+	import { extractRefs, PORCIONES_POR_MASA } from '$lib/features/shifts/domain/close-shift';
+	import { cerrarLinea } from '$lib/features/shifts/domain/line-close';
 
-  let gastos = $state<{ id: number; descripcion: string; monto: string }[]>([]);
-  let nextGastoId = 1;
+	let { data, form } = $props();
 
-  function addGasto() { gastos.push({ id: nextGastoId++, descripcion: '', monto: '' }); }
-  function removeGasto(id: number) { gastos = gastos.filter(g => g.id !== id); }
+	let negocio = $derived(data.rubroConfig.nombreNegocio);
+	let pizzasActivas = $derived(data.rubroConfig.habilitarPizzas ?? true);
+	let modoChuzo = $derived(data.rubroConfig.rubroPrincipal === 'chuzos');
+	let unidad = $derived(modoChuzo ? 'pinchos' : 'porciones');
+	let materiaPrima = $derived(modoChuzo ? 'insumos crudos' : 'masas crudas');
 
-  // ── Estados del formulario ────────────────────────────────────────────────
-  let montoFisico      = $state('');
-  let nequi            = $state('');
-  let refNequi         = $state('');
-  let masasSobrantesStr   = $state('');
-  let porcionesSobrantesStr = $state('');
-  let porcionesMermadasStr  = $state('');
+	// ── Estado del formulario ──────────────────────────────────
+	let monto = $state('');
+	let nequi = $state('');
+	let refNequi = $state('');
+	let descripcion = $state('');
+	let masasSobrantesStr = $state('');
+	let porcionesSobrantesStr = $state('');
+	let mermasManual = $state('');
+	let quemadasPorSabor = $state<Record<number, string>>({});
+	let gastos = $state<{ id: number; descripcion: string; monto: string }[]>([]);
+	let nextId = 1;
+	let submitting = $state(false);
 
-  // Registro de quemadas por sabor reactivo
-  let quemadasPorSabor = $state<Record<number, number>>({});
+	const addGasto = () => gastos.push({ id: nextId++, descripcion: '', monto: '' });
+	const removeGasto = (id: number) => (gastos = gastos.filter((g) => g.id !== id));
 
-  function updateQuemada(saborId: number, val: string) {
-    const parsed = parseInt(val) || 0;
-    quemadasPorSabor[saborId] = parsed;
-    const total = Object.values(quemadasPorSabor).reduce((a, b) => a + b, 0);
-    porcionesMermadasStr = total.toString();
-  }
+	// ── Inventario ─────────────────────────────────────────────
+	let masasIniciales = $derived(data.inventario.masasActuales);
+	let porcionesAyer = $derived(data.inventario.porcionesAyer);
+	let precioPorcion = $derived(data.inventario.precioPorcion);
+	let masasSobrantes = $derived(parseFraction(masasSobrantesStr) || 0);
+	let masasExceden = $derived(masasSobrantes > masasIniciales);
+	let porcionesSobrantes = $derived(parseInt(porcionesSobrantesStr) || 0);
+	let mermasPorSabor = $derived(Object.values(quemadasPorSabor).reduce((a, v) => a + (parseInt(v) || 0), 0));
+	// Si se detallan quemadas por sabor, ese total manda; si no, el campo manual.
+	let porcionesMermadas = $derived(mermasPorSabor > 0 ? mermasPorSabor : parseInt(mermasManual) || 0);
+	let masasUsadas = $derived(Math.max(0, masasIniciales - masasSobrantes));
+	let porcionesNuevas = $derived(masasUsadas * PORCIONES_POR_MASA);
+	let porcionesVendidas = $derived(Math.max(0, Math.round(porcionesNuevas + porcionesAyer - porcionesSobrantes - porcionesMermadas)));
+	let ventaPizza = $derived(pizzasActivas ? porcionesVendidas * precioPorcion : 0);
 
-  // ── Derivados de inventario ───────────────────────────────────────────────
-  let masasIniciales   = $derived(data.inventario.masasActuales);
-  let porcionesAyer    = $derived(data.inventario.porcionesAyer);
-  let precioPorcion    = $derived(data.inventario.precioPorcion);
-  let masasSobrantes   = $derived(parseFraction(masasSobrantesStr) || 0);
-  let porcionesSobrantes = $derived(parseInt(porcionesSobrantesStr)  || 0);
-  let porcionesMermadas  = $derived(parseInt(porcionesMermadasStr)   || 0);
-  let masasUsadas      = $derived(Math.max(0, masasIniciales - masasSobrantes));
-  let porcionesNuevas  = $derived(masasUsadas * 8);
-  let totalPorcionesDisp = $derived(porcionesNuevas + porcionesAyer);
-  let porcionesVendidas  = $derived(Math.max(0, totalPorcionesDisp - porcionesSobrantes - porcionesMermadas));
-  let granTotalEsperado  = $derived(porcionesVendidas * precioPorcion);
+	// ── Otras líneas (hamburguesas, chuzos, lasañas, carnes): control por inventario ──
+	let lineaSob = $state<Record<number, string>>({});
+	let lineaMer = $state<Record<number, string>>({});
+	let itemQty = $state<Record<number, string>>({});
+	let lineas = $derived(
+		data.lineas
+			.filter((l) => l.producto)
+			.map((l) => {
+				const inicial = l.producto!.stock;
+				const sobStr = lineaSob[l.id] ?? '';
+				const sobrantes = parseFraction(sobStr) || 0;
+				const mermas = parseFraction(lineaMer[l.id] ?? '') || 0;
+				const desglose = l.platos.map((p) => ({ itemId: p.id, cantidad: parseInt(itemQty[p.id] ?? '') || 0 })).filter((d) => d.cantidad > 0);
+				return {
+					...l,
+					inicial,
+					contado: sobStr.trim() !== '',
+					excede: sobrantes + mermas > inicial,
+					r: cerrarLinea(inicial, sobrantes, mermas, l.platos, desglose),
+					tieneDesglose: desglose.length > 0
+				};
+			})
+	);
+	let ventaLineas = $derived(lineas.reduce((a, l) => a + (l.contado ? l.r.ventaEsperada : 0), 0));
+	let lineasPendientes = $derived(lineas.filter((l) => !l.contado));
+	let lineaExcede = $derived(lineas.some((l) => l.excede));
+	let hayControl = $derived(pizzasActivas || lineas.length > 0);
+	let ventaEsperada = $derived(ventaPizza + ventaLineas);
 
-  // Terminología multi-rubro dinámica
-  let esModoChuzo = $derived(data.rubroConfig?.rubroPrincipal === 'chuzos' || data.rubroConfig?.rubroPrincipal === 'mixto');
-  let nombreMateriaPrima = $derived(esModoChuzo ? 'Insumos / Masas Crudas' : 'Masas Crudas');
-  let nombreProductoTerminado = $derived(esModoChuzo ? 'Pinchos / Porciones en Parrilla y Vitrina' : 'Porciones Horneadas en Vitrina');
+	// ── Dinero ─────────────────────────────────────────────────
+	let efectivoNum = $derived(parseFloat(monto) || 0);
+	let nequiNum = $derived(parseFloat(nequi) || 0);
+	let totalGastos = $derived(gastos.reduce((a, g) => a + (parseFloat(g.monto) || 0), 0));
+	let totalDeclarado = $derived(efectivoNum + nequiNum + totalGastos);
+	let diferencia = $derived(totalDeclarado - ventaEsperada);
+	let hayDatos = $derived(monto !== '' || nequi !== '' || gastos.length > 0);
+	let estadoCuadre = $derived(
+		!hayControl ? 'sin-inventario' : Math.abs(diferencia) < 1 ? 'cuadrado' : diferencia > 0 ? 'sobrante' : 'faltante'
+	);
 
-  // ── Derivados de caja y transferencias ────────────────────────────────────
-  let efectivoNum   = $derived(parseFloat(montoFisico) || 0);
-  let nequiNum      = $derived(parseFloat(nequi)       || 0);
-  let totalGastos   = $derived(gastos.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0));
+	function addEfectivo(v: number) {
+		monto = String((parseFloat(monto) || 0) + v);
+	}
 
-  let totalTransferencias = $derived(nequiNum);
-  let totalDeclarado      = $derived(efectivoNum + totalTransferencias + totalGastos);
-  let diferencia          = $derived(totalDeclarado - granTotalEsperado);
+	// ── Antifraude: comprobante repetido ───────────────────────
+	let refsPrevias = $derived(
+		new Set(data.historialTurnos.flatMap((t) => t.transacciones.flatMap((tr) => extractRefs(tr.referencias))))
+	);
+	let refRepetida = $derived(extractRefs(refNequi).find((r) => refsPrevias.has(r)) ?? null);
 
-  let hayDatos = $derived(montoFisico !== '' || nequi !== '' || gastos.length > 0);
+	// ── Reporte WhatsApp ───────────────────────────────────────
+	let whatsappUrl = $derived.by(() => {
+		const ahora = new Date().toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota' });
+		const msg = [
+			`*Cierre de turno · ${negocio}*`,
+			ahora,
+			'',
+			`Efectivo: ${formatCOP(efectivoNum)}`,
+			`Nequi: ${formatCOP(nequiNum)}`,
+			`Gastos: ${formatCOP(totalGastos)}`,
+			`*Total declarado: ${formatCOP(totalDeclarado)}*`
+		];
+		if (hayControl) {
+			msg.push('');
+			if (pizzasActivas) msg.push(`Pizza: ${porcionesVendidas} ${unidad} (${formatCOP(ventaPizza)}), mermas ${porcionesMermadas}`);
+			for (const l of lineas) {
+				if (l.contado) msg.push(`${l.nombre}: ${l.r.consumidas} ${l.etiqueta} (${formatCOP(l.r.ventaEsperada)})`);
+			}
+			msg.push(
+				`Venta esperada: ${formatCOP(ventaEsperada)}`,
+				`*Diferencia: ${diferencia >= 0 ? '+' : ''}${formatCOP(diferencia)} (${estadoCuadre === 'cuadrado' ? 'cuadrado' : estadoCuadre})*`
+			);
+		}
+		if (refNequi.trim()) msg.push('', `Refs Nequi: ${refNequi.trim()}`);
+		if (descripcion.trim()) msg.push(`Nota: ${descripcion.trim()}`);
+		return `https://wa.me/?text=${encodeURIComponent(msg.join('\n'))}`;
+	});
 
-  // ── Botones rápidos de efectivo (Billetes de Colombia) ──
-  function addEfectivo(valor: number) {
-    const actual = parseFloat(montoFisico) || 0;
-    montoFisico = (actual + valor).toString();
-  }
-  function setEfectivoExacto() {
-    // Si la venta esperada existe, poner el saldo restante esperado en efectivo
-    const restante = Math.max(0, granTotalEsperado - nequiNum - totalGastos);
-    montoFisico = restante.toString();
-  }
-  function resetEfectivo() {
-    montoFisico = '0';
-  }
+	function resetForm() {
+		monto = nequi = refNequi = descripcion = masasSobrantesStr = porcionesSobrantesStr = mermasManual = '';
+		quemadasPorSabor = {};
+		lineaSob = {};
+		lineaMer = {};
+		itemQty = {};
+		gastos = [];
+	}
 
-  // ── Antifraude Comprobantes Nequi ──
-  // Detectar si la referencia ya fue registrada en turnos anteriores
-  let todasRefsPrevias = $derived.by(() => {
-    const setRefs = new Set<string>();
-    if (data.historialTurnos) {
-      for (const t of data.historialTurnos) {
-        if (t.transacciones) {
-          for (const tr of t.transacciones) {
-            if (tr.referencias) {
-              tr.referencias.split(/[,;\s]+/).forEach((r: string) => {
-                const clean = r.trim().toLowerCase();
-                if (clean.length >= 4) setRefs.add(clean);
-              });
-            }
-          }
-        }
-      }
-    }
-    return setRefs;
-  });
+	// ── Historial ──────────────────────────────────────────────
+	type Turno = (typeof data.historialTurnos)[number];
+	const columns: Column<Turno>[] = [
+		{ id: 'fecha', header: 'Fecha', accessor: (t) => t.fecha, format: (v) => formatDateTime(v as string | null) },
+		{ id: 'id', header: 'Turno', accessor: (t) => t.id, format: (v) => `#${v}` },
+		{ id: 'porciones', header: 'Vendidas', accessor: (t) => t.porcionesVendidas ?? 0, align: 'right', hideOnMobile: true },
+		{ id: 'mermas', header: 'Mermas', accessor: (t) => t.porcionesMermadas ?? 0, align: 'right', hideOnMobile: true },
+		{ id: 'efectivo', header: 'Efectivo', accessor: (t) => Number(t.monto), format: (v) => formatCOP(Number(v)), align: 'right', hideOnMobile: true },
+		{ id: 'nequi', header: 'Nequi', accessor: (t) => Number(t.transferencias ?? 0), format: (v) => formatCOP(Number(v)), align: 'right', hideOnMobile: true },
+		{ id: 'gastos', header: 'Gastos', accessor: (t) => t.totalGastos, align: 'right' },
+		{ id: 'total', header: 'Total', accessor: (t) => Number(t.monto) + Number(t.transferencias ?? 0) + t.totalGastos, format: (v) => formatCOP(Number(v)), align: 'right' }
+	];
 
-  let referenciaDuplicadaDetectada = $derived.by(() => {
-    if (!refNequi.trim()) return null;
-    const tokens = refNequi.split(/[,;\s]+/).map(t => t.trim().toLowerCase()).filter(t => t.length >= 4);
-    for (const tok of tokens) {
-      if (todasRefsPrevias.has(tok)) {
-        return tok;
-      }
-    }
-    return null;
-  });
-
-  // ── Generador de Reporte WhatsApp Nocturno para el Dueño ──
-  let whatsappUrl = $derived.by(() => {
-    const fechaStr = new Date().toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
-    const horaStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-    const texto = 
-`🍢 *REPORTE DE CIERRE - CHUZOOS / GASTROFLOW* 🍢
-📅 *Fecha:* ${fechaStr} - ${horaStr}
----------------------------------
-💰 *Efectivo en Cajón:* $${efectivoNum.toLocaleString('es-CO')}
-📱 *Nequi Recibido:* $${nequiNum.toLocaleString('es-CO')}
-📉 *Gastos del Turno:* $${totalGastos.toLocaleString('es-CO')}
-💵 *TOTAL DECLARADO:* $${totalDeclarado.toLocaleString('es-CO')}
----------------------------------
-📦 *Venta Esperada x Inventario:* $${granTotalEsperado.toLocaleString('es-CO')}
-📊 *Porciones / Pinchos Vendidos:* ${porcionesVendidas}
-🔥 *Mermas / Quemadas:* ${porcionesMermadas}
-⚖️ *Diferencia / Balance:* ${diferencia >= 0 ? '+' : ''}$${diferencia.toLocaleString('es-CO')} (${diferencia === 0 ? 'CUADRADO EXACTO ✅' : diferencia > 0 ? 'SOBRANTE 🟢' : 'FALTANTE 🔴'})
-${refNequi ? `🔖 *Refs Nequi:* ${refNequi}\n` : ''}---------------------------------
-_Auditado con ChuzoOS Engine 🚀_`;
-
-    return `https://wa.me/?text=${encodeURIComponent(texto)}`;
-  });
+	const BILLETES = [2000, 5000, 10000, 20000, 50000, 100000];
 </script>
 
-<div class="max-w-4xl mx-auto">
-  <div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
-    <div>
-      <h1 class="text-3xl font-black text-slate-900 tracking-tight">Cierre de Turno</h1>
-      <p class="text-slate-500 font-medium mt-1">Audita el inventario físico y cuadra la caja.</p>
-    </div>
-    
-    <div class="bg-gradient-to-br from-orange-50 to-orange-100/50 border border-orange-200/60 rounded-3xl p-6 min-w-[300px] shadow-sm">
-      <div>
-        <p class="text-xs font-bold text-orange-800 uppercase tracking-wider mb-1">Venta Esperada</p>
-        <p class="text-4xl font-black text-orange-600">${granTotalEsperado.toLocaleString('es-CO')}</p>
-        <div class="text-xs text-orange-700 mt-3 space-y-1 bg-white/60 p-3 rounded-xl border border-orange-100">
-          <p class="flex justify-between"><span>Masas Crudas Usadas:</span> <span class="font-bold text-slate-800">{masasUsadas} masas</span></p>
-          <p class="flex justify-between"><span>Porciones Totales Vendidas:</span> <span class="font-bold text-slate-800">{porcionesVendidas} porc.</span></p>
-        </div>
-      </div>
-    </div>
-  </div>
+<svelte:head><title>Cierre de turno · MesaCapital</title></svelte:head>
 
-  {#if form?.success}
-    <div class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl mb-6 shadow-sm border border-emerald-200 flex items-center gap-3">
-      <CheckCircle2 size={24} class="text-emerald-600 shrink-0" />
-      <div>
-        <span class="font-bold block">Operación exitosa</span>
-        <span class="text-sm">{form.message}</span>
-      </div>
-    </div>
-  {/if}
+<div class="mx-auto flex max-w-6xl flex-col gap-6 print:hidden">
+	<PageHeader eyebrow={negocio} title="Cierre de turno" description="Cuenta el inventario y el dinero. El sistema calcula cuánto debió entrar y te muestra la diferencia." />
 
-  {#if form?.error}
-    <div class="bg-red-50 text-red-800 p-5 rounded-2xl mb-6 shadow-sm border border-red-200 flex items-center gap-3">
-      <AlertTriangle size={24} class="text-red-600 shrink-0" />
-      <div>
-        <span class="font-bold block">Error</span>
-        <span class="text-sm">{form.error}</span>
-      </div>
-    </div>
-  {/if}
+	<FormFeedback {form} />
 
-  <form method="POST" use:enhance={() => {
-    return async ({ update }) => {
-      await update();
-      if (form?.success) {
-        gastos = [];
-      }
-    };
-  }} class="space-y-8">
-    
-    <!-- Sección de Inventario -->
-    <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
-      <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl text-orange-600"><Boxes size={20} /></span> Inventario Físico
-      </h2>
-      
-      <!-- Campos ocultos para enviar al backend -->
-      <input type="hidden" name="masas_iniciales" value={masasIniciales} />
-      <input type="hidden" name="porciones_ayer" value={porcionesAyer} />
+	<form
+		method="POST"
+		class="grid items-start gap-6 lg:grid-cols-[1fr_340px]"
+		use:enhance={({ cancel }) => {
+			if ((pizzasActivas && masasExceden) || lineaExcede || lineasPendientes.length > 0) {
+				cancel();
+				document.getElementById(lineasPendientes.length ? `linea-${lineasPendientes[0].id}` : 'masas_sobrantes')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				return;
+			}
+			submitting = true;
+			return async ({ result, update }) => {
+				await update({ reset: false });
+				submitting = false;
+				if (result.type === 'success') resetForm();
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			};
+		}}
+	>
+		<div class="flex min-w-0 flex-col gap-6">
+			{#if pizzasActivas}
+				<!-- 1. Inventario -->
+				<Card title="1. Inventario físico" description="Lo que queda al final del turno. Masas iniciales y vitrina de ayer se toman de bodega automáticamente.">
+					<div class="grid gap-4 sm:grid-cols-3">
+						<Field
+							label={`Sobrantes (${materiaPrima})`}
+							for="masas_sobrantes"
+							hint={`De ${formatNumber(masasIniciales)} en bodega al iniciar`}
+							error={masasExceden ? `No puede superar ${formatNumber(masasIniciales)}` : undefined}
+						>
+							<input id="masas_sobrantes" name="masas_sobrantes" bind:value={masasSobrantesStr} required inputmode="decimal" placeholder="Ej: 11 1/2" class={inputClass} />
+						</Field>
+						<Field label={`${unidad[0].toUpperCase() + unidad.slice(1)} en vitrina`} for="porciones_sobrantes" hint="Quedan para mañana">
+							<input id="porciones_sobrantes" name="porciones_sobrantes" type="number" min="0" step="1" bind:value={porcionesSobrantesStr} required placeholder="0" class={inputClass} />
+						</Field>
+						<Field label="Mermas (quemadas o dañadas)" for="porciones_mermadas" hint={mermasPorSabor > 0 ? 'Calculado desde el detalle por sabor' : 'No se cobran, pero quedan registradas'}>
+							<input
+								id="porciones_mermadas"
+								name="porciones_mermadas"
+								type="number"
+								min="0"
+								step="1"
+								value={mermasPorSabor > 0 ? mermasPorSabor : mermasManual}
+								oninput={(e) => (mermasManual = e.currentTarget.value)}
+								readonly={mermasPorSabor > 0}
+								placeholder="0"
+								class={cn(inputClass, mermasPorSabor > 0 && 'bg-muted')}
+							/>
+						</Field>
+					</div>
 
-      <div class="grid grid-cols-1 gap-6">
-        <div class="p-4 bg-amber-50/50 border border-amber-100 rounded-2xl">
-          <label for="masas_sobrantes" class="block text-sm font-bold text-slate-700 mb-1">
-            {nombreMateriaPrima} Sobrantes en Nevera/Bodega
-          </label>
-          <p class="text-xs text-slate-500 mb-3">
-            Insumos base o masas sin cocinar que quedaron guardados. Con esto el sistema deduce el gasto exacto del turno.
-          </p>
-          <div class="flex items-center gap-3">
-            <input 
-              type="text" 
-              id="masas_sobrantes" 
-              name="masas_sobrantes" 
-              bind:value={masasSobrantesStr}
-              required 
-              placeholder="Ej. 12 o 11 1/2"
-              class="w-full md:w-1/2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
-            />
-            <span class="text-sm bg-amber-100/80 text-amber-800 font-bold px-3 py-2 rounded-xl whitespace-nowrap">de {masasIniciales} iniciales</span>
-          </div>
-        </div>
+					<!-- Fórmula en vivo -->
+					<div class="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border text-center sm:grid-cols-4">
+						{#each [
+							{ l: 'De ayer', v: porcionesAyer, h: 'vitrina' },
+							{ l: 'Nuevas hoy', v: porcionesNuevas, h: `${formatNumber(masasUsadas)} × ${PORCIONES_POR_MASA}` },
+							{ l: 'Sobran + mermas', v: porcionesSobrantes + porcionesMermadas, h: `${porcionesSobrantes} + ${porcionesMermadas}` },
+							{ l: 'Vendidas', v: porcionesVendidas, h: formatCOP(ventaEsperada), strong: true }
+						] as s (s.l)}
+							<div class="bg-card px-3 py-3">
+								<p class="text-xs text-muted-foreground">{s.l}</p>
+								<p class="mt-0.5 text-lg font-semibold tabular-nums {s.strong ? 'text-foreground' : ''}">{formatNumber(s.v)}</p>
+								<p class="text-[11px] text-muted-foreground tabular-nums">{s.h}</p>
+							</div>
+						{/each}
+					</div>
+					<p class="mt-2 text-xs text-muted-foreground">
+						Precio usado: {formatCOP(precioPorcion)} por porción {data.inventario.precioEsPromedio ? '(promedio de tus sabores)' : '(valor por defecto; configura precios en Sabores)'}.
+					</p>
+				</Card>
 
-        <div class="p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
-          <div class="flex items-center justify-between mb-1">
-            <label for="porciones_sobrantes" class="flex items-center gap-1.5 text-sm font-bold text-slate-700">
-              <Pizza class="w-4 h-4 text-orange-600" /> {nombreProductoTerminado} (Quedan para mañana)
-            </label>
-            {#if porcionesAyer > 0}
-              <span class="text-xs bg-orange-200 text-orange-900 font-bold px-2.5 py-1 rounded-lg">
-                Recibidas de ayer: {porcionesAyer} unid.
-              </span>
-            {/if}
-          </div>
-          <p class="text-xs text-slate-500 mb-3">
-            Porciones ya preparadas en vitrina al cierre. Ten en cuenta que las porciones que venían de ayer ({porcionesAyer}) se venden de primero (rotación), sumadas a las porciones nuevas horneadas de las masas de hoy.
-          </p>
-          <input 
-            type="number" 
-            id="porciones_sobrantes" 
-            name="porciones_sobrantes" 
-            bind:value={porcionesSobrantesStr}
-            required 
-            min="0"
-            step="1"
-            placeholder="Ej. 3"
-            class="w-full md:w-1/2 px-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-bold text-slate-800"
-          />
-        </div>
+				<!-- 2. Sabores -->
+				{#if data.sabores.length > 0}
+					<Card title="2. Detalle por sabor" description="Opcional. Ruedas preparadas, porciones sobrantes y quemadas de cada sabor (alimenta el ranking de ventas).">
+						<div class="overflow-x-auto rounded-md border border-border custom-scrollbar">
+							<table class="w-full text-sm">
+								<thead class="bg-muted/60 text-left text-xs text-muted-foreground">
+									<tr>
+										<th class="h-10 px-3 font-medium">Sabor</th>
+										<th class="h-10 px-3 font-medium">Ruedas</th>
+										<th class="h-10 px-3 font-medium">Sobrantes</th>
+										<th class="h-10 px-3 font-medium">Quemadas</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each data.sabores as s (s.id)}
+										<tr class="border-t border-border">
+											<td class="px-3 py-2 font-medium">{s.nombre}</td>
+											<td class="px-3 py-2"><input type="number" name="ruedas_{s.id}" min="0" step="1" placeholder="0" aria-label={`Ruedas de ${s.nombre}`} class={cn(inputClass, 'h-8 w-24')} /></td>
+											<td class="px-3 py-2"><input type="number" name="sobras_{s.id}" min="0" step="0.5" placeholder="0" aria-label={`Sobrantes de ${s.nombre}`} class={cn(inputClass, 'h-8 w-24')} /></td>
+											<td class="px-3 py-2">
+												<input type="number" name="quemadas_{s.id}" min="0" step="1" placeholder="0" aria-label={`Quemadas de ${s.nombre}`} bind:value={quemadasPorSabor[s.id]} class={cn(inputClass, 'h-8 w-24')} />
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</Card>
+				{/if}
+			{/if}
 
-        <div>
-          <label for="porciones_mermadas" class="block text-sm font-bold text-slate-600 mb-2">🔥 Pizzas / Porciones Quemadas o Dañadas (Merma)</label>
-          <input 
-            type="number" 
-            id="porciones_mermadas" 
-            name="porciones_mermadas" 
-            bind:value={porcionesMermadasStr}
-            required 
-            min="0"
-            step="1"
-            placeholder="Ej. 0"
-            class="w-full md:w-1/2 px-4 py-3.5 bg-rose-50 border border-rose-200 rounded-2xl focus:ring-4 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all font-bold text-rose-800"
-          />
-          <p class="text-xs text-rose-600 mt-1">
-            ⚠️ <strong>Importante:</strong> Las porciones quemadas se descuentan de la venta esperada. Es decir, el sistema <strong>no</strong> exigirá el dinero de estas porciones en caja, pero registrará la pérdida en el inventario.
-          </p>
-        </div>
+			<!-- Otras líneas: control por inventario del insumo de cada línea -->
+			{#each lineas as l (l.id)}
+				{@const unidadLbl = l.etiqueta}
+				<div id={`linea-${l.id}`} class="scroll-mt-24">
+					<Card title={l.nombre} description={`Cuenta los ${unidadLbl} que quedan (${l.producto?.nombre}). Lo que había se toma de bodega automáticamente.`}>
+						{#snippet actions()}
+							{#if l.contado && !l.excede}
+								<Badge variant="success"><CircleCheck size={12} /> {formatNumber(l.r.consumidas)} vendidos</Badge>
+							{:else if !l.contado}
+								<Badge variant="outline">Pendiente</Badge>
+							{/if}
+						{/snippet}
+						<div class="grid gap-4 sm:grid-cols-3">
+							<div class="flex flex-col gap-1.5">
+								<span class="text-sm font-medium">Había al iniciar</span>
+								<div class="flex h-9 items-center rounded-md border border-border bg-muted px-3 text-sm tabular-nums">{formatNumber(l.inicial)} {unidadLbl}</div>
+								<p class="text-xs text-muted-foreground">Según bodega{l.inicial === 0 ? ' — registra la compra en Bodega' : ''}</p>
+							</div>
+							<Field label={`${unidadLbl[0].toUpperCase() + unidadLbl.slice(1)} sobrantes`} for={`linea_${l.id}_sobrantes`} error={l.excede ? `Sobrantes + mermas no pueden superar ${formatNumber(l.inicial)}` : undefined} hint="Cuéntalos físicamente">
+								<input id={`linea_${l.id}_sobrantes`} name={`linea_${l.id}_sobrantes`} bind:value={lineaSob[l.id]} inputmode="decimal" placeholder="0" required class={cn(inputClass, l.excede && 'border-danger')} />
+							</Field>
+							<Field label="Mermas (dañados)" for={`linea_${l.id}_mermas`} hint="No se cobran">
+								<input id={`linea_${l.id}_mermas`} name={`linea_${l.id}_mermas`} bind:value={lineaMer[l.id]} inputmode="decimal" placeholder="0" class={inputClass} />
+							</Field>
+						</div>
 
-        <!-- Tarjeta dinámica de desglose matemático para el operador -->
-        <div class="p-5 bg-gradient-to-br from-slate-50 to-orange-50/40 border border-orange-200/60 rounded-2xl">
-          <h3 class="text-xs font-black uppercase tracking-wider text-orange-950 mb-3 flex items-center gap-1.5">
-            <span>🧮</span> Desglose Automático del Turno en Vivo
-          </h3>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-              <span class="text-[11px] font-bold text-slate-400 block uppercase">De Ayer (Vitrina)</span>
-              <p class="text-lg font-black text-slate-800">{porcionesAyer} <span class="text-xs text-slate-400">porc.</span></p>
-              <span class="text-[10px] text-emerald-600 font-semibold">Salen de primero</span>
-            </div>
-            <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-              <span class="text-[11px] font-bold text-slate-400 block uppercase">Nuevas de Hoy</span>
-              <p class="text-lg font-black text-slate-800">{porcionesNuevas} <span class="text-xs text-slate-400">porc.</span></p>
-              <span class="text-[10px] text-slate-500 font-medium">({masasUsadas} masas × 8)</span>
-            </div>
-            <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-              <span class="text-[11px] font-bold text-slate-400 block uppercase">Sobraron para Mañana</span>
-              <p class="text-lg font-black text-amber-700">{porcionesSobrantes} <span class="text-xs text-slate-400">porc.</span></p>
-              <span class="text-[10px] text-amber-600 font-medium">En vitrina</span>
-            </div>
-            <div class="bg-white p-3 rounded-xl border border-orange-200 shadow-sm">
-              <span class="text-[11px] font-bold text-orange-600 block uppercase">Vendidas Reales</span>
-              <p class="text-xl font-black text-orange-600">{porcionesVendidas} <span class="text-xs text-orange-400">porc.</span></p>
-              <span class="text-[10px] text-orange-700 font-bold">${granTotalEsperado.toLocaleString('es-CO')}</span>
-            </div>
-          </div>
-          <p class="text-[11px] text-slate-500 mt-3 text-center">
-            Fórmula exacta: <strong>({porcionesAyer} de ayer + {porcionesNuevas} de hoy) - {porcionesSobrantes} sobras - {porcionesMermadas} mermas = {porcionesVendidas} porciones vendidas</strong>
-          </p>
-        </div>
-      </div>
-    </div>
+						{#if l.platos.length === 0}
+							<Alert variant="warning" class="mt-4">
+								Esta línea no tiene platos con precio. Agrégalos en <a href="/configuracion/rubros" class="underline">Líneas y combos</a> para calcular la venta esperada.
+							</Alert>
+						{:else}
+							<details class="group mt-4 rounded-md border border-border" open={l.tieneDesglose}>
+								<summary class="flex cursor-pointer items-center justify-between px-3 py-2.5 text-sm font-medium select-none">
+									<span>Desglose por plato <span class="font-normal text-muted-foreground">(opcional, precio exacto y ranking)</span></span>
+									{#if l.tieneDesglose}
+										<Badge variant={l.r.desgloseCompleto ? 'success' : 'warning'}>{formatNumber(l.r.unidadesDesglose)} de {formatNumber(l.r.consumidas)}</Badge>
+									{/if}
+								</summary>
+								<ul class="divide-y divide-border border-t border-border">
+									{#each l.platos as p (p.id)}
+										<li class="flex items-center gap-3 px-3 py-2">
+											<span class="min-w-0 flex-1 truncate text-sm">{p.nombre}</span>
+											<span class="text-xs text-muted-foreground tabular-nums">{formatCOP(p.precio)}{p.unidades !== 1 ? ` · ${p.unidades} ${unidadLbl}` : ''}</span>
+											<input name={`item_${p.id}`} type="number" min="0" step="1" bind:value={itemQty[p.id]} placeholder="0" aria-label={`Vendidos de ${p.nombre}`} class={cn(inputClass, 'h-8 w-20 tabular-nums')} />
+										</li>
+									{/each}
+								</ul>
+								{#if l.tieneDesglose && !l.r.desgloseCompleto && l.contado}
+									<p class="border-t border-border px-3 py-2 text-xs text-warning">
+										{l.r.diferenciaUnidades > 0
+											? `Faltan ${formatNumber(l.r.diferenciaUnidades)} ${unidadLbl} por explicar: se cobran al precio promedio.`
+											: `El desglose supera lo consumido en ${formatNumber(-l.r.diferenciaUnidades)} ${unidadLbl}: revisa el conteo.`}
+									</p>
+								{/if}
+							</details>
+							<p class="mt-2 text-xs text-muted-foreground">
+								Venta esperada: <span class="font-medium text-foreground tabular-nums">{l.contado ? formatCOP(l.r.ventaEsperada) : '—'}</span>
+								{#if l.contado && !l.r.desgloseCompleto}(precio promedio {formatCOP(l.r.precioPorUnidad)} por {unidadLbl.replace(/s$/, '')}){/if}
+							</p>
+						{/if}
+					</Card>
+				</div>
+			{/each}
 
-    <!-- Sección de Desglose de Sabores -->
-    <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
-      <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl text-orange-600"><Pizza class="w-5 h-5" /></span> Desglose por Sabores y Mermas
-      </h2>
-      <p class="text-sm font-medium text-slate-500 mb-6">Detalla cuántas ruedas preparaste, cuántas porciones buenas sobraron en vitrina y si hubo porciones quemadas o dañadas por sabor:</p>
-      
-      <div class="overflow-x-auto">
-        <table class="w-full text-left">
-          <thead>
-            <tr class="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-100">
-              <th class="py-3 font-bold">Sabor</th>
-              <th class="py-3 font-bold">Ruedas Preparadas</th>
-              <th class="py-3 font-bold">Porciones Sobrantes</th>
-              <th class="py-3 font-bold text-rose-600">Porciones Quemadas</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-50">
-            {#each data.sabores as sabor}
-              <tr class="hover:bg-slate-50/50 transition-colors">
-                <td class="py-4 font-bold text-slate-800">{sabor.nombre}</td>
-                <td class="py-4 pr-4">
-                  <input 
-                    type="number" 
-                    name="ruedas_{sabor.id}" 
-                    min="0" 
-                    step="1" 
-                    placeholder="0"
-                    class="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
-                  />
-                </td>
-                <td class="py-4 pr-4">
-                  <input 
-                    type="number" 
-                    name="sobras_{sabor.id}" 
-                    min="0" 
-                    step="0.5" 
-                    placeholder="0"
-                    class="w-full max-w-[120px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
-                  />
-                </td>
-                <td class="py-4">
-                  <input 
-                    type="number" 
-                    name="quemadas_{sabor.id}" 
-                    min="0" 
-                    step="1" 
-                    placeholder="0"
-                    oninput={(e) => updateQuemada(sabor.id, e.currentTarget.value)}
-                    class="w-full max-w-[120px] px-3 py-2 bg-rose-50 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none font-bold text-rose-700"
-                  />
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
+			{#if !hayControl}
+				<Alert variant="info" title="Sin control de inventario">
+					No hay líneas activas en Líneas y combos, así que este cierre solo registra el dinero.
+				</Alert>
+			{/if}
 
-    <!-- Sección de Caja Desglosada -->
-    <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
-      <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-3 border-b border-slate-100 pb-4">
-        <span class="bg-orange-100 p-2 rounded-xl text-orange-600"><Banknote class="w-5 h-5" /></span> Medios de Pago
-      </h2>
-      <p class="text-sm font-medium text-slate-500 mb-6">Detalla el dinero recibido en cada plataforma. El sistema sumará todo para el cuadre.</p>
+			<!-- 3. Dinero -->
+			<Card title="Dinero recibido" description="Cuenta el efectivo físicamente antes de escribirlo.">
+				<div class="grid gap-5 md:grid-cols-2">
+					<Field label="Efectivo en caja" for="monto">
+						<div class="relative">
+							<Banknote size={15} class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
+							<input id="monto" name="monto" type="number" min="0" step="100" bind:value={monto} required placeholder="0" class={cn(inputClass, 'h-10 pl-9 text-base font-medium tabular-nums')} />
+						</div>
+						<div class="mt-1 grid grid-cols-3 gap-1.5 sm:grid-cols-6 md:grid-cols-3 xl:grid-cols-6">
+							{#each BILLETES as b (b)}
+								<button type="button" class="h-8 rounded-md border border-border text-xs font-medium tabular-nums hover:bg-accent" onclick={() => addEfectivo(b)}>+{b / 1000}k</button>
+							{/each}
+						</div>
+						{#if monto}
+							<button type="button" class="self-start text-xs text-muted-foreground hover:text-foreground" onclick={() => (monto = '')}>Borrar efectivo</button>
+						{/if}
+					</Field>
 
-      <div class="space-y-5">
-        <!-- Efectivo con Botonera Rápida para Puestos Callejeros -->
-        <div class="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl">
-          <div class="flex justify-between items-center mb-2">
-            <label for="monto" class="flex items-center gap-2 text-sm font-black text-emerald-800">
-              <Banknote class="w-4 h-4 text-emerald-600" /> Efectivo Físico en Gaveta / Canguro
-            </label>
-            <div class="flex gap-2">
-              <button 
-                type="button" 
-                onclick={setEfectivoExacto}
-                class="text-xs bg-emerald-200 hover:bg-emerald-300 text-emerald-900 font-extrabold px-3 py-1 rounded-lg transition-colors cursor-pointer"
-                title="Poner el valor exacto para cuadrar"
-              >
-                ⚡ Cuadre Exacto
-              </button>
-              <button 
-                type="button" 
-                onclick={resetEfectivo}
-                class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                title="Limpiar efectivo"
-              >
-                Borrar
-              </button>
-            </div>
-          </div>
+					<div class="flex flex-col gap-4">
+						<Field label="Nequi / Daviplata" for="nequi">
+							<div class="relative">
+								<Smartphone size={15} class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
+								<input id="nequi" name="nequi" type="number" min="0" step="100" bind:value={nequi} placeholder="0" class={cn(inputClass, 'h-10 pl-9 text-base font-medium tabular-nums')} />
+							</div>
+						</Field>
+						<Field label="Referencias de comprobantes" for="ref_nequi" hint="Separadas por coma. El sistema bloquea comprobantes ya usados.">
+							<input id="ref_nequi" name="ref_nequi" bind:value={refNequi} placeholder="Ej: M12345, C89012" class={cn(inputClass, refRepetida && 'border-danger ring-2 ring-danger/30')} />
+						</Field>
+						{#if refRepetida}
+							<Alert variant="danger" title="Comprobante repetido">
+								La referencia {refRepetida.toUpperCase()} ya se registró en un turno anterior. Verifica el pantallazo del cliente.
+							</Alert>
+						{/if}
+					</div>
+				</div>
+			</Card>
 
-          <div class="relative">
-            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-black">$</span>
-            <input type="number" id="monto" name="monto" bind:value={montoFisico}
-              required min="0" step="100" placeholder="0"
-              class="w-full pl-10 pr-4 py-3.5 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-black text-xl text-slate-800"
-            />
-          </div>
+			<!-- 4. Gastos -->
+			<Card title="Gastos pagados con la caja" description="Compras inmediatas pagadas con dinero del turno (hielo, gas, domicilio…).">
+				{#snippet actions()}
+					<button type="button" class={cn(btn.base, btn.outline, btn.sm)} onclick={addGasto}><Plus size={14} /> Agregar</button>
+				{/snippet}
+				{#if gastos.length === 0}
+					<p class="rounded-md border border-dashed border-border py-6 text-center text-sm text-muted-foreground">Sin gastos en este turno.</p>
+				{:else}
+					<ul class="flex flex-col gap-2">
+						{#each gastos as g (g.id)}
+							<li class="flex gap-2">
+								<input name="gasto_descripcion" bind:value={g.descripcion} required placeholder="Concepto" aria-label="Concepto del gasto" class={cn(inputClass, 'flex-1')} />
+								<input name="gasto_monto" type="number" min="1" step="100" bind:value={g.monto} required placeholder="Valor" aria-label="Valor del gasto" class={cn(inputClass, 'w-32 tabular-nums')} />
+								<button type="button" class={cn(btn.base, btn.icon, 'h-9 w-9 hover:text-danger')} aria-label="Quitar gasto" onclick={() => removeGasto(g.id)}><Trash2 size={15} /></button>
+							</li>
+						{/each}
+					</ul>
+					<p class="mt-3 text-right text-sm text-muted-foreground">Total gastos <span class="font-medium text-foreground tabular-nums">{formatCOP(totalGastos)}</span></p>
+				{/if}
+			</Card>
 
-          <!-- Botones Táctiles Rápidos de Billetes de Colombia -->
-          <div class="mt-3 pt-3 border-t border-emerald-200/60">
-            <p class="text-[11px] font-bold text-emerald-700 mb-1.5 uppercase tracking-wider">Sumar billetes al instante:</p>
-            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-              <button type="button" onclick={() => addEfectivo(2000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$2.000</button>
-              <button type="button" onclick={() => addEfectivo(5000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$5.000</button>
-              <button type="button" onclick={() => addEfectivo(10000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$10.000</button>
-              <button type="button" onclick={() => addEfectivo(20000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$20.000</button>
-              <button type="button" onclick={() => addEfectivo(50000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$50.000</button>
-              <button type="button" onclick={() => addEfectivo(100000)} class="px-2 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-black rounded-lg text-xs shadow-xs transition-all cursor-pointer">+$100.000</button>
-            </div>
-          </div>
-        </div>
+			<Card title="Observaciones">
+				<textarea name="descripcion" bind:value={descripcion} rows="2" maxlength="500" placeholder="Ej: el datáfono falló en la mañana…" class={textareaClass} aria-label="Observaciones del turno"></textarea>
+			</Card>
+		</div>
 
-        <!-- Nequi con Antifraude -->
-        <div class="p-5 bg-purple-50 border border-purple-200 rounded-2xl space-y-3">
-          <label class="flex items-center gap-2 text-sm font-black text-purple-800">
-            <Smartphone class="w-4 h-4 text-purple-600" /> Nequi / Daviplata Digital
-          </label>
-          <div class="flex flex-col md:flex-row gap-4">
-            <div class="relative flex-1">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-purple-700 font-black">$</span>
-              <input type="number" name="nequi" bind:value={nequi}
-                min="0" step="100" placeholder="0"
-                class="w-full pl-10 pr-4 py-3.5 bg-white border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-black text-xl text-slate-800"
-              />
-            </div>
-            <input type="text" name="ref_nequi" bind:value={refNequi}
-              placeholder="Referencias / Comprobantes (Ej: M1234, C8901)"
-              class="flex-1 md:flex-[2] px-4 py-3.5 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none text-sm font-medium text-slate-700"
-            />
-          </div>
+		<!-- Panel de cuadre (fijo en escritorio) -->
+		<aside class="flex flex-col gap-4 lg:sticky lg:top-6">
+			<Card title="Cuadre de caja">
+				{#snippet actions()}
+					{#if estadoCuadre === 'cuadrado' && hayDatos}
+						<Badge variant="success"><CircleCheck size={12} /> Cuadrado</Badge>
+					{:else if estadoCuadre === 'sobrante' && hayDatos}
+						<Badge variant="warning"><Info size={12} /> Sobrante</Badge>
+					{:else if estadoCuadre === 'faltante' && hayDatos}
+						<Badge variant="danger"><CircleAlert size={12} /> Faltante</Badge>
+					{/if}
+				{/snippet}
+				<dl class="flex flex-col gap-2 text-sm">
+					<div class="flex justify-between"><dt class="flex items-center gap-1.5 text-muted-foreground"><Banknote size={14} /> Efectivo</dt><dd class="tabular-nums">{formatCOP(efectivoNum)}</dd></div>
+					<div class="flex justify-between"><dt class="flex items-center gap-1.5 text-muted-foreground"><Smartphone size={14} /> Nequi</dt><dd class="tabular-nums">{formatCOP(nequiNum)}</dd></div>
+					<div class="flex justify-between"><dt class="flex items-center gap-1.5 text-muted-foreground"><Receipt size={14} /> Gastos</dt><dd class="tabular-nums">{formatCOP(totalGastos)}</dd></div>
+					<div class="mt-1 flex justify-between border-t border-border pt-2 font-medium"><dt>Total declarado</dt><dd class="tabular-nums">{formatCOP(totalDeclarado)}</dd></div>
+					{#if hayControl}
+						{#if pizzasActivas}
+							<div class="flex justify-between"><dt class="flex items-center gap-1.5 text-muted-foreground"><Pizza size={14} /> Pizza</dt><dd class="tabular-nums">{formatCOP(ventaPizza)}</dd></div>
+						{/if}
+						{#each lineas as l (l.id)}
+							<div class="flex justify-between"><dt class="flex items-center gap-1.5 text-muted-foreground"><Package size={14} /> <span class="max-w-36 truncate">{l.nombre}</span></dt><dd class="tabular-nums {l.contado ? '' : 'text-muted-foreground'}">{l.contado ? formatCOP(l.r.ventaEsperada) : 'sin contar'}</dd></div>
+						{/each}
+						<div class="flex justify-between font-medium"><dt>Venta esperada</dt><dd class="tabular-nums">{formatCOP(ventaEsperada)}</dd></div>
+						<div class="mt-1 flex items-baseline justify-between border-t border-border pt-3">
+							<dt class="font-medium">Diferencia</dt>
+							<dd class="text-2xl font-semibold tracking-tight tabular-nums {!hayDatos ? 'text-muted-foreground' : estadoCuadre === 'faltante' ? 'text-danger' : estadoCuadre === 'sobrante' ? 'text-warning' : 'text-success'}">
+								{diferencia > 0 ? '+' : ''}{formatCOP(diferencia)}
+							</dd>
+						</div>
+					{/if}
+				</dl>
+				{#if hayDatos && estadoCuadre === 'faltante'}
+					<p class="mt-3 text-xs text-muted-foreground">Revisa si falta registrar un gasto, un pago por Nequi o una merma.</p>
+				{:else if hayDatos && estadoCuadre === 'sobrante'}
+					<p class="mt-3 text-xs text-muted-foreground">Entró más de lo esperado: propinas, bebidas o redondeos.</p>
+				{/if}
+			</Card>
 
-          <!-- Alerta Antifraude en Tiempo Real -->
-          {#if referenciaDuplicadaDetectada}
-            <div class="p-3 bg-red-100 border border-red-300 rounded-xl flex items-center gap-2 text-red-800 text-xs font-bold animate-pulse">
-              <AlertTriangle class="w-4 h-4 text-red-600 shrink-0" />
-              <span>⚠️ ALERTA ANTIFRAUDE: La referencia "<strong>{referenciaDuplicadaDetectada}</strong>" ya fue registrada en un turno anterior. ¡Verifica el pantallazo del cliente!</span>
-            </div>
-          {/if}
-        </div>
+			<div class="flex flex-col gap-2">
+				{#if lineasPendientes.length}
+					<p class="flex items-center gap-1.5 text-xs text-muted-foreground"><Info size={13} /> Falta contar: {lineasPendientes.map((l) => l.nombre).join(', ')}.</p>
+				{/if}
+				<button type="submit" class={cn(btn.base, btn.primary, 'h-11 text-base')} disabled={submitting || (pizzasActivas && masasExceden) || lineaExcede || !!refRepetida}>
+					{#if submitting}<LoaderCircle size={17} class="animate-spin" /> Guardando…{:else}<LockKeyhole size={17} /> Guardar y cerrar turno{/if}
+				</button>
+				<div class="grid grid-cols-2 gap-2">
+					<a href={whatsappUrl} target="_blank" rel="noopener noreferrer" class={cn(btn.base, btn.outline)}><Send size={15} /> WhatsApp</a>
+					<button type="button" class={cn(btn.base, btn.outline)} onclick={() => window.print()}><Printer size={15} /> Tirilla</button>
+				</div>
+				{#if refRepetida}<p class="flex items-center gap-1.5 text-xs text-danger"><TriangleAlert size={13} /> Corrige el comprobante repetido para guardar.</p>{/if}
+			</div>
+		</aside>
+	</form>
 
-        <!-- Mini resumen de transferencias -->
-        {#if totalTransferencias > 0}
-          <div  class="flex justify-between items-center text-sm px-2 py-4 bg-slate-50 rounded-xl border border-slate-100">
-            <span class="text-slate-500 font-bold uppercase tracking-wider text-xs">Total Nequi:</span>
-            <span class="font-black text-slate-700 text-lg">${totalTransferencias.toLocaleString('es-CO')}</span>
-          </div>
-        {/if}
-
-        <!-- Observaciones -->
-        <div class="pt-4">
-          <label for="descripcion" class="block text-sm font-bold text-slate-600 mb-2">Observaciones del Turno (Opcional)</label>
-          <textarea id="descripcion" name="descripcion" rows="2"
-            placeholder="Ej: Faltó billete de $50, el datafono falló en la mañana..."
-            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-medium text-slate-800 resize-none"
-          ></textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sección de Gastos -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <span class="text-amber-600"><Receipt class="w-5 h-5" /></span> Gastos del Turno
-        </h2>
-        <button 
-          type="button" 
-          onclick={addGasto}
-          class="text-base bg-orange-100 hover:bg-orange-200 text-orange-800 font-extrabold py-3 px-5 rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-        >
-          <span class="text-lg">+</span> Agregar Gasto
-        </button>
-      </div>
-
-      {#if gastos.length === 0}
-        <div class="text-center py-6 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-          No has registrado ningún gasto en este turno.
-        </div>
-      {:else}
-        <div class="space-y-3">
-          {#each gastos as gasto (gasto.id)}
-            <div  class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <input 
-                type="text" 
-                name="gasto_descripcion" 
-                bind:value={gasto.descripcion}
-                placeholder="¿En qué se gastó? (Ej: Hielo)" 
-                required 
-                class="flex-1 w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
-              />
-              <div class="flex gap-2 w-full sm:w-auto">
-                <div class="relative flex-1 sm:w-32">
-                  <span class="absolute left-3 top-3 text-slate-400">$</span>
-                  <input 
-                    type="number" 
-                    name="gasto_monto" 
-                    bind:value={gasto.monto}
-                    step="0.01" 
-                    min="0.01" 
-                    required 
-                    placeholder="0.00"
-                    class="w-full pl-7 pr-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
-                  />
-                </div>
-                <button 
-                  type="button" 
-                  onclick={() => removeGasto(gasto.id)}
-                  class="w-12 h-12 flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 rounded-xl transition-colors font-bold text-xl"
-                  title="Eliminar gasto"
-                >
-                  &times;
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-        
-        <div class="mt-4 pt-4 border-t border-slate-100 text-right">
-          <span class="text-slate-500 text-sm">Total de gastos declarados:</span>
-          <span class="text-xl font-bold text-red-600 ml-2">$-{totalGastos.toFixed(2)}</span>
-        </div>
-      {/if}
-    </div>
-
-    <!-- Cuadre de Caja -->
-    {#if hayDatos}
-      <div class="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 space-y-6">
-        <div class="border-b border-slate-100 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-          <div>
-            <h2 class="text-xl font-black text-slate-800 flex items-center gap-3">
-              <span class="bg-blue-100 p-2 rounded-xl text-blue-600"><Calculator class="w-5 h-5" /></span> Balance y Cuadre de Turno
-            </h2>
-            <p class="text-xs text-slate-400 mt-1">Comparación exacta entre el dinero recibido (físico + digital) y las porciones vendidas.</p>
-          </div>
-          <span class="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full {diferencia === 0 ? 'bg-emerald-100 text-emerald-700' : diferencia > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}">
-            {diferencia === 0 ? '✓ Caja Cuadrada' : diferencia > 0 ? 'Sobrante en Caja' : 'Faltante de Dinero'}
-          </span>
-        </div>
-
-        <!-- 3 Columnas Explicativas de Dinero -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <!-- Columna 1: Efectivo Físico -->
-          <div class="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl">
-            <span class="text-xs font-bold uppercase text-emerald-800 tracking-wider block">1. Físico en Cajón</span>
-            <p class="text-2xl font-black text-emerald-700 mt-1">${efectivoNum.toLocaleString('es-CO')}</p>
-            <p class="text-xs text-emerald-600 mt-2">Billetes y monedas contados físicamente en la gaveta.</p>
-          </div>
-
-          <!-- Columna 2: Nequi Digital -->
-          <div class="p-4 bg-purple-50/70 border border-purple-200/80 rounded-2xl">
-            <span class="text-xs font-bold uppercase text-purple-800 tracking-wider block">2. Nequi (En el Celular)</span>
-            <p class="text-2xl font-black text-purple-700 mt-1">${nequiNum.toLocaleString('es-CO')}</p>
-            <p class="text-xs text-purple-600 mt-2">Plata recibida en la cuenta Nequi (<strong>no</strong> está en la gaveta física).</p>
-          </div>
-
-          <!-- Columna 3: Gastos Menores -->
-          <div class="p-4 bg-amber-50/70 border border-amber-200/80 rounded-2xl">
-            <span class="text-xs font-bold uppercase text-amber-800 tracking-wider block">3. Gastos del Turno</span>
-            <p class="text-2xl font-black text-amber-700 mt-1">-${totalGastos.toLocaleString('es-CO')}</p>
-            <p class="text-xs text-amber-600 mt-2">Dinero de la caja usado para compras inmediatas (hielo, insumos).</p>
-          </div>
-        </div>
-
-        <!-- Tabla Resumen Comparativa -->
-        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-3">
-          <div class="flex justify-between items-center text-sm">
-            <span class="text-slate-600 font-medium">Dinero Físico en Gaveta:</span>
-            <span class="font-bold text-slate-800">${efectivoNum.toLocaleString('es-CO')}</span>
-          </div>
-          <div class="flex justify-between items-center text-sm">
-            <span class="text-slate-600 font-medium">+ Transferencias Nequi en Cuenta:</span>
-            <span class="font-bold text-purple-700">+${nequiNum.toLocaleString('es-CO')}</span>
-          </div>
-          <div class="flex justify-between items-center text-sm">
-            <span class="text-slate-600 font-medium">+ Gastos Justificados con Recibo/Turno:</span>
-            <span class="font-bold text-amber-700">+${totalGastos.toLocaleString('es-CO')}</span>
-          </div>
-
-          <div class="pt-3 border-t border-slate-200 flex justify-between items-center">
-            <span class="font-bold text-slate-700">Total Producido Declarado:</span>
-            <span class="text-lg font-black text-slate-900">${totalDeclarado.toLocaleString('es-CO')}</span>
-          </div>
-
-          <div class="flex justify-between items-center text-sm">
-            <span class="font-medium text-slate-500">Venta Esperada por Inventario ({porcionesVendidas} porciones vendidas):</span>
-            <span class="font-bold text-slate-700">${granTotalEsperado.toLocaleString('es-CO')}</span>
-          </div>
-
-          <!-- Diferencia final -->
-          <div class="pt-3 border-t-2 border-slate-300 flex justify-between items-center">
-            <div>
-              <span class="text-base font-black text-slate-900 block">Diferencia (Descuadre):</span>
-              <span class="text-xs text-slate-500">Total Declarado menos Venta Esperada por Porciones</span>
-            </div>
-            <span class="text-2xl font-black {diferencia > 0 ? 'text-blue-600' : diferencia < 0 ? 'text-rose-600' : 'text-emerald-600'}">
-              {diferencia > 0 ? '+' : ''}${diferencia.toLocaleString('es-CO')}
-            </span>
-          </div>
-        </div>
-
-        {#if diferencia > 0}
-          <div class="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3">
-            <Lightbulb class="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <p class="text-sm font-bold text-blue-900">Sobrante de dinero (+${diferencia.toLocaleString('es-CO')})</p>
-              <p class="text-xs text-blue-800 mt-1">
-                Entró más dinero del esperado por inventario. Puede deberse a propinas voluntarias, venta de gaseosas/bebidas o redondeos a favor.
-              </p>
-            </div>
-          </div>
-        {:else if diferencia < 0}
-          <div class="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
-            <AlertTriangle class="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
-            <div>
-              <p class="text-sm font-bold text-rose-900">Faltante de dinero (-${Math.abs(diferencia).toLocaleString('es-CO')})</p>
-              <p class="text-xs text-rose-800 mt-1">
-                Falta dinero en comparación con las porciones que salieron del horno. Revisa si olvidaste registrar algún gasto menor pagado en efectivo, un pago recibido por Nequi, o si hubo alguna pizza quemada/dañada que no registraste en la casilla de merma.
-              </p>
-            </div>
-          </div>
-        {:else}
-          <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
-            <CheckCircle2 class="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <p class="text-sm font-bold text-emerald-900">¡Caja perfectamente balanceada!</p>
-              <p class="text-xs text-emerald-800 mt-1">
-                El total del dinero (físico + Nequi + gastos) coincide exactamente con las porciones vendidas.
-              </p>
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- Botones de Envío, WhatsApp y Comprobante Térmico POS -->
-    <div class="pt-6 flex flex-col sm:flex-row gap-3">
-      <button 
-        type="submit" 
-        class="flex-1 py-5 px-6 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 hover:from-orange-700 hover:to-amber-700 text-white font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl text-lg flex justify-center items-center gap-2.5 cursor-pointer transform active:scale-98"
-      >
-        <LockKeyhole class="w-6 h-6" /> Guardar y Cerrar Turno
-      </button>
-
-      <a 
-        href={whatsappUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="sm:w-auto px-5 py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-lg hover:shadow-xl text-base flex justify-center items-center gap-2 cursor-pointer text-center"
-        title="Enviar reporte instantáneo al WhatsApp del dueño"
-      >
-        <Smartphone class="w-5 h-5" /> Enviar a WhatsApp
-      </a>
-
-      <button 
-        type="button" 
-        onclick={() => window.print()}
-        class="sm:w-auto px-5 py-5 bg-slate-800 hover:bg-slate-900 text-white font-black rounded-2xl transition-all shadow-lg text-base flex justify-center items-center gap-2 cursor-pointer text-center"
-        title="Imprimir comprobante físico para tirilla POS / Bluetooth"
-      >
-        <Receipt class="w-5 h-5" /> Imprimir Tirilla
-      </button>
-    </div>
-    
-  </form>
-
-  <!-- HISTORIAL COMPLETO DE TURNOS Y AUDITORÍA DE CAJA -->
-  {#if data.historialTurnos && data.historialTurnos.length > 0}
-    <div class="mt-12 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden">
-      <div class="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div class="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold mb-2">
-            <History class="w-3.5 h-3.5" /> Auditoría y Trazabilidad
-          </div>
-          <h2 class="text-2xl font-black text-slate-900 tracking-tight">Historial de Turnos y Entradas de Caja</h2>
-          <p class="text-sm text-slate-500 mt-1">
-            Registro detallado con fecha, hora exacta, desglose de lo que entró a caja física, transferencias Nequi y salidas por gastos.
-          </p>
-        </div>
-        <span class="text-xs font-bold uppercase tracking-wider px-3 py-1.5 bg-slate-100 text-slate-600 rounded-full">
-          {data.historialTurnos.length} turnos registrados
-        </span>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-50/80 text-slate-400 text-xs uppercase tracking-wider font-extrabold border-b border-slate-100">
-              <th class="p-4 pl-6">Fecha y Hora</th>
-              <th class="p-4 text-center">Porciones Vendidas</th>
-              <th class="p-4 text-center text-rose-500">Mermas</th>
-              <th class="p-4 text-right">Efectivo</th>
-              <th class="p-4 text-right text-purple-600">Nequi</th>
-              <th class="p-4 text-right text-amber-600">Gastos</th>
-              <th class="p-4 text-right pr-6 font-black text-slate-900">Total Producido</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 text-sm">
-            {#each data.historialTurnos as turno}
-              <tr class="hover:bg-slate-50/70 transition-colors">
-                <td class="p-4 pl-6 font-bold text-slate-800">
-                  <div class="flex flex-col">
-                    <span class="text-slate-900">
-                      {turno.fecha ? new Date(turno.fecha).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                    </span>
-                    <span class="text-xs font-semibold text-slate-400">
-                      {turno.fecha ? new Date(turno.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}
-                    </span>
-                    {#if turno.descripcion}
-                      <span class="text-[11px] text-slate-500 font-normal italic mt-0.5 max-w-xs truncate" title={turno.descripcion}>
-                        "{turno.descripcion}"
-                      </span>
-                    {/if}
-                  </div>
-                </td>
-                <td class="p-4 text-center font-bold text-slate-700">
-                  <span class="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold">
-                    {turno.porcionesVendidas ?? 0} porc.
-                  </span>
-                </td>
-                <td class="p-4 text-center">
-                  {#if (turno.porcionesMermadas ?? 0) > 0}
-                    <span class="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-md text-xs font-bold">
-                      {turno.porcionesMermadas} mermas
-                    </span>
-                  {:else}
-                    <span class="text-xs text-slate-300">-</span>
-                  {/if}
-                </td>
-                <td class="p-4 text-right font-semibold text-slate-700">
-                  ${Number(turno.monto).toLocaleString('es-CO')}
-                </td>
-                <td class="p-4 text-right font-semibold text-purple-700">
-                  ${Number(turno.transferencias || 0).toLocaleString('es-CO')}
-                </td>
-                <td class="p-4 text-right font-semibold text-amber-700">
-                  {#if turno.totalGastos > 0}
-                    -${turno.totalGastos.toLocaleString('es-CO')}
-                  {:else}
-                    <span class="text-xs text-slate-300">$0</span>
-                  {/if}
-                </td>
-                <td class="p-4 text-right pr-6 font-black text-slate-900">
-                  ${(Number(turno.monto) + Number(turno.transferencias || 0) + (turno.totalGastos || 0)).toLocaleString('es-CO')}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  {/if}
+	<Card title="Últimos turnos" description="Los 20 cierres más recientes.">
+		<DataTable rows={data.historialTurnos} {columns} rowKey={(t) => t.id} searchPlaceholder="Buscar turno o nota…" initialSort={{ id: 'fecha', dir: 'desc' }} emptyTitle="Aún no hay turnos" emptyDescription="El primer cierre aparecerá aquí.">
+			{#snippet cell(t, c)}
+				{#if c.id === 'gastos'}
+					<span class={t.totalGastos > 0 ? 'text-danger' : 'text-muted-foreground'}>{t.totalGastos > 0 ? `−${formatCOP(t.totalGastos)}` : '—'}</span>
+				{:else if c.id === 'total'}
+					<span class="font-medium">{c.format?.(c.accessor(t), t)}</span>
+				{:else if c.id === 'fecha'}
+					<span>{formatDateTime(t.fecha)}</span>
+					{#if t.descripcion}<span class="block max-w-52 truncate text-xs text-muted-foreground" title={t.descripcion}>{t.descripcion}</span>{/if}
+				{:else}
+					{c.format ? c.format(c.accessor(t), t) : c.accessor(t)}
+				{/if}
+			{/snippet}
+		</DataTable>
+	</Card>
 </div>
+
+<!-- Tirilla térmica (58/80 mm): solo visible al imprimir -->
+<div class="receipt hidden font-mono text-[11px] leading-snug text-black print:block">
+	<p class="text-center text-sm font-bold">{negocio}</p>
+	<p class="text-center">CIERRE DE TURNO</p>
+	<p class="text-center">{new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Bogota' })}</p>
+	<hr class="my-1 border-dashed border-black" />
+	<p class="flex justify-between"><span>Efectivo</span><span>{formatCOP(efectivoNum)}</span></p>
+	<p class="flex justify-between"><span>Nequi</span><span>{formatCOP(nequiNum)}</span></p>
+	{#each gastos.filter((g) => g.descripcion && parseFloat(g.monto) > 0) as g (g.id)}
+		<p class="flex justify-between"><span>- {g.descripcion}</span><span>{formatCOP(parseFloat(g.monto))}</span></p>
+	{/each}
+	<p class="flex justify-between font-bold"><span>TOTAL DECLARADO</span><span>{formatCOP(totalDeclarado)}</span></p>
+	{#if hayControl}
+		<hr class="my-1 border-dashed border-black" />
+		{#if pizzasActivas}
+			<p class="flex justify-between"><span>Pizza: {porcionesVendidas} {unidad}</span><span>{formatCOP(ventaPizza)}</span></p>
+			<p class="flex justify-between"><span>Mermas pizza</span><span>{porcionesMermadas}</span></p>
+		{/if}
+		{#each lineas.filter((x) => x.contado) as l (l.id)}
+			<p class="flex justify-between"><span>{l.nombre}: {l.r.consumidas}</span><span>{formatCOP(l.r.ventaEsperada)}</span></p>
+		{/each}
+		<p class="flex justify-between"><span>Venta esperada</span><span>{formatCOP(ventaEsperada)}</span></p>
+		<p class="flex justify-between font-bold"><span>DIFERENCIA</span><span>{diferencia > 0 ? '+' : ''}{formatCOP(diferencia)}</span></p>
+	{/if}
+	{#if refNequi.trim()}<p class="mt-1">Refs: {refNequi}</p>{/if}
+	{#if descripcion.trim()}<p>Nota: {descripcion}</p>{/if}
+	<hr class="my-1 border-dashed border-black" />
+	<p class="mt-6 text-center">_______________________</p>
+	<p class="text-center">Firma cajero</p>
+</div>
+
+<style>
+	@media print {
+		:global(html, body) {
+			background: white !important;
+		}
+		.receipt {
+			width: 72mm;
+			margin: 0 auto;
+		}
+		:global(.receipt p) {
+			margin: 0;
+		}
+	}
+	@page {
+		margin: 4mm;
+	}
+</style>

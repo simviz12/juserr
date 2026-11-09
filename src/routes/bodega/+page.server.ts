@@ -1,163 +1,103 @@
 import { db } from '$lib/server/db';
 import { productos, movimientosInventario, categorias } from '$lib/server/schema';
-import { eq, desc } from 'drizzle-orm';
-import { fail, redirect } from '@sveltejs/kit';
+import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-
-export const load: PageServerLoad = async ({ locals }) => {
-    if (!locals.user) {
-        throw redirect(302, '/');
-    }
-
-    // Asegurar categoría de Bebidas en catálogo
-    let allCats = await db.select().from(categorias);
-    let catBebidas = allCats.find(c => c.nombre.toLowerCase().includes('bebida'));
-    if (!catBebidas) {
-        const [nuevaCat] = await db.insert(categorias).values({ nombre: 'Bebidas' }).returning();
-        catBebidas = nuevaCat;
-    }
-
-    const allProducts = await db.select().from(productos);
-    
-    // Asegurar Masa
-    let masaProduct = allProducts.find(p => p.nombre === 'Masa' || p.nombre === 'Masas');
-    if (!masaProduct) {
-        const [nuevo] = await db.insert(productos).values({
-            nombre: 'Masa',
-            unidadMedida: 'unidad',
-            stockActual: 0,
-            precio: '0'
-        }).returning();
-        masaProduct = nuevo;
-        allProducts.push(nuevo);
-    }
-
-    // Asegurar que las bebidas principales existan en productos de bodega
-    const bebidasIniciales = [
-        { nombre: 'Coca Cola 400ml', precio: '3500' },
-        { nombre: 'Jugo Hit Mora', precio: '3000' },
-        { nombre: 'Agua Cristal 600ml', precio: '2500' }
-    ];
-
-    for (const b of bebidasIniciales) {
-        if (!allProducts.some(p => p.nombre.toLowerCase() === b.nombre.toLowerCase())) {
-            const [nuevo] = await db.insert(productos).values({
-                nombre: b.nombre,
-                categoriaId: catBebidas.id,
-                unidadMedida: 'unidad',
-                stockActual: 0,
-                stockMinimo: 5,
-                precio: b.precio,
-                precioCosto: '1500'
-            }).returning();
-            allProducts.push(nuevo);
-        }
-    }
-
-    // Historial de compras y movimientos con nombre de producto
-    const historialMovimientos = await db.select({
-        id: movimientosInventario.id,
-        productoNombre: productos.nombre,
-        unidadMedida: productos.unidadMedida,
-        tipo: movimientosInventario.tipo,
-        cantidad: movimientosInventario.cantidad,
-        costoUnitario: movimientosInventario.costoUnitario,
-        costoTotal: movimientosInventario.costoTotal,
-        fecha: movimientosInventario.fecha
-    })
-    .from(movimientosInventario)
-    .innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
-    .orderBy(desc(movimientosInventario.fecha));
-
-    return { 
-        stockMasas: masaProduct.stockActual || 0,
-        productos: allProducts,
-        historialMovimientos
-    };
-};
-
 import { parseFraction } from '$lib/utils/fractions';
 
-export const actions: Actions = {
-    default: async ({ request, locals }) => {
-        if (!locals.user) return fail(401, { error: 'No autorizado' });
+const MASA_NAMES = ['Masa', 'Masas'];
 
-        const formData = await request.formData();
-        const tipoOperacion = formData.get('tipo_operacion')?.toString() || 'entrada';
-        const productoIdStr = formData.get('tipo_insumo')?.toString();
-        const productoId = parseInt(productoIdStr || '0');
-        const cantidadStr = formData.get('cantidad')?.toString() || '';
-        const cantidad = parseFraction(cantidadStr);
-        const precioTotalStr = formData.get('precioTotalCompra')?.toString();
-        const precioTotal = isNaN(parseFloat(precioTotalStr || "0")) ? 0 : parseFloat(precioTotalStr || "0");
+export const load: PageServerLoad = async () => {
+	// El cierre de turno necesita el producto "Masa"; se crea solo si no existe.
+	// (Antes también se re-creaban bebidas de ejemplo en cada visita.)
+	const [masa] = await db.select({ id: productos.id }).from(productos).where(inArray(productos.nombre, MASA_NAMES)).limit(1);
+	if (!masa) {
+		await db.insert(productos).values({ nombre: 'Masa', unidadMedida: 'unidad', stockActual: 0, precio: '0' });
+	}
 
-        if (isNaN(cantidad) || cantidad < 0) {
-            return fail(400, { error: 'Cantidad inválida. Ingresa un número o fracción (ej: 6 1/4, 2 1/2, 3/4).' });
-        }
-        if (isNaN(productoId) || productoId <= 0) {
-            return fail(400, { error: 'Producto no válido.' });
-        }
+	const [lista, cats, historial] = await Promise.all([
+		db.select().from(productos).orderBy(asc(productos.nombre)),
+		db.select().from(categorias),
+		db
+			.select({
+				id: movimientosInventario.id,
+				productoNombre: productos.nombre,
+				unidadMedida: productos.unidadMedida,
+				tipo: movimientosInventario.tipo,
+				cantidad: movimientosInventario.cantidad,
+				costoUnitario: movimientosInventario.costoUnitario,
+				costoTotal: movimientosInventario.costoTotal,
+				fecha: movimientosInventario.fecha
+			})
+			.from(movimientosInventario)
+			.innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
+			.orderBy(desc(movimientosInventario.fecha))
+			.limit(1000)
+	]);
 
-        const costoUnitario = (cantidad > 0 && tipoOperacion === 'entrada') ? precioTotal / cantidad : 0;
-
-        try {
-            let [targetProduct] = await db.select().from(productos).where(eq(productos.id, productoId));
-            
-            if (!targetProduct) {
-                throw new Error("Producto no encontrado.");
-            }
-
-            const stockActual = targetProduct.stockActual || 0;
-            const precioCostoAnterior = parseFloat(targetProduct.precioCosto?.toString() || '0');
-            
-            let nuevoStock = 0;
-            let cantidadMovimiento = 0;
-
-            if (tipoOperacion === 'entrada') {
-                nuevoStock = stockActual + cantidad;
-                cantidadMovimiento = cantidad;
-            } else {
-                // Ajuste físico
-                nuevoStock = cantidad;
-                cantidadMovimiento = nuevoStock - stockActual; // Puede ser negativo si hay mermas/ventas no registradas
-            }
-
-            // Calcular nuevo costo promedio ponderado SOLO si es entrada con compras
-            let nuevoPrecioCosto = precioCostoAnterior;
-            if (tipoOperacion === 'entrada' && nuevoStock > 0 && precioTotal > 0) {
-                const valorInventarioAnterior = stockActual * precioCostoAnterior;
-                nuevoPrecioCosto = (valorInventarioAnterior + precioTotal) / nuevoStock;
-            }
-
-            // Actualizar stock y costo
-            await db.update(productos)
-                .set({ 
-                    stockActual: nuevoStock,
-                    precioCosto: nuevoPrecioCosto.toString()
-                })
-                .where(eq(productos.id, targetProduct.id));
-
-            // Registrar movimiento
-            await db.insert(movimientosInventario).values({
-                productoId: targetProduct.id,
-                usuarioId: locals.user.id,
-                tipo: tipoOperacion === 'entrada' ? 'entrada' : 'ajuste',
-                cantidad: cantidadMovimiento, // Registro contable
-                costoTotal: tipoOperacion === 'entrada' ? precioTotal.toString() : '0',
-                costoUnitario: tipoOperacion === 'entrada' ? costoUnitario.toString() : '0'
-            });
-
-            const costoMsg = (tipoOperacion === 'entrada' && precioTotal > 0)
-                ? ` | Costo total: $${precioTotal.toLocaleString('es-CO')} | Promedio: $${nuevoPrecioCosto.toLocaleString('es-CO', { maximumFractionDigits: 2 })} / ${targetProduct.unidadMedida}`
-                : '';
-            
-            const accionVisual = tipoOperacion === 'entrada' ? `Se ingresaron ${cantidad}` : `Conteo final actualizado a ${cantidad}`;
-            
-            return { success: true, message: `${accionVisual} ${targetProduct.nombre}. Nuevo stock: ${nuevoStock}.${costoMsg}` };
-        } catch (err) {
-            console.error(err);
-            return fail(500, { error: 'Error interno al actualizar el inventario.' });
-        }
-    }
+	const catName = new Map(cats.map((c) => [c.id, c.nombre]));
+	return {
+		productos: lista.map((p) => ({ ...p, categoria: p.categoriaId ? (catName.get(p.categoriaId) ?? null) : null })),
+		historialMovimientos: historial.map((m) => ({ ...m, fecha: m.fecha ? m.fecha.toISOString() : null }))
+	};
 };
 
+export const actions: Actions = {
+	default: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'No autorizado' });
+
+		const formData = await request.formData();
+		const tipo = formData.get('tipo_operacion')?.toString() === 'ajuste' ? 'ajuste' : 'entrada';
+		const productoId = parseInt(formData.get('tipo_insumo')?.toString() ?? '', 10);
+		const cantidad = parseFraction(formData.get('cantidad')?.toString() ?? '');
+		const precioRaw = parseFloat(formData.get('precioTotalCompra')?.toString() ?? '0');
+		const precioTotal = Number.isFinite(precioRaw) && precioRaw > 0 ? precioRaw : 0;
+
+		if (!Number.isFinite(productoId) || productoId <= 0) return fail(400, { error: 'Selecciona un insumo.' });
+		if (!Number.isFinite(cantidad) || cantidad < 0) {
+			return fail(400, { error: 'Cantidad inválida. Usa un número o fracción (ej: 6 1/4, 2 1/2, 3/4).' });
+		}
+		if (tipo === 'entrada' && cantidad === 0) return fail(400, { error: 'La cantidad comprada debe ser mayor a 0.' });
+
+		const [p] = await db.select().from(productos).where(eq(productos.id, productoId));
+		if (!p) return fail(404, { error: 'El insumo no existe.' });
+
+		const stockActual = p.stockActual ?? 0;
+		const costoAnterior = Number(p.precioCosto ?? 0);
+		const nuevoStock = tipo === 'entrada' ? stockActual + cantidad : cantidad;
+		const movimiento = nuevoStock - stockActual;
+
+		// Costo promedio ponderado solo cambia con compras valorizadas
+		const nuevoCosto =
+			tipo === 'entrada' && nuevoStock > 0 && precioTotal > 0
+				? (stockActual * costoAnterior + precioTotal) / nuevoStock
+				: costoAnterior;
+
+		try {
+			// Atómico: stock y movimiento se guardan juntos o ninguno
+			await db.batch([
+				db.update(productos).set({ stockActual: nuevoStock, precioCosto: nuevoCosto.toFixed(2) }).where(eq(productos.id, p.id)),
+				db.insert(movimientosInventario).values({
+					productoId: p.id,
+					usuarioId: locals.user.id,
+					tipo,
+					cantidad: movimiento,
+					costoTotal: tipo === 'entrada' ? precioTotal.toString() : '0',
+					costoUnitario: tipo === 'entrada' && cantidad > 0 ? (precioTotal / cantidad).toFixed(2) : '0'
+				})
+			]);
+		} catch (err) {
+			console.error(err);
+			return fail(500, { error: 'Error interno al actualizar el inventario.' });
+		}
+
+		const fmt = (n: number) => n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
+		return {
+			success: true,
+			message:
+				tipo === 'entrada'
+					? `Compra registrada: +${fmt(cantidad)} ${p.unidadMedida} de ${p.nombre}. Stock: ${fmt(nuevoStock)}.`
+					: `Conteo guardado: ${p.nombre} queda en ${fmt(nuevoStock)} ${p.unidadMedida} (${movimiento >= 0 ? '+' : ''}${fmt(movimiento)}).`
+		};
+	}
+};

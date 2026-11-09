@@ -70,6 +70,14 @@ export async function validateSessionToken(token: string) {
   return { session, user };
 }
 
+/** Limpia la caché de sesiones de un usuario (cambio de rol, contraseña o borrado). */
+export async function invalidateUserSessions(userId: number) {
+  for (const [id, entry] of sessionCache) {
+    if (entry.user.id === userId) sessionCache.delete(id);
+  }
+  await db.delete(sesiones).where(eq(sesiones.userId, userId));
+}
+
 export async function invalidateSession(sessionId: string) {
   sessionCache.delete(sessionId);
   await db.delete(sesiones).where(eq(sesiones.id, sessionId));

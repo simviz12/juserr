@@ -1,18 +1,8 @@
 import { redirect } from '@sveltejs/kit';
+import { homeFor } from '$lib/auth/access';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async (event) => {
-    const user = event.locals.user;
-    
-    if (!user) {
-        throw redirect(302, '/login');
-    }
-
-    if (user.rol === 'jefe') {
-        throw redirect(302, '/dashboard');
-    } else if (user.rol === 'bodeguero') {
-        throw redirect(302, '/bodega');
-    } else {
-        throw redirect(302, '/turnos/cierre');
-    }
+export const load: PageServerLoad = async ({ locals }) => {
+	if (!locals.user) redirect(302, '/login');
+	redirect(302, homeFor(locals.user.rol));
 };

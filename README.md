@@ -1,4 +1,4 @@
-# 🍕 JuanchoPizza POS & ERP System
+# MesaCapital — Finanzas para restaurantes
 
 Sistema integral de Punto de Venta (POS), control de inventario de materia prima, auditoría de turnos, arqueo de caja con desglose digital (Nequi / Daviplata) y reportes gerenciales para pizzerías.
 

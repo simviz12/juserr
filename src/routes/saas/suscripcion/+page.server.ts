@@ -29,7 +29,7 @@ export const load: PageServerLoad = async () => {
     // 2. Conteo de usuarios activos vs límite del plan
     const usuariosActuales = await db.select({ id: usuarios.id }).from(usuarios);
 
-    // 3. Catálogo de planes comerciales SENOVA
+    // 3. Catálogo de planes comerciales MesaCapital
     const planesDisponibles = [
         {
             codigo: 'basico',
@@ -53,7 +53,7 @@ export const load: PageServerLoad = async () => {
             nombre: 'Pro Gastronómico',
             precioMes: 69000,
             precioDia: 2300,
-            badge: 'Plan Estrella ⭐',
+            badge: 'Recomendado',
             destacado: true,
             caracteristicas: [
                 'Todo lo del Plan Básico',
@@ -105,8 +105,13 @@ export const load: PageServerLoad = async () => {
         }
     ];
 
+    // Días restantes reales según la fecha de renovación (antes era un número fijo)
+    const diasRestantes = sub.fechaRenovacion
+        ? Math.max(0, Math.ceil((sub.fechaRenovacion.getTime() - Date.now()) / 86_400_000))
+        : null;
+
     return {
-        suscripcion: sub,
+        suscripcion: { ...sub, diasRestantes, fechaRenovacion: sub.fechaRenovacion ? sub.fechaRenovacion.toISOString() : null, actualizadoEn: null },
         conteoUsuarios: usuariosActuales.length,
         planes: planesDisponibles
     };
@@ -118,7 +123,9 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const planCodigo = formData.get('plan_codigo')?.toString() || 'pro';
-        const ciclo = formData.get('ciclo')?.toString() || 'mensual';
+        if (!['basico', 'pro', 'restobar', 'franquicia'].includes(planCodigo)) return fail(400, { error: 'Plan inválido.' });
+        const cicloRaw = formData.get('ciclo')?.toString() || 'mensual';
+        const ciclo = ['mensual', 'trimestral', 'anual'].includes(cicloRaw) ? cicloRaw : 'mensual';
 
         const precios: Record<string, { nombre: string; monto: number; usuarios: number }> = {
             basico: { nombre: 'Chuzo Básico', monto: 39000, usuarios: 1 },

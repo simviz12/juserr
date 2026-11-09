@@ -1,181 +1,112 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  let { data, form } = $props();
+	import { enhance } from '$app/forms';
+	import { UserPlus, Pencil, Trash2, Eye, EyeOff } from '@lucide/svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
+	import DataTable from '$lib/components/data-table/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table/types';
+	import { inputClass, selectClass, btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { formatDate } from '$lib/utils/format';
+	import { ROL_LABELS, normalizeRol } from '$lib/auth/access';
 
-  let isModalOpen = $state(false);
-  let editMode = $state(false);
-  
-  let formId = $state('');
-  let formNombre = $state('');
-  let formRol = $state('cajero');
-  let formPassword = $state('');
+	let { data, form } = $props();
+	type U = (typeof data.personal)[number];
 
-  function openCreateModal() {
-    editMode = false;
-    formId = '';
-    formNombre = '';
-    formRol = 'cajero';
-    formPassword = '';
-    isModalOpen = true;
-  }
+	const ROL_INFO = [
+		{ value: 'cajero', desc: 'Solo cierre de turno' },
+		{ value: 'empleado', desc: 'Solo cierre de turno' },
+		{ value: 'bodeguero', desc: 'Bodega y cierre de turno' },
+		{ value: 'jefe', desc: 'Acceso total' }
+	] as const;
 
-  function openEditModal(user: any) {
-    editMode = true;
-    formId = user.id;
-    formNombre = user.nombre;
-    formRol = user.rol;
-    formPassword = ''; // Blank so they don't have to change it
-    isModalOpen = true;
-  }
+	let open = $state(false);
+	let editing = $state<U | null>(null);
+	let nombre = $state('');
+	let rol = $state('cajero');
+	let password = $state('');
+	let showPwd = $state(false);
+	function openForm(u: U | null) {
+		editing = u;
+		nombre = u?.nombre ?? '';
+		rol = u ? normalizeRol(u.rol) : 'cajero';
+		password = '';
+		showPwd = false;
+		open = true;
+	}
+	let alLimite = $derived(data.limite !== null && data.personal.length >= data.limite);
 
-  function closeModal() {
-    isModalOpen = false;
-  }
-
-  function getRoleBadge(rol: string) {
-    switch(rol) {
-      case 'jefe': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'bodeguero': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'cajero': return 'bg-orange-100 text-orange-800 border-orange-200';
-      default: return 'bg-slate-100 text-slate-800 border-slate-200';
-    }
-  }
+	const columns: Column<U>[] = [
+		{ id: 'nombre', header: 'Usuario', accessor: (u) => u.nombre },
+		{ id: 'rol', header: 'Rol', accessor: (u) => u.rol },
+		{ id: 'creado', header: 'Creado', accessor: (u) => u.createdAt, format: (v) => (v ? formatDate(String(v)) : '—'), hideOnMobile: true },
+		{ id: 'acciones', header: '', accessor: () => null, sortable: false, align: 'right' }
+	];
 </script>
 
-<div class="max-w-5xl mx-auto">
-  <div class="flex justify-between items-center mb-6">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-800">Gestión de Personal</h1>
-      <p class="text-slate-500 text-sm mt-1">Crea y administra las cuentas de tus trabajadores</p>
-    </div>
-    <button 
-      onclick={openCreateModal}
-      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium shadow-sm transition-colors flex items-center gap-2"
-    >
-      <span>+</span> Nuevo Usuario
-    </button>
-  </div>
+<svelte:head><title>Personal · MesaCapital</title></svelte:head>
 
-  {#if form?.error}
-    <div class="bg-red-50 text-red-700 p-4 rounded-xl mb-6 shadow-sm border border-red-200">
-      {form.error}
-    </div>
-  {/if}
-
-  <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
-            <th class="p-4 font-medium">Nombre de Usuario</th>
-            <th class="p-4 font-medium">Rol Asignado</th>
-            <th class="p-4 font-medium">Fecha Creación</th>
-            <th class="p-4 font-medium text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {#each data.personal as user}
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="p-4">
-                <span class="block font-bold text-slate-800">{user.nombre}</span>
-              </td>
-              <td class="p-4">
-                <span class="px-3 py-1 rounded-full text-xs font-bold border {getRoleBadge(user.rol)} uppercase tracking-wider">
-                  {user.rol}
-                </span>
-              </td>
-              <td class="p-4 text-sm text-slate-500">
-                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}
-              </td>
-              <td class="p-4 flex justify-end gap-2">
-                <button 
-                  onclick={() => openEditModal(user)}
-                  class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium"
-                >
-                  Editar
-                </button>
-                <form action="?/delete" method="POST" use:enhance onsubmit={(e) => !confirm(`¿Eliminar al usuario ${user.nombre}?`) && e.preventDefault()}>
-                  <input type="hidden" name="id" value={user.id} />
-                  <button 
-                    type="submit"
-                    class="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium"
-                  >
-                    Eliminar
-                  </button>
-                </form>
-              </td>
-            </tr>
-          {:else}
-            <tr>
-              <td colspan="4" class="p-8 text-center text-slate-500">
-                No hay usuarios registrados. Crea uno nuevo.
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  </div>
+<div class="mx-auto flex max-w-4xl flex-col gap-6">
+	<PageHeader title="Personal" description={data.limite !== null ? `${data.personal.length} de ${data.limite} usuarios de tu plan.` : 'Usuarios con acceso al sistema.'}>
+		{#snippet actions()}
+			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => openForm(null)} disabled={alLimite} title={alLimite ? 'Límite del plan alcanzado' : undefined}><UserPlus size={15} /> Nuevo usuario</button>
+		{/snippet}
+	</PageHeader>
+	<FormFeedback {form} />
+	<Card>
+		<DataTable rows={data.personal} {columns} rowKey={(u) => u.id} initialSort={{ id: 'nombre', dir: 'asc' }} searchPlaceholder="Buscar usuario…" emptyTitle="Sin usuarios">
+			{#snippet cell(u, col)}
+				{#if col.id === 'nombre'}
+					<div class="flex items-center gap-3">
+						<span class="grid h-8 w-8 place-items-center rounded-full bg-muted text-sm font-semibold">{u.nombre.charAt(0).toUpperCase()}</span>
+						<span class="font-medium">{u.nombre}</span>
+						{#if u.id === data.yo}<Badge variant="outline">Tú</Badge>{/if}
+					</div>
+				{:else if col.id === 'rol'}
+					{@const r = normalizeRol(u.rol)}
+					<Badge variant={r === 'jefe' ? 'success' : 'neutral'}>{ROL_LABELS[r]}</Badge>
+				{:else if col.id === 'acciones'}
+					<div class="flex justify-end">
+						<button type="button" class={cn(btn.base, btn.icon)} aria-label={`Editar ${u.nombre}`} onclick={() => openForm(u)}><Pencil size={14} /></button>
+						<form method="POST" action="?/delete" use:enhance={({ cancel }) => { if (!confirm(`¿Eliminar a ${u.nombre}? Perderá el acceso inmediatamente.`)) cancel(); }}>
+							<input type="hidden" name="id" value={u.id} />
+							<button class={cn(btn.base, btn.icon, 'hover:text-danger')} aria-label={`Eliminar ${u.nombre}`} disabled={u.id === data.yo}><Trash2 size={14} /></button>
+						</form>
+					</div>
+				{:else}
+					{col.format ? col.format(col.accessor(u), u) : col.accessor(u)}
+				{/if}
+			{/snippet}
+		</DataTable>
+	</Card>
 </div>
 
-{#if isModalOpen}
-  <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-      <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-        <h2 class="text-xl font-bold text-slate-800">
-          {editMode ? 'Editar Usuario' : 'Nuevo Usuario'}
-        </h2>
-        <button onclick={closeModal} class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
-      </div>
-      
-      <form action={editMode ? '?/update' : '?/create'} method="POST" use:enhance={() => {
-        return async ({ update }) => {
-          await update();
-          closeModal();
-        };
-      }} class="p-6 space-y-4">
-        
-        {#if editMode}
-          <input type="hidden" name="id" value={formId} />
-        {/if}
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Nombre (Usuario)</label>
-          <input type="text" name="nombre" bind:value={formNombre} required class="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" placeholder="Ej: Juan Perez" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Rol</label>
-          <select name="rol" bind:value={formRol} class="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white">
-            <option value="cajero">Cajero (Mostrador, Ventas, Cierre)</option>
-            <option value="bodeguero">Bodeguero (Nevera, Compras, Insumos)</option>
-            <option value="jefe">Jefe (Acceso Total)</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">
-            Contraseña {editMode ? '(Opcional: Dejar en blanco para no cambiarla)' : ''}
-          </label>
-          <input 
-            type="password" 
-            name="password" 
-            bind:value={formPassword} 
-            required={!editMode} 
-            class="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" 
-            placeholder="*********" 
-          />
-        </div>
-
-        <div class="pt-4 flex justify-end gap-3">
-          <button type="button" onclick={closeModal} class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors font-medium">
-            Cancelar
-          </button>
-          <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-bold shadow-sm">
-            Guardar
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-{/if}
+<Dialog bind:open title={editing ? `Editar a ${editing.nombre}` : 'Nuevo usuario'} size="sm">
+	<form id="user-form" method="POST" action={editing ? '?/update' : '?/create'} class="flex flex-col gap-4" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'success') open = false; }}>
+		{#if editing}<input type="hidden" name="id" value={editing.id} />{/if}
+		<Field label="Nombre de usuario" for="u-nombre" hint="Con este nombre inicia sesión">
+			<input id="u-nombre" name="nombre" bind:value={nombre} required maxlength="60" autocomplete="off" class={inputClass} />
+		</Field>
+		<Field label="Rol" for="u-rol" hint={ROL_INFO.find((r) => r.value === rol)?.desc}>
+			<select id="u-rol" name="rol" bind:value={rol} class={selectClass}>
+				{#each ROL_INFO as r (r.value)}<option value={r.value}>{ROL_LABELS[r.value]}</option>{/each}
+			</select>
+		</Field>
+		<Field label={editing ? 'Nueva contraseña' : 'Contraseña'} for="u-pwd" hint={editing ? 'Déjala vacía para no cambiarla. Si la cambias, se cerrarán sus sesiones.' : 'Mínimo 8 caracteres'} error={password && password.length < 8 ? 'Mínimo 8 caracteres' : undefined}>
+			<div class="relative">
+				<input id="u-pwd" name="password" type={showPwd ? 'text' : 'password'} bind:value={password} required={!editing} minlength="8" autocomplete="new-password" class={cn(inputClass, 'pr-9')} />
+				<button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'} onclick={() => (showPwd = !showPwd)}>
+					{#if showPwd}<EyeOff size={15} />{:else}<Eye size={15} />{/if}
+				</button>
+			</div>
+		</Field>
+	</form>
+	{#snippet footer()}
+		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (open = false)}>Cancelar</button>
+		<button type="submit" form="user-form" class={cn(btn.base, btn.primary)}>Guardar</button>
+	{/snippet}
+</Dialog>

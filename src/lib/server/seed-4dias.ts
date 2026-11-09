@@ -17,7 +17,7 @@ const sql = neon(process.env.DATABASE_URL);
 const db = drizzle(sql);
 
 async function simular4DiasFlujoCompleto() {
-  console.log('🚀 Iniciando inyección y simulación de 4 días de operación real en JuanchoPizza...');
+  console.log('🚀 Iniciando inyección y simulación de 4 días de operación real en MesaCapital...');
 
   // 1. Limpieza total previa
   await db.delete(cortesSemanales);

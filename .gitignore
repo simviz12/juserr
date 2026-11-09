@@ -26,3 +26,6 @@ vite.config.ts.timestamp-*
 coverage/
 *.log
 
+
+# Datos demo locales
+scripts/.demo-manifest.json

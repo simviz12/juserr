@@ -1,342 +1,288 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import { 
-    UtensilsCrossed, 
-    Pizza, 
-    Flame, 
-    Layers, 
-    Beef, 
-    CheckCircle2, 
-    AlertTriangle, 
-    Store,
-    Plus,
-    Save,
-    Sparkles,
-    SlidersHorizontal
-  } from '@lucide/svelte';
+	import { enhance } from '$app/forms';
+	import { Pizza, Flame, Sandwich, Layers, Beef, UtensilsCrossed, Plus, Pencil, Trash2, Pause, Play, Save, LoaderCircle } from '@lucide/svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import Switch from '$lib/components/ui/Switch.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
+	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import { inputClass, selectClass, btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { LINE_TOGGLES, RUBROS, itemEconomics } from '$lib/features/business/domain/lines';
+	import { FOOD_COST_TARGET, foodCostStatus } from '$lib/features/finance/domain/metrics';
+	import { formatCOP, formatNumber, formatPct } from '$lib/utils/format';
 
-  let { data, form } = $props();
+	let { data, form } = $props();
 
-  let nombreNegocio = $state(data.config?.nombreNegocio || 'ChuzoOS Gourmet Pasto');
-  let rubroPrincipal = $state(data.config?.rubroPrincipal || 'mixto');
-  let habilitarPizzas = $state(data.config?.habilitarPizzas ?? true);
-  let habilitarChuzos = $state(data.config?.habilitarChuzos ?? true);
-  let habilitarHamburguesas = $state(data.config?.habilitarHamburguesas ?? true);
-  let habilitarLasanas = $state(data.config?.habilitarLasanas ?? true);
-  let habilitarCarnes = $state(data.config?.habilitarCarnes ?? true);
+	const ICONS = { pizza: Pizza, chuzo: Flame, burger: Sandwich, lasana: Layers, carne: Beef } as const;
+	const iconFor = (codigo: string) => ICONS[codigo as keyof typeof ICONS] ?? UtensilsCrossed;
 
-  // Estados para modal de nuevo ítem
-  let showModalItem = $state(false);
-  let modalLineaId = $state(data.lineas[0]?.id || 1);
-  let modalNombre = $state('');
-  let modalPrecioVenta = $state('');
-  let modalPrecioCosto = $state('');
+	// Estado del formulario de ajustes (se reinicia cuando llegan datos nuevos)
+	let nombreNegocio = $state('');
+	let rubroPrincipal = $state('mixto');
+	let flags = $state<Record<string, boolean>>({});
+	$effect.pre(() => {
+		nombreNegocio = data.config.nombreNegocio;
+		rubroPrincipal = data.config.rubroPrincipal;
+		flags = Object.fromEntries(LINE_TOGGLES.map((t) => [t.field, Boolean(data.config[t.field] ?? true)]));
+	});
+	let dirty = $derived(
+		nombreNegocio !== data.config.nombreNegocio ||
+			rubroPrincipal !== data.config.rubroPrincipal ||
+			LINE_TOGGLES.some((t) => flags[t.field] !== Boolean(data.config[t.field] ?? true))
+	);
+	let saving = $state(false);
 
-  function openItemModal(lineaId: number) {
-    modalLineaId = lineaId;
-    modalNombre = '';
-    modalPrecioVenta = '';
-    modalPrecioCosto = '';
-    showModalItem = true;
-  }
+	// Diálogo de plato
+	type Item = (typeof data.items)[number];
+	let dialogOpen = $state(false);
+	let editing = $state<Item | null>(null);
+	let lineaId = $state(0);
+	let nombre = $state('');
+	let precioVenta = $state('');
+	let precioCosto = $state('');
+	let unidadesControl = $state('1');
+	let preview = $derived(itemEconomics(Number(precioVenta) || 0, Number(precioCosto) || 0));
+	let lineaDialog = $derived(data.lineas.find((l) => l.id === lineaId));
+	const controlDe = (productoId: number | null) => data.insumos.find((p) => p.id === productoId);
+
+	function openNew(id: number) {
+		editing = null;
+		lineaId = id;
+		nombre = '';
+		precioVenta = '';
+		precioCosto = '';
+		unidadesControl = '1';
+		dialogOpen = true;
+	}
+	function openEdit(item: Item) {
+		editing = item;
+		lineaId = item.lineaId;
+		nombre = item.nombre;
+		precioVenta = String(Number(item.precioVenta));
+		precioCosto = String(Number(item.precioCosto ?? 0));
+		unidadesControl = String(Number(item.unidadesControl ?? 1));
+		dialogOpen = true;
+	}
+
+	const fcVariant = (fc: number | null) => {
+		const s = foodCostStatus(fc);
+		return s === 'saludable' ? 'success' : s === 'vigilar' ? 'warning' : s === 'riesgo' ? 'danger' : 'neutral';
+	};
 </script>
 
-<div class="max-w-6xl mx-auto space-y-8">
-  <!-- Cabecera de Página -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-    <div>
-      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-black mb-2">
-        <Sparkles size={14} /> ChuzoOS / GastroFlow Multi-Rubro Engine
-      </div>
-      <h1 class="text-3xl font-black text-slate-900 tracking-tight">Arquitectura Multi-Rubro y Entrelazado</h1>
-      <p class="text-slate-500 font-medium mt-1">
-        Personaliza y activa las líneas gastronómicas que vende tu negocio: Chuzos, Asaderos, Hamburguesas, Lasañas o Pizzerías combinadas.
-      </p>
-    </div>
-  </div>
+<svelte:head><title>Líneas y combos · MesaCapital</title></svelte:head>
 
-  {#if form?.success}
-    <div class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl shadow-sm border border-emerald-200 flex items-center gap-3">
-      <CheckCircle2 size={24} class="text-emerald-600 shrink-0" />
-      <div>
-        <span class="font-bold block">Configuración Actualizada</span>
-        <span class="text-sm">{form.message}</span>
-      </div>
-    </div>
-  {/if}
+<div class="mx-auto flex max-w-6xl flex-col gap-6">
+	<PageHeader
+		title="Líneas y combos"
+		description="Define qué vende tu negocio y el costo de cada plato. Estos ajustes cambian el menú lateral, los reportes y el cierre de turno."
+	/>
 
-  {#if form?.error}
-    <div class="bg-red-50 text-red-800 p-5 rounded-2xl shadow-sm border border-red-200 flex items-center gap-3">
-      <AlertTriangle size={24} class="text-red-600 shrink-0" />
-      <div>
-        <span class="font-bold block">Error</span>
-        <span class="text-sm">{form.error}</span>
-      </div>
-    </div>
-  {/if}
+	<FormFeedback {form} />
 
-  <!-- Formulario de Configuración Principal -->
-  <form action="?/actualizarRubros" method="POST" use:enhance class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-8">
-    <div class="border-b border-slate-100 pb-6 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span class="p-2.5 bg-orange-50 text-orange-600 rounded-2xl">
-          <Store size={24} />
-        </span>
-        <div>
-          <h2 class="text-xl font-black text-slate-800">Identidad del Negocio</h2>
-          <p class="text-xs text-slate-400">Define cómo se presenta tu establecimiento en tickets, turnos y arqueos.</p>
-        </div>
-      </div>
-      <button 
-        type="submit" 
-        class="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
-      >
-        <Save size={18} /> Guardar Ajustes
-      </button>
-    </div>
+	<!-- Ajustes del negocio -->
+	<form
+		method="POST"
+		action="?/actualizarRubros"
+		use:enhance={() => {
+			saving = true;
+			return async ({ update }) => {
+				await update({ reset: false });
+				saving = false;
+			};
+		}}
+	>
+		<Card title="Identidad del negocio" description="El nombre aparece en el menú lateral, en los reportes PDF y en el reporte de cierre por WhatsApp.">
+			{#snippet actions()}
+				<button type="submit" class={cn(btn.base, btn.primary)} disabled={!dirty || saving}>
+					{#if saving}<LoaderCircle size={15} class="animate-spin" />{:else}<Save size={15} />{/if}
+					{dirty ? 'Guardar ajustes' : 'Guardado'}
+				</button>
+			{/snippet}
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <label for="nombre_negocio" class="block text-sm font-black text-slate-700 mb-2">Nombre Comercial del Negocio</label>
-        <input 
-          type="text" 
-          id="nombre_negocio" 
-          name="nombre_negocio" 
-          bind:value={nombreNegocio}
-          required
-          placeholder="Ej: ChuzoBurgers & Pizza Pasto"
-          class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-bold text-slate-800"
-        />
-      </div>
+			<div class="grid gap-4 md:grid-cols-2">
+				<Field label="Nombre comercial" for="nombre_negocio">
+					<input id="nombre_negocio" name="nombre_negocio" bind:value={nombreNegocio} required maxlength="80" class={inputClass} />
+				</Field>
+				<Field label="Tipo de negocio" for="rubro_principal" hint="Ajusta los textos del cierre de turno (p. ej. 'pinchos' en vez de 'porciones').">
+					<select id="rubro_principal" name="rubro_principal" bind:value={rubroPrincipal} class={selectClass}>
+						{#each RUBROS as r (r.value)}<option value={r.value}>{r.label}</option>{/each}
+					</select>
+				</Field>
+			</div>
 
-      <div>
-        <label for="rubro_principal" class="block text-sm font-black text-slate-700 mb-2">Modelo Operativo Principal</label>
-        <select 
-          id="rubro_principal" 
-          name="rubro_principal" 
-          bind:value={rubroPrincipal}
-          class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 outline-none font-bold text-slate-800 cursor-pointer"
-        >
-          <option value="mixto">🌟 Negocio Mixto / Combinado (Híbrido)</option>
-          <option value="chuzos">🍢 Especialidad: Chuzos, Asaderos y Parrilla</option>
-          <option value="hamburguesas">🍔 Especialidad: Hamburguesería & Comidas Rápidas</option>
-          <option value="pizzas">🍕 Especialidad: Pizzería Artesanal</option>
-          <option value="lasanas">🍝 Especialidad: Lasañas & Pastas al Horno</option>
-          <option value="carnes">🥩 Especialidad: Asadero de Carnes & Cortes</option>
-        </select>
-      </div>
-    </div>
+			<div class="mt-6">
+				<p class="text-sm font-medium">Líneas activas</p>
+				<p class="text-xs text-muted-foreground">Una línea apagada se oculta del catálogo. Apagar Pizzas también oculta la conciliación de pizzas en el cierre de turno.</p>
+				<ul class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+					{#each LINE_TOGGLES as t (t.field)}
+						{@const Icon = iconFor(t.codigo)}
+						<li
+							class="flex items-start gap-3 rounded-lg border p-3 transition-colors {flags[t.field]
+								? 'border-border bg-card'
+								: 'border-dashed border-border bg-muted/40 opacity-70'}"
+						>
+							<span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted"><Icon size={16} /></span>
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-medium">{t.label}</p>
+								<p class="text-xs text-muted-foreground">{t.description}</p>
+							</div>
+							<Switch name={t.form} label={`Activar ${t.label}`} bind:checked={flags[t.field]} />
+						</li>
+					{/each}
+				</ul>
+			</div>
+		</Card>
+	</form>
 
-    <!-- Switch de Rubros Activos Entrelazados -->
-    <div>
-      <h3 class="text-sm font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
-        <SlidersHorizontal size={16} /> Activar / Entrelazar Líneas de Producción
-      </h3>
-      <p class="text-xs text-slate-500 mb-4">Marca las categorías que vende tu cocina. El sistema unificará el inventario cruzado y las alertas:</p>
+	<!-- Catálogo -->
+	<div>
+		<h2 class="text-lg font-semibold tracking-tight">Menú y costeo</h2>
+		<p class="text-sm text-muted-foreground">
+			Precio de venta y costo de insumos por plato. El food cost ideal está entre {formatPct(FOOD_COST_TARGET.ideal, 0)} y {formatPct(FOOD_COST_TARGET.max, 0)}.
+		</p>
+	</div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Chuzos -->
-        <label class="p-5 border-2 rounded-2xl cursor-pointer transition-all flex items-start gap-4 {habilitarChuzos ? 'border-orange-500 bg-orange-50/40 shadow-xs' : 'border-slate-100 bg-slate-50/50 opacity-70'}">
-          <input type="checkbox" name="habilitar_chuzos" bind:checked={habilitarChuzos} class="w-5 h-5 accent-orange-600 rounded mt-1" />
-          <div class="flex-1">
-            <span class="text-2xl block mb-1">🍢</span>
-            <span class="font-black text-slate-800 block text-base">Parrilla & Chuzos</span>
-            <span class="text-xs text-slate-500">Pinchos ensartados, carbón, tocineta y pechugas.</span>
-          </div>
-        </label>
+	<div class="grid gap-4 lg:grid-cols-2">
+		{#each data.lineas as linea (linea.id)}
+			{@const Icon = iconFor(linea.codigo)}
+			{@const items = data.items.filter((i) => i.lineaId === linea.id)}
+			{@const activos = items.filter((i) => i.activo)}
+			{@const avgFc = activos.length
+				? activos.reduce((a, i) => a + (itemEconomics(Number(i.precioVenta), Number(i.precioCosto ?? 0)).foodCost ?? 0), 0) / activos.length
+				: null}
+			<Card class={linea.activo ? '' : 'opacity-60'} bodyClass="p-0">
+				<header class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+					<div class="flex min-w-0 items-center gap-3">
+						<span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted"><Icon size={17} /></span>
+						<div class="min-w-0">
+							<h3 class="truncate text-sm font-semibold">{linea.nombre}</h3>
+							<p class="text-xs text-muted-foreground">
+								{items.length} {items.length === 1 ? 'plato' : 'platos'} · unidad: {linea.unidadPorcion}
+								{#if avgFc !== null}· food cost prom. {formatPct(avgFc, 0)}{/if}
+							</p>
+						</div>
+					</div>
+					<div class="flex items-center gap-2">
+						{#if !linea.activo}<Badge variant="outline">Inactiva</Badge>{/if}
+						<button type="button" class={cn(btn.base, btn.outline, btn.sm)} onclick={() => openNew(linea.id)} disabled={!linea.activo}>
+							<Plus size={14} /> Plato
+						</button>
+					</div>
+				</header>
 
-        <!-- Hamburguesas -->
-        <label class="p-5 border-2 rounded-2xl cursor-pointer transition-all flex items-start gap-4 {habilitarHamburguesas ? 'border-amber-500 bg-amber-50/40 shadow-xs' : 'border-slate-100 bg-slate-50/50 opacity-70'}">
-          <input type="checkbox" name="habilitar_hamburguesas" bind:checked={habilitarHamburguesas} class="w-5 h-5 accent-amber-600 rounded mt-1" />
-          <div class="flex-1">
-            <span class="text-2xl block mb-1">🍔</span>
-            <span class="font-black text-slate-800 block text-base">Hamburguesas & Combos</span>
-            <span class="text-xs text-slate-500">Pan artesanal, tortas de carne, papas a la francesa.</span>
-          </div>
-        </label>
+				{#if linea.codigo !== 'pizza' && linea.activo}
+					{@const control = controlDe(linea.productoControlId)}
+					<form method="POST" action="?/actualizarControl" use:enhance={() => async ({ update }) => update({ reset: false })} class="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-5 py-2.5 text-xs">
+						<input type="hidden" name="linea_id" value={linea.id} />
+						<span class="text-muted-foreground">En el cierre se cuenta:</span>
+						<select
+							name="producto_control_id"
+							value={linea.productoControlId ?? ''}
+							onchange={(e) => e.currentTarget.form?.requestSubmit()}
+							aria-label={`Insumo de control de ${linea.nombre}`}
+							class="h-7 rounded border border-input bg-card px-2 text-xs"
+						>
+							{#each data.insumos as p (p.id)}<option value={p.id}>{p.nombre}</option>{/each}
+						</select>
+						{#if control}
+							<span class="ml-auto text-muted-foreground tabular-nums">En bodega: <span class="font-medium text-foreground">{formatNumber(control.stock ?? 0)}</span></span>
+						{/if}
+					</form>
+				{/if}
 
-        <!-- Pizzas -->
-        <label class="p-5 border-2 rounded-2xl cursor-pointer transition-all flex items-start gap-4 {habilitarPizzas ? 'border-red-500 bg-red-50/40 shadow-xs' : 'border-slate-100 bg-slate-50/50 opacity-70'}">
-          <input type="checkbox" name="habilitar_pizzas" bind:checked={habilitarPizzas} class="w-5 h-5 accent-red-600 rounded mt-1" />
-          <div class="flex-1">
-            <span class="text-2xl block mb-1">🍕</span>
-            <span class="font-black text-slate-800 block text-base">Pizzas & Ruedas</span>
-            <span class="text-xs text-slate-500">Bolas de masa cruda, porciones horneadas y vitrina.</span>
-          </div>
-        </label>
-
-        <!-- Lasañas -->
-        <label class="p-5 border-2 rounded-2xl cursor-pointer transition-all flex items-start gap-4 {habilitarLasanas ? 'border-purple-500 bg-purple-50/40 shadow-xs' : 'border-slate-100 bg-slate-50/50 opacity-70'}">
-          <input type="checkbox" name="habilitar_lasanas" bind:checked={habilitarLasanas} class="w-5 h-5 accent-purple-600 rounded mt-1" />
-          <div class="flex-1">
-            <span class="text-2xl block mb-1">🍝</span>
-            <span class="font-black text-slate-800 block text-base">Lasañas al Horno</span>
-            <span class="text-xs text-slate-500">Bandejas familiares, porciones individuales y pasta.</span>
-          </div>
-        </label>
-
-        <!-- Cortes y Asados -->
-        <label class="p-5 border-2 rounded-2xl cursor-pointer transition-all flex items-start gap-4 {habilitarCarnes ? 'border-rose-500 bg-rose-50/40 shadow-xs' : 'border-slate-100 bg-slate-50/50 opacity-70'}">
-          <input type="checkbox" name="habilitar_carnes" bind:checked={habilitarCarnes} class="w-5 h-5 accent-rose-600 rounded mt-1" />
-          <div class="flex-1">
-            <span class="text-2xl block mb-1">🥩</span>
-            <span class="font-black text-slate-800 block text-base">Asados & Carnes en Kilos</span>
-            <span class="text-xs text-slate-500">Lomos, costillas, pulpa por peso y mermas por asado.</span>
-          </div>
-        </label>
-      </div>
-    </div>
-  </form>
-
-  <!-- Catálogo de Líneas y Productos Entrelazados -->
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-black text-slate-900 tracking-tight">Catálogo de Productos por Línea</h2>
-        <p class="text-xs text-slate-500">Administra los precios de venta al público y los costos de insumo por producto.</p>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {#each data.lineas as linea}
-        {@const itemsDeLinea = data.items.filter(i => i.lineaId === linea.id)}
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-              <div class="flex items-center gap-2.5">
-                <span class="p-2 bg-orange-50 text-orange-600 rounded-xl font-bold">
-                  {#if linea.codigo === 'chuzo'}🍢{:else if linea.codigo === 'burger'}🍔{:else if linea.codigo === 'pizza'}🍕{:else if linea.codigo === 'lasana'}🍝{:else}🥩{/if}
-                </span>
-                <div>
-                  <h3 class="font-black text-slate-800 text-base">{linea.nombre}</h3>
-                  <span class="text-[11px] font-bold text-slate-400 uppercase">Unidad: {linea.unidadPorcion}</span>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                onclick={() => openItemModal(linea.id)}
-                class="p-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl font-black transition-colors cursor-pointer"
-                title="Añadir plato a esta línea"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-
-            <!-- Listado de ítems -->
-            {#if itemsDeLinea.length === 0}
-              <div class="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs text-slate-400">
-                No hay productos registrados en esta línea. Haz clic en <strong>+</strong> para añadir el primero.
-              </div>
-            {:else}
-              <div class="space-y-2">
-                {#each itemsDeLinea as item}
-                  <div class="p-3 bg-slate-50/70 hover:bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
-                    <div>
-                      <p class="text-sm font-bold text-slate-800">{item.nombre}</p>
-                      <p class="text-[11px] text-slate-400">Costo aprox: ${Number(item.precioCosto || 0).toLocaleString('es-CO')}</p>
-                    </div>
-                    <span class="font-black text-orange-600 text-sm">
-                      ${Number(item.precioVenta).toLocaleString('es-CO')}
-                    </span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-
-          <div class="mt-6 pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
-            <span>{itemsDeLinea.length} productos activos</span>
-            <button 
-              type="button" 
-              onclick={() => openItemModal(linea.id)}
-              class="font-black text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
-            >
-              + Agregar plato
-            </button>
-          </div>
-        </div>
-      {/each}
-    </div>
-  </div>
+				{#if items.length === 0}
+					<EmptyState icon={Icon} title="Sin platos" description={linea.activo ? 'Agrega el primero con el botón “Plato”.' : 'Activa la línea para agregar platos.'} />
+				{:else}
+					<ul class="divide-y divide-border">
+						{#each items as item (item.id)}
+							{@const venta = Number(item.precioVenta)}
+							{@const eco = itemEconomics(venta, Number(item.precioCosto ?? 0))}
+							<li class="flex items-center gap-3 px-5 py-3 {item.activo ? '' : 'opacity-50'}">
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">{item.nombre}{#if !item.activo}<span class="ml-2 text-xs font-normal text-muted-foreground">(pausado)</span>{/if}</p>
+									<p class="text-xs text-muted-foreground tabular-nums">Costo {formatCOP(Number(item.precioCosto ?? 0))} · margen {formatCOP(eco.margen)}</p>
+								</div>
+								<Badge variant={fcVariant(eco.foodCost)}>{formatPct(eco.foodCost, 0)}</Badge>
+								<span class="w-20 text-right text-sm font-semibold tabular-nums">{formatCOP(venta)}</span>
+								<div class="flex">
+									<button type="button" class={cn(btn.base, btn.icon)} aria-label={`Editar ${item.nombre}`} onclick={() => openEdit(item)}><Pencil size={14} /></button>
+									<form method="POST" action="?/toggleItem" use:enhance>
+										<input type="hidden" name="id" value={item.id} />
+										<button class={cn(btn.base, btn.icon)} aria-label={item.activo ? `Pausar ${item.nombre}` : `Reactivar ${item.nombre}`} title={item.activo ? 'Pausar' : 'Reactivar'}>
+											{#if item.activo}<Pause size={14} />{:else}<Play size={14} />{/if}
+										</button>
+									</form>
+									<form
+										method="POST"
+										action="?/eliminarItem"
+										use:enhance={({ cancel }) => {
+											if (!confirm(`¿Eliminar "${item.nombre}"? Esta acción no se puede deshacer.`)) cancel();
+										}}
+									>
+										<input type="hidden" name="id" value={item.id} />
+										<button class={cn(btn.base, btn.icon, 'hover:text-danger')} aria-label={`Eliminar ${item.nombre}`} title="Eliminar"><Trash2 size={14} /></button>
+									</form>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</Card>
+		{/each}
+	</div>
 </div>
 
-<!-- Modal para Registrar Nuevo Plato en Línea Gastronómica -->
-{#if showModalItem}
-  <div class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-6 animate-in fade-in zoom-in-95 duration-150">
-      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-        <h3 class="text-lg font-black text-slate-900">Nuevo Producto Gastronómico</h3>
-        <button type="button" onclick={() => showModalItem = false} class="text-slate-400 hover:text-slate-700 text-2xl font-bold">×</button>
-      </div>
-
-      <form action="?/crearItem" method="POST" use:enhance={() => {
-        return async ({ update }) => {
-          await update();
-          showModalItem = false;
-        };
-      }} class="space-y-4">
-        <input type="hidden" name="linea_id" value={modalLineaId} />
-
-        <div>
-          <label for="nombre_item" class="block text-xs font-black uppercase text-slate-500 mb-1">Nombre del Plato / Combo</label>
-          <input 
-            type="text" 
-            id="nombre_item" 
-            name="nombre" 
-            bind:value={modalNombre}
-            required 
-            placeholder="Ej: Hamburguesa Doble Queso + Papas"
-            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-800"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label for="precio_venta" class="block text-xs font-black uppercase text-slate-500 mb-1">Precio de Venta ($)</label>
-            <input 
-              type="number" 
-              id="precio_venta" 
-              name="precio_venta" 
-              bind:value={modalPrecioVenta}
-              required 
-              min="0" 
-              step="100" 
-              placeholder="18000"
-              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-black text-slate-900"
-            />
-          </div>
-
-          <div>
-            <label for="precio_costo" class="block text-xs font-black uppercase text-slate-500 mb-1">Costo Insumos ($)</label>
-            <input 
-              type="number" 
-              id="precio_costo" 
-              name="precio_costo" 
-              bind:value={modalPrecioCosto}
-              min="0" 
-              step="100" 
-              placeholder="7500"
-              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none font-bold text-slate-700"
-            />
-          </div>
-        </div>
-
-        <div class="pt-4 flex gap-3">
-          <button 
-            type="button" 
-            onclick={() => showModalItem = false}
-            class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button 
-            type="submit" 
-            class="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl transition-all shadow-md cursor-pointer"
-          >
-            Guardar Plato
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-{/if}
+<Dialog bind:open={dialogOpen} title={editing ? 'Editar plato' : 'Nuevo plato'} description={data.lineas.find((l) => l.id === lineaId)?.nombre}>
+	<form
+		id="item-form"
+		method="POST"
+		action={editing ? '?/actualizarItem' : '?/crearItem'}
+		class="flex flex-col gap-4"
+		use:enhance={() =>
+			async ({ result, update }) => {
+				await update();
+				if (result.type === 'success') dialogOpen = false;
+			}}
+	>
+		<input type="hidden" name="linea_id" value={lineaId} />
+		{#if editing}<input type="hidden" name="id" value={editing.id} />{/if}
+		<Field label="Nombre" for="item-nombre">
+			<input id="item-nombre" name="nombre" bind:value={nombre} required maxlength="120" placeholder="Ej: Hamburguesa doble queso + papas" class={inputClass} />
+		</Field>
+		<div class="grid grid-cols-2 gap-3">
+			<Field label="Precio de venta" for="item-venta">
+				<input id="item-venta" name="precio_venta" type="number" min="1" step="100" bind:value={precioVenta} required class={inputClass} />
+			</Field>
+			<Field label="Costo de insumos" for="item-costo">
+				<input id="item-costo" name="precio_costo" type="number" min="0" step="100" bind:value={precioCosto} class={inputClass} />
+			</Field>
+		</div>
+		{#if lineaDialog && lineaDialog.codigo !== 'pizza'}
+			{@const control = controlDe(lineaDialog.productoControlId)}
+			<Field
+				label={`¿Cuántos “${control?.nombre ?? 'insumo de control'}” usa una venta?`}
+				for="item-unidades"
+				hint="Normalmente 1. Ej: un combo doble que lleva 2 panes = 2. Así el cierre sabe cuántas ventas salieron de lo contado."
+			>
+				<input id="item-unidades" name="unidades_control" type="number" min="0.25" max="50" step="0.25" bind:value={unidadesControl} required class={cn(inputClass, 'w-28')} />
+			</Field>
+		{:else}
+			<input type="hidden" name="unidades_control" value="1" />
+		{/if}
+		{#if Number(precioVenta) > 0}
+			<div class="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm">
+				<span class="text-muted-foreground">Margen <span class="font-medium text-foreground tabular-nums">{formatCOP(preview.margen)}</span></span>
+				<Badge variant={fcVariant(preview.foodCost)}>Food cost {formatPct(preview.foodCost, 0)}</Badge>
+			</div>
+		{/if}
+	</form>
+	{#snippet footer()}
+		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (dialogOpen = false)}>Cancelar</button>
+		<button type="submit" form="item-form" class={cn(btn.base, btn.primary)}>{editing ? 'Guardar cambios' : 'Agregar plato'}</button>
+	{/snippet}
+</Dialog>

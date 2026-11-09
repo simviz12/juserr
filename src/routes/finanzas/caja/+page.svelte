@@ -1,103 +1,89 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  let { form, data } = $props();
+	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
+	import { navigating } from '$app/state';
+	import { LockKeyhole, LoaderCircle, CircleCheck, Banknote, Smartphone, Receipt, ClipboardList } from '@lucide/svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import StatTile from '$lib/components/ui/StatTile.svelte';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
+	import DataTable from '$lib/components/data-table/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table/types';
+	import { inputClass, btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { formatCOP, formatDate } from '$lib/utils/format';
+	import { businessDayKey } from '$lib/features/finance/domain/period';
 
-  let fechaHoy = new Date().toISOString().split('T')[0];
-  let fechaSeleccionada = $state(fechaHoy);
+	let { data, form } = $props();
+
+	let p = $derived(data.preview);
+	let loading = $derived(navigating.to?.url.pathname === '/finanzas/caja');
+	let submitting = $state(false);
+	let fecha = $state('');
+	$effect.pre(() => {
+		fecha = p.dayKey;
+	});
+	const hoy = businessDayKey(new Date());
+	const dayLabel = (k: string) => formatDate(k + 'T12:00:00-05:00');
+
+	type Cierre = (typeof data.ultimosCierres)[number];
+	const money = (v: string | number | null) => formatCOP(Number(v ?? 0));
+	const columns: Column<Cierre>[] = [
+		{ id: 'fecha', header: 'Día', accessor: (c) => (c.fecha ? c.fecha.slice(0, 10) : ''), format: (v) => (v ? dayLabel(String(v)) : '—') },
+		{ id: 'efectivo', header: 'Efectivo', accessor: (c) => c.efectivo, format: money, align: 'right' },
+		{ id: 'nequi', header: 'Nequi', accessor: (c) => c.transferencias, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'gastos', header: 'Gastos', accessor: (c) => c.gastos, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'total', header: 'Total', accessor: (c) => c.efectivo + c.transferencias, format: money, align: 'right' }
+	];
 </script>
 
-<div class="max-w-4xl mx-auto space-y-6">
-  <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-    <div class="inline-flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-bold mb-2">
-      <span>📥</span> Cierre Diario de Operaciones
-    </div>
-    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Cierre de Caja Diario</h1>
-    <p class="text-slate-500 text-sm mt-1">Consolida automáticamente todos los turnos y gastos ocurridos en una fecha para fijar las finanzas del día.</p>
-  </div>
+<div class="flex flex-col gap-6">
+	<FormFeedback {form} />
 
-  {#if form?.success}
-    <div class="bg-emerald-50 text-emerald-800 p-5 rounded-2xl shadow-sm border border-emerald-200 flex items-center gap-3">
-      <span class="text-2xl">✅</span>
-      <div>
-        <span class="font-bold text-base">¡Cierre consolidado con éxito!</span>
-        <p class="text-xs text-emerald-700 mt-0.5">{form.message}</p>
-      </div>
-    </div>
-  {/if}
+	<div class="grid items-start gap-6 lg:grid-cols-[360px_1fr]">
+		<Card title="Cerrar caja del día" description="Consolida todos los turnos de una jornada en un cierre diario.">
+			<form
+				method="POST"
+				class="flex flex-col gap-4"
+				use:enhance={() => {
+					submitting = true;
+					return async ({ update }) => {
+						await update({ reset: false });
+						submitting = false;
+					};
+				}}
+			>
+				<Field label="Jornada" for="fecha" hint="De 04:00 a 04:00 del día siguiente">
+					<input id="fecha" name="fecha" type="date" max={hoy} bind:value={fecha} onchange={() => goto(`?fecha=${fecha}`, { keepFocus: true, noScroll: true, replaceState: true })} required class={inputClass} />
+				</Field>
+				{#if p.yaCerrado}
+					<Badge variant="success" class="self-start"><CircleCheck size={12} /> Este día ya está cerrado</Badge>
+				{/if}
+				<button type="submit" class={cn(btn.base, btn.primary)} disabled={submitting || loading || p.yaCerrado || (p.turnos === 0 && p.gastos === 0)}>
+					{#if submitting}<LoaderCircle size={15} class="animate-spin" />{:else}<LockKeyhole size={15} />{/if}
+					Cerrar caja del {dayLabel(p.dayKey)}
+				</button>
+				{#if !p.yaCerrado && p.turnos === 0 && p.gastos === 0 && !loading}
+					<p class="text-xs text-muted-foreground">No hay movimientos en esta jornada.</p>
+				{/if}
+			</form>
+		</Card>
 
-  {#if form?.error}
-    <div class="bg-red-50 text-red-700 p-5 rounded-2xl shadow-sm border border-red-200 flex items-center gap-3">
-      <span class="text-2xl">⚠️</span>
-      <div>
-        <span class="font-bold text-base">No se pudo procesar</span>
-        <p class="text-xs text-red-600 mt-0.5">{form.error}</p>
-      </div>
-    </div>
-  {/if}
+		<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+			{#if loading}
+				{#each Array(4) as _, i (i)}<Skeleton class="h-[92px]" />{/each}
+			{:else}
+				<StatTile label="Turnos" value={String(p.turnos)} icon={ClipboardList} hint={dayLabel(p.dayKey)} />
+				<StatTile label="Efectivo" value={formatCOP(p.efectivo)} icon={Banknote} />
+				<StatTile label="Nequi" value={formatCOP(p.transferencias)} icon={Smartphone} />
+				<StatTile label="Gastos" value={formatCOP(p.gastos)} icon={Receipt} hint={`Total ventas ${formatCOP(p.efectivo + p.transferencias)}`} />
+			{/if}
+		</div>
+	</div>
 
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8">
-    <form method="POST" use:enhance class="space-y-6">
-      <div>
-        <label for="fecha" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Fecha a Consolidar</label>
-        <div class="max-w-md">
-          <input 
-            type="date" 
-            id="fecha" 
-            name="fecha" 
-            bind:value={fechaSeleccionada}
-            required 
-            class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-semibold text-slate-800"
-          />
-        </div>
-        <p class="text-xs text-slate-400 mt-2">
-          El sistema sumará todos los turnos registrados (Efectivo y Nequi) más los gastos reportados en esta fecha exacta.
-        </p>
-      </div>
-
-      <div class="pt-4 border-t border-slate-100">
-        <button 
-          type="submit" 
-          class="w-full md:w-auto py-3.5 px-8 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all shadow-md flex justify-center items-center gap-2"
-        >
-          <span>📥</span> Generar Cierre del Día
-        </button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Historial de cierres de caja -->
-  {#if data?.ultimosCierres && data.ultimosCierres.length > 0}
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="p-6 border-b border-slate-100">
-        <h2 class="text-lg font-extrabold text-slate-900">Últimos Cierres Registrados</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Historial de días consolidados en la base de datos.</p>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider font-extrabold border-b border-slate-100">
-              <th class="p-4 pl-6">Fecha</th>
-              <th class="p-4 text-right">Efectivo</th>
-              <th class="p-4 text-right">Nequi</th>
-              <th class="p-4 text-right text-red-500">Gastos</th>
-              <th class="p-4 text-right pr-6 font-bold text-slate-800">Total Consolidado</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 text-sm">
-            {#each data.ultimosCierres as c}
-              <tr class="hover:bg-slate-50/70 transition-colors">
-                <td class="p-4 pl-6 font-bold text-slate-800">
-                  {c.fecha ? new Date(c.fecha).toISOString().split('T')[0] : '-'}
-                </td>
-                <td class="p-4 text-right text-slate-600 font-semibold">${Number(c.totalEfectivo).toLocaleString('es-CO')}</td>
-                <td class="p-4 text-right text-purple-600 font-semibold">${Number(c.totalTransferencias).toLocaleString('es-CO')}</td>
-                <td class="p-4 text-right text-red-500 font-semibold">-${Number(c.totalGastos).toLocaleString('es-CO')}</td>
-                <td class="p-4 text-right pr-6 font-black text-slate-900">${(Number(c.totalEfectivo) + Number(c.totalTransferencias)).toLocaleString('es-CO')}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  {/if}
+	<Card title="Cierres registrados" description="Últimos 30 días cerrados.">
+		<DataTable rows={data.ultimosCierres} {columns} rowKey={(c) => c.id} initialSort={{ id: 'fecha', dir: 'desc' }} emptyTitle="Aún no hay cierres" searchPlaceholder="Buscar…" />
+	</Card>
 </div>

@@ -1,85 +1,81 @@
 import { db } from '$lib/server/db';
 import { turnos, gastos, cierresDia } from '$lib/server/schema';
-import { sql, and, gte, lt, desc } from 'drizzle-orm';
-import { fail, redirect } from '@sveltejs/kit';
+import { and, gte, lt, desc, eq } from 'drizzle-orm';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getRange } from '$lib/utils/date';
+import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
+import { toNumber } from '$lib/features/finance/domain/metrics';
 
-export const load: PageServerLoad = async ({ locals }) => {
-    if (!locals.user || locals.user.rol !== 'jefe') {
-        throw redirect(302, '/');
-    }
+/** Fecha con la que se guarda el cierre: mediodía de Colombia del día de negocio (estable entre servidores). */
+const cierreDate = (dayKey: string) => new Date(dayKey + 'T12:00:00-05:00');
 
-    const ultimosCierres = await db.select()
-        .from(cierresDia)
-        .orderBy(desc(cierresDia.fecha))
-        .limit(15);
+async function resumenDelDia(dayKey: string) {
+	const { start, end } = currentRange('diario', dayKey);
+	const [ts, gs, existentes] = await Promise.all([
+		db.select({ monto: turnos.monto, transferencias: turnos.transferencias }).from(turnos).where(and(gte(turnos.fecha, start), lt(turnos.fecha, end))),
+		db.select({ monto: gastos.monto }).from(gastos).where(and(gte(gastos.fecha, start), lt(gastos.fecha, end))),
+		// Compatibilidad: cierres antiguos se guardaban a medianoche (hora servidor)
+		db.select({ id: cierresDia.id, fecha: cierresDia.fecha }).from(cierresDia).where(and(gte(cierresDia.fecha, new Date(start.getTime() - 86_400_000)), lt(cierresDia.fecha, end)))
+	]);
+	const efectivo = ts.reduce((a, t) => a + toNumber(t.monto), 0);
+	const transferencias = ts.reduce((a, t) => a + toNumber(t.transferencias), 0);
+	const totalGastos = gs.reduce((a, x) => a + toNumber(x.monto), 0);
+	// La fecha UTC del registro coincide con el día cerrado (nuevos a mediodía Colombia, antiguos a medianoche)
+	const yaCerrado = existentes.some((c) => c.fecha?.toISOString().slice(0, 10) === dayKey);
+	return { dayKey, turnos: ts.length, efectivo, transferencias, gastos: totalGastos, yaCerrado };
+}
 
-    return {
-        ultimosCierres
-    };
+export const load: PageServerLoad = async ({ url }) => {
+	const f = url.searchParams.get('fecha');
+	const dayKey = isValidDateKey(f) ? f : businessDayKey(new Date());
+
+	const [preview, ultimosCierres] = await Promise.all([
+		resumenDelDia(dayKey),
+		db.select().from(cierresDia).orderBy(desc(cierresDia.fecha)).limit(30)
+	]);
+
+	return {
+		preview,
+		ultimosCierres: ultimosCierres.map((c) => ({
+			id: c.id,
+			fecha: c.fecha ? c.fecha.toISOString() : null,
+			efectivo: toNumber(c.totalEfectivo),
+			transferencias: toNumber(c.totalTransferencias),
+			gastos: toNumber(c.totalGastos)
+		}))
+	};
 };
 
 export const actions: Actions = {
-    default: async ({ request, locals }) => {
-        if (!locals.user || locals.user.rol !== 'jefe') return fail(401, { error: 'No autorizado' });
+	default: async ({ request }) => {
+		const formData = await request.formData();
+		const dayKey = formData.get('fecha')?.toString() ?? '';
+		if (!isValidDateKey(dayKey)) return fail(400, { error: 'Selecciona una fecha válida.' });
+		if (dayKey > businessDayKey(new Date())) return fail(400, { error: 'No puedes cerrar un día que aún no ha ocurrido.' });
 
-        const formData = await request.formData();
-        const fechaStr = formData.get('fecha')?.toString();
+		const r = await resumenDelDia(dayKey);
+		if (r.yaCerrado) return fail(409, { error: `El día ${dayKey} ya tiene un cierre de caja registrado.` });
+		if (r.turnos === 0 && r.gastos === 0) {
+			return fail(400, { error: 'No hay turnos ni gastos registrados en esa fecha.' });
+		}
 
-        if (!fechaStr) {
-            return fail(400, { error: 'Debe seleccionar una fecha.' });
-        }
+		try {
+			await db.insert(cierresDia).values({
+				fecha: cierreDate(dayKey),
+				totalEfectivo: r.efectivo.toString(),
+				totalTransferencias: r.transferencias.toString(),
+				totalTurnos: r.efectivo.toString(),
+				totalGastos: r.gastos.toString()
+			});
+		} catch (err) {
+			console.error(err);
+			return fail(500, { error: 'Error al guardar el cierre de caja.' });
+		}
 
-        const dateObj = new Date(fechaStr + 'T00:00:00');
-        if (isNaN(dateObj.getTime())) {
-            return fail(400, { error: 'Fecha inválida.' });
-        }
-
-        const { start, end } = getRange('diario', fechaStr);
-
-        try {
-            // 1. Obtener suma de turnos en ese rango de fecha
-            const [sumaTurnos] = await db.select({
-                efectivo: sql<number>`SUM(CAST(${turnos.monto} AS NUMERIC))`,
-                transferencias: sql<number>`SUM(CAST(${turnos.transferencias} AS NUMERIC))`
-            })
-            .from(turnos)
-            .where(and(gte(turnos.fecha, start), lt(turnos.fecha, end)));
-
-            const totalTurnos = Number(sumaTurnos?.efectivo || 0);
-            const totalTransferencias = Number(sumaTurnos?.transferencias || 0);
-
-            // 2. Obtener suma de gastos
-            const [sumaGastos] = await db.select({
-                total: sql<number>`SUM(${gastos.monto})`
-            })
-            .from(gastos)
-            .where(and(gte(gastos.fecha, start), lt(gastos.fecha, end)));
-
-            const totalGastos = Number(sumaGastos?.total || 0);
-
-            if (totalTurnos === 0 && totalGastos === 0 && totalTransferencias === 0) {
-                throw new Error('NO_MOVIMIENTOS');
-            }
-
-            // 3. Guardar Cierre Diario
-            await db.insert(cierresDia).values({
-                fecha: dateObj,
-                totalEfectivo: totalTurnos.toString(),
-                totalTransferencias: totalTransferencias.toString(),
-                totalTurnos: totalTurnos.toString(),
-                totalGastos: totalGastos.toString()
-            });
-
-            const granTotal = totalTurnos + totalTransferencias;
-            return { success: true, message: `Cierre del día ${fechaStr} guardado. Físico: $${totalTurnos.toLocaleString('es-CO')} | Nequi: $${totalTransferencias.toLocaleString('es-CO')} | Total Consolidado: $${granTotal.toLocaleString('es-CO')}` };
-        } catch (err: any) {
-            console.error(err);
-            if (err.message === 'NO_MOVIMIENTOS') {
-                return fail(400, { error: 'No hay movimientos (turnos ni gastos) registrados en esta fecha.' });
-            }
-            return fail(500, { error: 'Error al procesar el cierre de caja diario.' });
-        }
-    }
+		const cop = (n: number) => '$' + n.toLocaleString('es-CO');
+		return {
+			success: true,
+			message: `Caja del ${dayKey} cerrada: efectivo ${cop(r.efectivo)} · Nequi ${cop(r.transferencias)} · total ${cop(r.efectivo + r.transferencias)}.`
+		};
+	}
 };

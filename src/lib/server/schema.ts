@@ -164,6 +164,8 @@ export const lineasGastronomicas = pgTable('lineas_gastronomicas', {
   unidadPorcion: text('unidad_porcion').notNull().default('unidad'), // pincho, porcion, combo, bandeja, libra
   precioPromedio: numeric('precio_promedio', { precision: 10, scale: 2 }).default('0'),
   activo: boolean('activo').default(true),
+  // Insumo que se cuenta en el cierre de turno para controlar la línea (pan, chuzo armado, porción...)
+  productoControlId: integer('producto_control_id').references(() => productos.id),
 });
 
 export const itemsLinea = pgTable('items_linea', {
@@ -173,6 +175,35 @@ export const itemsLinea = pgTable('items_linea', {
   precioVenta: numeric('precio_venta', { precision: 10, scale: 2 }).notNull().default('0'),
   precioCosto: numeric('precio_costo', { precision: 10, scale: 2 }).default('0'),
   activo: boolean('activo').default(true),
+  // Unidades del insumo de control que consume una venta de este plato (p. ej. 1 pan)
+  unidadesControl: real('unidades_control').default(1),
+});
+
+// Conciliación por inventario de cada línea en un cierre de turno (puestos callejeros)
+export const cierresLinea = pgTable('cierres_linea', {
+  id: serial('id').primaryKey(),
+  turnoId: integer('turno_id').references(() => turnos.id).notNull(),
+  lineaId: integer('linea_id').references(() => lineasGastronomicas.id).notNull(),
+  productoId: integer('producto_id').references(() => productos.id),
+  inicial: real('inicial').notNull(),
+  sobrantes: real('sobrantes').notNull(),
+  mermas: real('mermas').notNull().default(0),
+  consumidas: real('consumidas').notNull(),
+  ventaEsperada: numeric('venta_esperada', { precision: 12, scale: 2 }).notNull().default('0'),
+  desgloseCompleto: boolean('desglose_completo').default(false),
+  fecha: timestamp('fecha').defaultNow(),
+});
+
+// Platos vendidos por turno (desglose opcional del cierre)
+export const ventasItems = pgTable('ventas_items', {
+  id: serial('id').primaryKey(),
+  turnoId: integer('turno_id').references(() => turnos.id).notNull(),
+  itemId: integer('item_id').references(() => itemsLinea.id).notNull(),
+  lineaId: integer('linea_id').references(() => lineasGastronomicas.id).notNull(),
+  cantidad: real('cantidad').notNull(),
+  precioUnitario: numeric('precio_unitario', { precision: 10, scale: 2 }).notNull(),
+  costoUnitario: numeric('costo_unitario', { precision: 10, scale: 2 }).default('0'),
+  fecha: timestamp('fecha').defaultNow(),
 });
 
 // ── GESTIÓN SAAS (Suscripciones, Planes, Facturación y Límites de Negocio) ──

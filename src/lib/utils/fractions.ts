@@ -1,5 +1,6 @@
 export function formatFraction(value: number): string {
   if (value === 0 || isNaN(value)) return '0';
+  if (value < 0) return '-' + formatFraction(-value);
   
   const whole = Math.floor(value);
   const decimal = Number((value - whole).toFixed(4));

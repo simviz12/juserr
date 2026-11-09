@@ -1,36 +1,41 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  let { children } = $props();
+	import { page } from '$app/state';
+	import { ChartPie, Inbox, Scale, FileText } from '@lucide/svelte';
+	let { children } = $props();
 
-  const tabs = [
-    { name: 'Resumen Financiero', path: '/finanzas/resumen', icon: '📊' },
-    { name: 'Caja Diaria', path: '/finanzas/caja', icon: '📥' },
-    { name: 'Corte Semanal', path: '/finanzas/semanal', icon: '⚖️' },
-    { name: 'Reporte Mensual (PDF)', path: '/finanzas/mensual', icon: '📄' }
-  ];
+	const tabs = [
+		{ name: 'Resumen', path: '/finanzas/resumen', icon: ChartPie },
+		{ name: 'Caja diaria', path: '/finanzas/caja', icon: Inbox },
+		{ name: 'Corte semanal', path: '/finanzas/semanal', icon: Scale },
+		{ name: 'Reporte mensual', path: '/finanzas/mensual', icon: FileText }
+	];
 </script>
 
-<div class="max-w-6xl mx-auto space-y-6">
-  <div>
-    <h1 class="text-3xl font-bold text-slate-800">Centro Financiero</h1>
-    <p class="text-slate-500">Maneja toda la contabilidad del negocio desde un solo lugar.</p>
-  </div>
+<svelte:head><title>Finanzas · MesaCapital</title></svelte:head>
 
-  <!-- Tabs Navigation -->
-  <div class="glass-panel rounded-2xl p-2.5 flex overflow-x-auto custom-scrollbar shadow-sm border border-slate-200/60 gap-2">
-    {#each tabs as tab}
-      <a 
-        href={tab.path}
-        class="flex items-center gap-2.5 px-7 py-4 rounded-xl whitespace-nowrap font-bold text-base transition-all { $page.url.pathname === tab.path ? 'bg-slate-900 text-orange-400 shadow-md ring-2 ring-orange-500/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' }"
-      >
-        <span class="text-xl">{tab.icon}</span>
-        {tab.name}
-      </a>
-    {/each}
-  </div>
+<div class="mx-auto flex max-w-7xl flex-col gap-6">
+	<div>
+		<h1 class="text-2xl font-semibold tracking-tight">Centro financiero</h1>
+		<p class="text-sm text-muted-foreground">Conciliación de caja, cortes y reportes del negocio.</p>
+	</div>
 
-  <!-- Tab Content -->
-  <div class="pt-4">
-    {@render children()}
-  </div>
+	<nav class="-mb-px flex gap-1 overflow-x-auto border-b border-border custom-scrollbar" aria-label="Secciones de finanzas">
+		{#each tabs as tab (tab.path)}
+			{@const Icon = tab.icon}
+			{@const active = page.url.pathname === tab.path}
+			<a
+				href={tab.path}
+				aria-current={active ? 'page' : undefined}
+				class="flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm whitespace-nowrap transition-colors {active
+					? 'border-foreground font-medium text-foreground'
+					: 'border-transparent text-muted-foreground hover:text-foreground'}"
+			>
+				<Icon size={15} />{tab.name}
+			</a>
+		{/each}
+	</nav>
+
+	<div class="animate-fade-in">
+		{@render children()}
+	</div>
 </div>

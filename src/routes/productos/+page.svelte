@@ -1,225 +1,120 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import { displayStock } from '$lib/utils/fractions';
-  let { data, form } = $props();
+	import { enhance } from '$app/forms';
+	import { Plus, Pencil, Trash2, Tags } from '@lucide/svelte';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Field from '$lib/components/ui/Field.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
+	import DataTable from '$lib/components/data-table/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table/types';
+	import { inputClass, selectClass, btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { formatCOP } from '$lib/utils/format';
+	import { formatFraction } from '$lib/utils/fractions';
 
-  let isModalOpen = $state(false);
-  let editMode = $state(false);
-  
-  // Datos del formulario
-  let formId = $state('');
-  let formNombre = $state('');
-  let formCategoriaId = $state('');
-  let formUnidadMedida = $state('unidad');
-  let formPrecio = $state('0');
-  let formStockMinimo = $state('5');
+	let { data, form } = $props();
+	type Prod = (typeof data.products)[number];
 
-  function openCreateModal() {
-    editMode = false;
-    formId = '';
-    formNombre = '';
-    formCategoriaId = '';
-    formUnidadMedida = 'unidad';
-    formPrecio = '0';
-    formStockMinimo = '5';
-    isModalOpen = true;
-  }
+	const UNIDAD_LABEL: Record<string, string> = {
+		unidad: 'Unidad',
+		fraccion: 'Fracción (1/4, 1/2…)',
+		kilo: 'Kilogramo',
+		libra: 'Libra',
+		litro: 'Litro',
+		pechuga: 'Pechuga / presa',
+		bulto: 'Bulto',
+		paquete: 'Paquete'
+	};
 
-  function openEditModal(prod: any) {
-    editMode = true;
-    formId = prod.id;
-    formNombre = prod.nombre;
-    formCategoriaId = prod.categoriaId;
-    formUnidadMedida = prod.unidadMedida;
-    formPrecio = prod.precio;
-    formStockMinimo = prod.stockMinimo || '5';
-    isModalOpen = true;
-  }
+	let categoriaFiltro = $state<number | 0>(0);
+	let rows = $derived(categoriaFiltro ? data.products.filter((p) => p.categoriaId === categoriaFiltro) : data.products);
 
-  function closeModal() {
-    isModalOpen = false;
-  }
+	let open = $state(false);
+	let editing = $state<Prod | null>(null);
+	let f = $state({ nombre: '', categoriaId: '' as number | '', unidadMedida: 'unidad', stockMinimo: '5', precio: '' });
+	function openForm(p: Prod | null) {
+		editing = p;
+		f = p
+			? { nombre: p.nombre, categoriaId: p.categoriaId ?? '', unidadMedida: p.unidadMedida, stockMinimo: String(p.stockMinimo ?? 0), precio: Number(p.precio) > 0 ? String(Number(p.precio)) : '' }
+			: { nombre: '', categoriaId: '', unidadMedida: 'unidad', stockMinimo: '5', precio: '' };
+		open = true;
+	}
 
-  // Búsqueda y filtrado compacto
-  let prodSearch = $state('');
-  let prodCatFilter = $state('');
-
-  let productosFiltrados = $derived.by(() => {
-    let prods = data.products || [];
-    if (prodCatFilter) {
-      prods = prods.filter(p => String(p.categoriaId) === String(prodCatFilter));
-    }
-    if (prodSearch.trim()) {
-      const q = prodSearch.toLowerCase();
-      prods = prods.filter(p => p.nombre.toLowerCase().includes(q));
-    }
-    return prods;
-  });
+	const columns: Column<Prod>[] = [
+		{ id: 'nombre', header: 'Producto', accessor: (p) => p.nombre },
+		{ id: 'cat', header: 'Categoría', accessor: (p) => p.categoriaNombre ?? '', format: (v) => (v ? String(v) : '—'), hideOnMobile: true },
+		{ id: 'unidad', header: 'Unidad', accessor: (p) => p.unidadMedida, format: (v) => UNIDAD_LABEL[String(v)] ?? String(v), hideOnMobile: true },
+		{ id: 'stock', header: 'Stock / mín.', accessor: (p) => p.stockActual ?? 0, align: 'right' },
+		{ id: 'costo', header: 'Costo prom.', accessor: (p) => Number(p.precioCosto ?? 0), format: (v) => (Number(v) > 0 ? formatCOP(Number(v)) : '—'), align: 'right', hideOnMobile: true },
+		{ id: 'precio', header: 'Precio venta', accessor: (p) => Number(p.precio ?? 0), format: (v) => (Number(v) > 0 ? formatCOP(Number(v)) : '—'), align: 'right', hideOnMobile: true },
+		{ id: 'acciones', header: '', accessor: () => null, sortable: false, align: 'right' }
+	];
 </script>
 
-<div class="max-w-6xl mx-auto">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-black text-slate-900 tracking-tight">Catálogo de Productos</h1>
-    <button 
-      onclick={openCreateModal}
-      class="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-6 py-3.5 rounded-2xl font-black text-base shadow-lg hover:shadow-xl transition-all flex items-center gap-2 cursor-pointer transform active:scale-98"
-    >
-      <span class="text-xl leading-none">+</span> Nuevo Producto
-    </button>
-  </div>
+<svelte:head><title>Productos · MesaCapital</title></svelte:head>
 
-  {#if form?.error}
-    <div class="bg-red-100 text-red-700 p-4 rounded-lg mb-4">
-      {form.error}
-    </div>
-  {/if}
-
-  <!-- Barra de Filtros y Búsqueda -->
-  <div class="bg-white p-4 rounded-2xl border border-slate-200 mb-6 flex flex-col sm:flex-row gap-3 items-center justify-between shadow-sm">
-    <div class="w-full sm:w-72">
-      <input 
-        type="text" 
-        bind:value={prodSearch}
-        placeholder="🔍 Buscar producto..."
-        class="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-medium"
-      />
-    </div>
-    <div class="w-full sm:w-auto flex items-center gap-2">
-      <span class="text-xs font-bold text-slate-400 uppercase">Categoría:</span>
-      <select 
-        bind:value={prodCatFilter}
-        class="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none font-semibold text-slate-700"
-      >
-        <option value="">Todas las categorías</option>
-        {#each data.categorias as cat}
-          <option value={cat.id}>{cat.nombre}</option>
-        {/each}
-      </select>
-    </div>
-  </div>
-
-  <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
-            <th class="p-4 font-medium">Nombre</th>
-            <th class="p-4 font-medium">Categoría</th>
-            <th class="p-4 font-medium">Tipo Conteo</th>
-            <th class="p-4 font-medium">Stock Actual</th>
-            <th class="p-4 font-medium">Stock Mínimo</th>
-            <th class="p-4 font-medium">Precio</th>
-            <th class="p-4 font-medium text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {#each productosFiltrados as prod}
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="p-4 font-bold text-slate-800">{prod.nombre}</td>
-              <td class="p-4 text-slate-600">
-                <span class="inline-block px-2 py-1 bg-slate-100 rounded-md text-xs font-semibold">{prod.categoriaNombre}</span>
-              </td>
-              <td class="p-4 text-slate-600 capitalize">{prod.unidadMedida}</td>
-              <td class="p-4 font-black text-slate-900 text-base">{displayStock(prod.stockActual || 0, prod.unidadMedida)}</td>
-              <td class="p-4 font-bold text-red-500">{displayStock(prod.stockMinimo || 0, prod.unidadMedida)}</td>
-              <td class="p-4 font-semibold text-slate-700">${Number(prod.precio || 0).toLocaleString('es-CO')}</td>
-              <td class="p-4 flex justify-end gap-2">
-                <button 
-                  onclick={() => openEditModal(prod)}
-                  class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold cursor-pointer"
-                >
-                  Editar
-                </button>
-                <form action="?/delete" method="POST" use:enhance onsubmit={(e) => !confirm('¿Eliminar producto?') && e.preventDefault()}>
-                  <input type="hidden" name="id" value={prod.id} />
-                  <button 
-                    type="submit"
-                    class="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold cursor-pointer"
-                  >
-                    Eliminar
-                  </button>
-                </form>
-              </td>
-            </tr>
-          {:else}
-            <tr>
-              <td colspan="7" class="p-8 text-center text-slate-400 text-sm">
-                No se encontraron productos que coincidan con la búsqueda.
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  </div>
+<div class="mx-auto flex max-w-6xl flex-col gap-6">
+	<PageHeader title="Productos e insumos" description="Catálogo de lo que entra a bodega. El stock y el costo promedio se actualizan desde Bodega.">
+		{#snippet actions()}
+			<a href="/configuracion/categorias" class={cn(btn.base, btn.outline)}><Tags size={15} /> Categorías</a>
+			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => openForm(null)}><Plus size={15} /> Nuevo producto</button>
+		{/snippet}
+	</PageHeader>
+	<FormFeedback {form} />
+	<Card>
+		<DataTable {rows} {columns} rowKey={(p) => p.id} initialSort={{ id: 'nombre', dir: 'asc' }} searchPlaceholder="Buscar producto…" emptyTitle="Sin productos">
+			{#snippet toolbar()}
+				<select bind:value={categoriaFiltro} aria-label="Filtrar por categoría" class="h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm">
+					<option value={0}>Todas las categorías</option>
+					{#each data.categorias as c (c.id)}<option value={c.id}>{c.nombre}</option>{/each}
+				</select>
+			{/snippet}
+			{#snippet cell(p, col)}
+				{#if col.id === 'stock'}
+					{@const bajo = (p.stockActual ?? 0) <= (p.stockMinimo ?? 0)}
+					<span class={bajo ? 'font-medium text-danger' : ''}>{formatFraction(p.stockActual ?? 0)}</span>
+					<span class="text-xs text-muted-foreground">/ {formatFraction(p.stockMinimo ?? 0)}</span>
+					{#if bajo}<Badge variant="danger" class="ml-1">Bajo</Badge>{/if}
+				{:else if col.id === 'acciones'}
+					<div class="flex justify-end">
+						<button type="button" class={cn(btn.base, btn.icon)} aria-label={`Editar ${p.nombre}`} onclick={() => openForm(p)}><Pencil size={14} /></button>
+						<form method="POST" action="?/delete" use:enhance={({ cancel }) => { if (!confirm(`¿Eliminar "${p.nombre}"?`)) cancel(); }}>
+							<input type="hidden" name="id" value={p.id} />
+							<button class={cn(btn.base, btn.icon, 'hover:text-danger')} aria-label={`Eliminar ${p.nombre}`}><Trash2 size={14} /></button>
+						</form>
+					</div>
+				{:else if col.id === 'nombre'}
+					<span class="font-medium">{p.nombre}</span>
+				{:else}
+					{col.format ? col.format(col.accessor(p), p) : col.accessor(p)}
+				{/if}
+			{/snippet}
+		</DataTable>
+	</Card>
 </div>
 
-{#if isModalOpen}
-  <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-      <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-        <h2 class="text-xl font-bold text-slate-800">
-          {editMode ? 'Editar Producto' : 'Nuevo Producto'}
-        </h2>
-        <button onclick={closeModal} class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
-      </div>
-      
-      <form action={editMode ? '?/update' : '?/create'} method="POST" use:enhance={() => {
-        return async ({ update }) => {
-          await update();
-          closeModal();
-        };
-      }} class="p-6 space-y-4">
-        
-        {#if editMode}
-          <input type="hidden" name="id" value={formId} />
-        {/if}
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Nombre del producto</label>
-          <input type="text" name="nombre" bind:value={formNombre} required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
-          <select name="categoriaId" bind:value={formCategoriaId} required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white">
-            <option value="" disabled>Selecciona una categoría...</option>
-            {#each data.categorias as cat}
-              <option value={cat.id}>{cat.nombre}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Tipo de conteo (Unidad de Medida)</label>
-          <select name="unidadMedida" bind:value={formUnidadMedida} required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white font-medium">
-            <option value="unidad">Unidad (ej: Pinchos ensartados, Lata, Arepa)</option>
-            <option value="fraccion">Fracción / Kilos (ej: 1/4, 1/2, 2.5 Kg de Carne)</option>
-            <option value="pechuga">Pechuga / Presas</option>
-            <option value="kilo">Kilogramos (Kg)</option>
-            <option value="bulto">Bulto / Paquete (ej: Carbón vegetal)</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Stock Mínimo (Alerta en rojo)</label>
-          <input type="number" step="0.1" name="stockMinimo" bind:value={formStockMinimo} required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Precio Unitario (Opcional)</label>
-          <input type="number" step="0.01" name="precio" bind:value={formPrecio} class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" />
-        </div>
-
-        <div class="pt-4 flex justify-end gap-3">
-          <button type="button" onclick={closeModal} class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium">
-            Cancelar
-          </button>
-          <button type="submit" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium shadow-sm">
-            Guardar
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-{/if}
+<Dialog bind:open title={editing ? 'Editar producto' : 'Nuevo producto'}>
+	<form id="prod-form" method="POST" action={editing ? '?/update' : '?/create'} class="grid gap-4 sm:grid-cols-2" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'success') open = false; }}>
+		{#if editing}<input type="hidden" name="id" value={editing.id} />{/if}
+		<Field label="Nombre" for="p-nombre" class="sm:col-span-2"><input id="p-nombre" name="nombre" bind:value={f.nombre} required maxlength="80" class={inputClass} /></Field>
+		<Field label="Categoría" for="p-cat">
+			<select id="p-cat" name="categoriaId" bind:value={f.categoriaId} class={selectClass}>
+				<option value="">Sin categoría</option>
+				{#each data.categorias as c (c.id)}<option value={c.id}>{c.nombre}</option>{/each}
+			</select>
+		</Field>
+		<Field label="Unidad de medida" for="p-unidad">
+			<select id="p-unidad" name="unidadMedida" bind:value={f.unidadMedida} class={selectClass}>
+				{#each data.unidades as u (u)}<option value={u}>{UNIDAD_LABEL[u] ?? u}</option>{/each}
+			</select>
+		</Field>
+		<Field label="Stock mínimo" for="p-min" hint="Por debajo de esto se genera una alerta"><input id="p-min" name="stockMinimo" type="number" min="0" step="0.25" bind:value={f.stockMinimo} required class={inputClass} /></Field>
+		<Field label="Precio de venta" for="p-precio" hint="Solo si se vende directo (bebidas)"><input id="p-precio" name="precio" type="number" min="0" step="100" bind:value={f.precio} placeholder="0" class={inputClass} /></Field>
+	</form>
+	{#snippet footer()}
+		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (open = false)}>Cancelar</button>
+		<button type="submit" form="prod-form" class={cn(btn.base, btn.primary)}>Guardar</button>
+	{/snippet}
+</Dialog>

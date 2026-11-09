@@ -1,488 +1,290 @@
 <script lang="ts">
-  import Chart from 'chart.js/auto';
-  import jsPDF from 'jspdf';
-  import autoTable from 'jspdf-autotable';
-  import * as XLSX from 'xlsx';
-  import { FileText, FileSpreadsheet, Sparkles } from '@lucide/svelte';
-  let { data } = $props();
+	import { goto } from '$app/navigation';
+	import { navigating } from '$app/state';
+	import { FileText, FileSpreadsheet, LoaderCircle, Wallet, Banknote, Smartphone, Receipt, ShoppingCart, ChartLine, CalendarRange } from '@lucide/svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import StatTile from '$lib/components/ui/StatTile.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import CashflowChart from '$lib/components/charts/CashflowChart.svelte';
+	import DataTable from '$lib/components/data-table/DataTable.svelte';
+	import type { Column } from '$lib/components/data-table/types';
+	import { btn } from '$lib/components/ui/styles';
+	import { cn } from '$lib/utils/cn';
+	import { formatCOP, formatDate, formatDateTime, formatNumber, formatPct } from '$lib/utils/format';
+	import { exportExcel, safeFileName } from '$lib/utils/export';
+	import { downloadPdfReport, pdfMoney } from '$lib/features/finance/reports/pdf';
+	import { businessDayKey, currentRange } from '$lib/features/finance/domain/period';
+	import { foodCostStatus } from '$lib/features/finance/domain/metrics';
+	import type { CashflowPoint } from '$lib/features/finance/domain/metrics';
 
-  let vistaActiva = $state<'diario' | 'semanal'>('diario');
+	let { data } = $props();
 
-  let chartCanvasElement: HTMLCanvasElement | null = null;
+	let loading = $derived(navigating.to?.url.pathname === '/finanzas/resumen');
+	let g = $derived(data.granTotal);
+	let margen = $derived(g.ventasBrutas > 0 ? g.utilidadNeta / g.ventasBrutas : null);
+	let foodCost = $derived(g.ventasBrutas > 0 ? g.compras / g.ventasBrutas : null);
+	const dayLabel = (k: string) => formatDate(k + 'T12:00:00-05:00');
 
-  function exportToPDF() {
-    const doc = new jsPDF();
-    
-    // Encabezado Premium
-    doc.setFillColor(249, 115, 22); // Orange JuanchoPizza
-    doc.rect(0, 0, 210, 15, 'F');
-    
-    doc.setFontSize(18);
-    doc.setTextColor(30, 41, 59);
-    doc.text('Reporte Financiero y Auditoría - JuanchoPizza', 14, 28);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Período evaluado: ${data.inicio || 'Inicio'} hasta ${data.fin || 'Fin'}  |  Generado: ${new Date().toLocaleDateString('es-CO')}`, 14, 35);
-    
-    // Estadísticas clave / KPIs
-    doc.setFontSize(12);
-    doc.setTextColor(15, 23, 42);
-    doc.text('1. Métricas Clave de Negocio', 14, 45);
+	// ── Filtro de período ───────────────────────────────────
+	let inicio = $state('');
+	let fin = $state('');
+	$effect.pre(() => {
+		inicio = data.inicio;
+		fin = data.fin;
+	});
+	function aplicar(i = inicio, f = fin) {
+		goto(`?inicio=${i}&fin=${f}`, { keepFocus: true, noScroll: true });
+	}
+	function preset(p: 'mes' | 'anterior' | '7' | '30') {
+		const hoy = businessDayKey(new Date());
+		const shift = (k: string, d: number) => {
+			const x = new Date(k + 'T12:00:00Z');
+			x.setUTCDate(x.getUTCDate() + d);
+			return x.toISOString().slice(0, 10);
+		};
+		if (p === 'mes') {
+			const r = currentRange('mensual');
+			aplicar(businessDayKey(r.start), businessDayKey(new Date(r.end.getTime() - 1)));
+		} else if (p === 'anterior') {
+			const r = currentRange('mensual', shift(businessDayKey(currentRange('mensual').start), -1));
+			aplicar(businessDayKey(r.start), businessDayKey(new Date(r.end.getTime() - 1)));
+		} else aplicar(shift(hoy, -(Number(p) - 1)), hoy);
+	}
 
-    const ticketPromedio = data.historialDias && data.historialDias.length > 0 
-      ? Math.round(data.granTotal.ventasBrutas / data.historialDias.length) 
-      : 0;
+	// ── Gráfico ─────────────────────────────────────────────
+	let chartCanvas = $state<HTMLCanvasElement | null>(null);
+	let serie = $derived<CashflowPoint[]>(
+		[...data.historialDias]
+			.sort((a, b) => a.fecha.localeCompare(b.fecha))
+			.map((d) => ({
+				key: d.fecha,
+				label: dayLabel(d.fecha),
+				efectivo: d.efectivo,
+				transferencias: d.transferencias,
+				gastos: d.gastos,
+				neto: d.ventasBrutas - d.gastos,
+				future: false
+			}))
+	);
 
-    autoTable(doc, {
-      startY: 49,
-      head: [['Ventas Brutas', 'Efectivo en Caja', 'Nequi / Transferencias', 'Gastos Totales', 'Utilidad Neta']],
-      body: [[
-        `$${data.granTotal.ventasBrutas.toLocaleString('es-CO')}`,
-        `$${data.granTotal.efectivo.toLocaleString('es-CO')}`,
-        `$${data.granTotal.transferencias.toLocaleString('es-CO')}`,
-        `-$${data.granTotal.gastos.toLocaleString('es-CO')}`,
-        `$${data.granTotal.utilidadNeta.toLocaleString('es-CO')}`
-      ]],
-      theme: 'grid',
-      headStyles: { fillColor: [249, 115, 22] },
-      styles: { halign: 'center', fontStyle: 'bold' }
-    });
+	// ── Tablas ──────────────────────────────────────────────
+	let vista = $state<'dias' | 'semanas' | 'turnos' | 'gastos' | 'compras'>('dias');
+	type Dia = (typeof data.historialDias)[number];
+	type Semana = (typeof data.semanas)[number];
+	type Turno = (typeof data.turnosDetallados)[number];
+	type Gasto = (typeof data.listaGastos)[number];
+	type Compra = (typeof data.compras)[number];
+	const money = (v: string | number | null) => formatCOP(Number(v ?? 0));
 
-    let currentY = (doc as any).lastAutoTable.finalY + 10;
+	const diaCols: Column<Dia>[] = [
+		{ id: 'fecha', header: 'Día', accessor: (d) => d.fecha, format: (v) => dayLabel(String(v)) },
+		{ id: 'turnos', header: 'Turnos', accessor: (d) => d.turnos, align: 'right', hideOnMobile: true },
+		{ id: 'efectivo', header: 'Efectivo', accessor: (d) => d.efectivo, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'nequi', header: 'Nequi', accessor: (d) => d.transferencias, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'ventas', header: 'Ventas', accessor: (d) => d.ventasBrutas, format: money, align: 'right' },
+		{ id: 'gastos', header: 'Gastos', accessor: (d) => d.gastos, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'compras', header: 'Compras', accessor: (d) => d.compras, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'neto', header: 'Utilidad', accessor: (d) => d.utilidadNeta, format: money, align: 'right' }
+	];
+	const semCols: Column<Semana>[] = [
+		{ id: 'lunes', header: 'Semana del', accessor: (s) => s.lunes, format: (v) => dayLabel(String(v)) },
+		{ id: 'dias', header: 'Días con venta', accessor: (s) => s.diasContados, align: 'right', hideOnMobile: true },
+		{ id: 'ventas', header: 'Ventas', accessor: (s) => s.ventasBrutas, format: money, align: 'right' },
+		{ id: 'gastos', header: 'Gastos', accessor: (s) => s.gastos, format: money, align: 'right' },
+		{ id: 'compras', header: 'Compras', accessor: (s) => s.compras, format: money, align: 'right', hideOnMobile: true },
+		{ id: 'neto', header: 'Utilidad', accessor: (s) => s.utilidadNeta, format: money, align: 'right' }
+	];
+	const turnoCols: Column<Turno>[] = [
+		{ id: 'fecha', header: 'Fecha', accessor: (t) => t.fecha, format: (v) => formatDateTime(v as string | null) },
+		{ id: 'ayer', header: 'De ayer', accessor: (t) => t.porcionesAyer, align: 'right', hideOnMobile: true },
+		{ id: 'masas', header: 'Masas usadas', accessor: (t) => t.masasUsadas, format: (v) => formatNumber(Number(v)), align: 'right', hideOnMobile: true },
+		{ id: 'sobras', header: 'Sobrantes', accessor: (t) => t.porcionesSobrantes, align: 'right', hideOnMobile: true },
+		{ id: 'mermas', header: 'Mermas', accessor: (t) => t.porcionesMermadas, align: 'right' },
+		{ id: 'vendidas', header: 'Vendidas', accessor: (t) => t.porcionesVendidas, align: 'right' },
+		{ id: 'total', header: 'Total', accessor: (t) => t.efectivo + t.transferencias, format: money, align: 'right' }
+	];
+	const gastoCols: Column<Gasto>[] = [
+		{ id: 'fecha', header: 'Fecha', accessor: (x) => x.fecha, format: (v) => formatDateTime(v as string | null) },
+		{ id: 'desc', header: 'Concepto', accessor: (x) => x.descripcion },
+		{ id: 'monto', header: 'Monto', accessor: (x) => x.monto, format: money, align: 'right' }
+	];
+	const compraCols: Column<Compra>[] = [
+		{ id: 'fecha', header: 'Fecha', accessor: (x) => x.fecha, format: (v) => formatDateTime(v as string | null) },
+		{ id: 'tipo', header: 'Tipo', accessor: (x) => (x.tipo === 'entrada' ? 'Compra' : 'Conteo'), hideOnMobile: true },
+		{ id: 'insumo', header: 'Insumo', accessor: (x) => x.productoNombre },
+		{ id: 'cant', header: 'Cantidad', accessor: (x) => x.cantidad, format: (v, x) => `${formatNumber(Number(v))} ${x.unidadMedida}`, align: 'right' },
+		{ id: 'total', header: 'Costo', accessor: (x) => x.costoTotal, format: (v) => (Number(v) > 0 ? money(v) : '—'), align: 'right' }
+	];
 
-    // Insertar gráfico de tendencias si está renderizado en el DOM
-    if (chartCanvasElement) {
-      try {
-        const chartImg = chartCanvasElement.toDataURL('image/png', 1.0);
-        doc.setFontSize(12);
-        doc.setTextColor(15, 23, 42);
-        doc.text('2. Gráfica Estadística de Tendencias (Ventas vs Gastos vs Libre)', 14, currentY);
-        // Ancho 180mm, Alto 65mm
-        doc.addImage(chartImg, 'PNG', 15, currentY + 4, 180, 65);
-        currentY = currentY + 75;
-      } catch (err) {
-        console.warn('No se pudo convertir el canvas para el PDF:', err);
-      }
-    }
+	// ── Exportaciones ───────────────────────────────────────
+	let busy = $state<'pdf' | 'xlsx' | null>(null);
+	let periodo = $derived(`${dayLabel(data.inicio)} – ${dayLabel(data.fin)}`);
+	let baseName = $derived(safeFileName(`${data.negocio}_Finanzas_${data.inicio}_a_${data.fin}`));
 
-    // 3. Auditoría Operativa de Porciones y Masas por Turno
-    if (data.turnosDetallados && data.turnosDetallados.length > 0) {
-      if (currentY > 230) {
-        doc.addPage();
-        currentY = 20;
-      }
+	async function pdf() {
+		busy = 'pdf';
+		try {
+			await downloadPdfReport({
+				fileName: baseName,
+				negocio: data.negocio,
+				title: 'Reporte financiero',
+				period: periodo,
+				kpis: [
+					{ label: 'Ventas brutas', value: pdfMoney(g.ventasBrutas), hint: `${data.diasConVenta} días con venta` },
+					{ label: 'Utilidad neta', value: pdfMoney(g.utilidadNeta), hint: margen === null ? undefined : `Margen ${formatPct(margen)}` },
+					{ label: 'Gastos de caja', value: pdfMoney(g.gastos) },
+					{ label: 'Food cost', value: formatPct(foodCost), hint: `Compras ${pdfMoney(g.compras)}` },
+					{ label: 'Efectivo', value: pdfMoney(g.efectivo) },
+					{ label: 'Nequi / transferencias', value: pdfMoney(g.transferencias) },
+					{ label: 'Promedio diario', value: pdfMoney(data.promedioDiario) },
+					{ label: 'Turnos', value: String(data.turnosDetallados.length) }
+				],
+				chart: { title: 'Flujo de caja diario', canvas: chartCanvas },
+				tables: [
+					{
+						title: 'Resumen por día',
+						head: ['Día', 'Turnos', 'Efectivo', 'Nequi', 'Ventas', 'Gastos', 'Compras', 'Utilidad'],
+						numeric: [1, 2, 3, 4, 5, 6, 7],
+						body: [...data.historialDias].reverse().map((d) => [dayLabel(d.fecha), d.turnos, pdfMoney(d.efectivo), pdfMoney(d.transferencias), pdfMoney(d.ventasBrutas), pdfMoney(d.gastos), pdfMoney(d.compras), pdfMoney(d.utilidadNeta)]),
+						foot: ['Total', data.turnosDetallados.length, pdfMoney(g.efectivo), pdfMoney(g.transferencias), pdfMoney(g.ventasBrutas), pdfMoney(g.gastos), pdfMoney(g.compras), pdfMoney(g.utilidadNeta)]
+					},
+					{
+						title: 'Resumen por semana',
+						head: ['Semana del', 'Días', 'Ventas', 'Gastos', 'Compras', 'Utilidad'],
+						numeric: [1, 2, 3, 4, 5],
+						body: [...data.semanas].reverse().map((s) => [dayLabel(s.lunes), s.diasContados, pdfMoney(s.ventasBrutas), pdfMoney(s.gastos), pdfMoney(s.compras), pdfMoney(s.utilidadNeta)])
+					},
+					{
+						title: 'Auditoría de turnos (inventario de vitrina)',
+						head: ['Fecha', 'De ayer', 'Masas', 'Sobrantes', 'Mermas', 'Vendidas', 'Efectivo', 'Nequi'],
+						numeric: [1, 2, 3, 4, 5, 6, 7],
+						body: [...data.turnosDetallados].reverse().map((t) => [formatDateTime(t.fecha), t.porcionesAyer, formatNumber(t.masasUsadas), t.porcionesSobrantes, t.porcionesMermadas, t.porcionesVendidas, pdfMoney(t.efectivo), pdfMoney(t.transferencias)])
+					},
+					{
+						title: 'Gastos de caja',
+						head: ['Fecha', 'Concepto', 'Monto'],
+						numeric: [2],
+						body: data.listaGastos.map((x) => [formatDateTime(x.fecha), x.descripcion, pdfMoney(x.monto)]),
+						foot: ['', 'Total', pdfMoney(g.gastos)]
+					}
+				],
+				notes: [
+					'Los días se cuentan por jornada de negocio (de 04:00 a 04:00, hora de Colombia).',
+					'Utilidad = ventas (efectivo + transferencias) − gastos de caja − compras de insumos. Food cost = compras ÷ ventas.'
+				]
+			});
+		} finally {
+			busy = null;
+		}
+	}
 
-      doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
-      doc.text('3. Auditoría de Turnos y Porciones (Masas y Sobras de Vitrina)', 14, currentY);
-      
-      const bodyAuditoria = (data.turnosDetallados || []).map((t: any) => {
-        const fechaStr = t.fecha ? new Date(t.fecha).toLocaleDateString('es-CO') : '-';
-        const horaStr = t.fecha ? new Date(t.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
-        const masasUsadas = Math.max(0, (t.masasIniciales || 0) - (t.masasSobrantes || 0));
-        return [
-          `${fechaStr} ${horaStr}`,
-          `${t.porcionesAyer || 0}`,
-          `${masasUsadas} (${masasUsadas * 8}p)`,
-          `${t.porcionesSobrantes || 0}`,
-          `${t.porcionesMermadas || 0}`,
-          `${t.porcionesVendidasCalculado || 0}`,
-          `$${Number(t.monto).toLocaleString('es-CO')}`,
-          `$${Number(t.transferencias || 0).toLocaleString('es-CO')}`
-        ];
-      });
-
-      autoTable(doc, {
-        startY: currentY + 4,
-        head: [['Fecha Turno', 'Ayer (Vitrina)', 'Masas Usadas', 'Sobras Hoy', 'Mermas', 'Vendidas', 'Efectivo', 'Nequi']],
-        body: bodyAuditoria,
-        theme: 'striped',
-        headStyles: { fillColor: [234, 88, 12] }
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 10;
-    }
-
-    // 4. Historial Consolidado por Días
-    if (currentY > 230) {
-      doc.addPage();
-      currentY = 20;
-    }
-
-    doc.setFontSize(12);
-    doc.setTextColor(15, 23, 42);
-    doc.text('4. Historial Consolidado Día por Día', 14, currentY);
-    
-    const bodyDias = (data.historialDias || []).map((d: any) => [
-      d.fecha,
-      `$${d.ventasBrutas.toLocaleString('es-CO')}`,
-      `$${d.efectivo.toLocaleString('es-CO')}`,
-      `$${d.transferencias.toLocaleString('es-CO')}`,
-      `-$${d.gastos.toLocaleString('es-CO')}`,
-      `$${d.utilidadNeta.toLocaleString('es-CO')}`
-    ]);
-
-    autoTable(doc, {
-      startY: currentY + 4,
-      head: [['Fecha', 'Venta Bruta', 'Efectivo', 'Nequi', 'Gastos', 'Libre']],
-      body: bodyDias,
-      theme: 'striped',
-      headStyles: { fillColor: [30, 41, 59] }
-    });
-    
-    doc.save(`JuanchoPizza_Reporte_Estadistico_${data.inicio || 'Historico'}.pdf`);
-  }
-
-  function exportComprasToExcel() {
-    if (!data.comprasHistorial || data.comprasHistorial.length === 0) {
-      alert('No se encontraron compras ni movimientos registrados para exportar.');
-      return;
-    }
-
-    const rows = data.comprasHistorial.map((m: any) => ({
-      'Fecha': m.fecha ? new Date(m.fecha).toLocaleDateString('es-CO') : '-',
-      'Hora': m.fecha ? new Date(m.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '-',
-      'Tipo': m.tipo === 'entrada' ? 'Compra (Entrada Insumo)' : 'Ajuste de Stock Físico',
-      'Producto / Insumo': m.productoNombre,
-      'Unidad': m.unidadMedida,
-      'Cantidad Adquirida': m.cantidad,
-      'Costo Unitario ($)': Number(m.costoUnitario || 0),
-      'Inversión Total ($)': Number(m.costoTotal || 0)
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial General de Compras');
-    XLSX.writeFile(workbook, `JuanchoPizza_Compras_Historial_Completo_${new Date().toISOString().split('T')[0]}.xlsx`);
-  }
-
-  function renderChart(node: HTMLCanvasElement, params: { semanas: any[], dias: any[] }) {
-    chartCanvasElement = node;
-    let chartInstance = new Chart(node, {
-      type: 'bar',
-      data: {
-        labels: params.dias.slice(0, 14).reverse().map(d => d.fecha),
-        datasets: [
-          {
-            label: 'Venta Bruta',
-            data: params.dias.slice(0, 14).reverse().map(d => d.ventasBrutas),
-            backgroundColor: '#f97316',
-            borderRadius: 6
-          },
-          {
-            label: 'Gastos',
-            data: params.dias.slice(0, 14).reverse().map(d => d.gastos),
-            backgroundColor: '#ef4444',
-            borderRadius: 6
-          },
-          {
-            label: 'Dinero Libre',
-            data: params.dias.slice(0, 14).reverse().map(d => d.utilidadNeta),
-            backgroundColor: '#10b981',
-            borderRadius: 6
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: $${Number(ctx.parsed.y).toLocaleString('es-CO')}`
-            }
-          }
-        },
-        scales: {
-          y: { 
-            beginAtZero: true, 
-            ticks: { 
-              callback: (v) => '$' + Number(v).toLocaleString('es-CO') 
-            } 
-          }
-        }
-      }
-    });
-
-    return {
-      update(newParams: { semanas: any[], dias: any[] }) {
-        chartInstance.data.labels = newParams.dias.slice(0, 14).reverse().map(d => d.fecha);
-        chartInstance.data.datasets[0].data = newParams.dias.slice(0, 14).reverse().map(d => d.ventasBrutas);
-        chartInstance.data.datasets[1].data = newParams.dias.slice(0, 14).reverse().map(d => d.gastos);
-        chartInstance.data.datasets[2].data = newParams.dias.slice(0, 14).reverse().map(d => d.utilidadNeta);
-        chartInstance.update();
-      },
-      destroy() {
-        chartInstance.destroy();
-      }
-    };
-  }
+	let exportMsg = $state('');
+	async function excel() {
+		busy = 'xlsx';
+		exportMsg = '';
+		try {
+			const ok = await exportExcel(baseName, [
+				{ name: 'Por día', rows: data.historialDias.map((d) => ({ Día: d.fecha, Turnos: d.turnos, Efectivo: d.efectivo, Nequi: d.transferencias, Ventas: d.ventasBrutas, Gastos: d.gastos, 'Compras insumos': d.compras, Utilidad: d.utilidadNeta })) },
+				{ name: 'Por semana', rows: data.semanas.map((s) => ({ 'Semana del': s.lunes, 'Días con venta': s.diasContados, Ventas: s.ventasBrutas, Gastos: s.gastos, 'Compras insumos': s.compras, Utilidad: s.utilidadNeta })) },
+				{ name: 'Turnos', rows: data.turnosDetallados.map((t) => ({ Turno: t.id, Fecha: formatDateTime(t.fecha), 'De ayer': t.porcionesAyer, 'Masas usadas': t.masasUsadas, Sobrantes: t.porcionesSobrantes, Mermas: t.porcionesMermadas, Vendidas: t.porcionesVendidas, Efectivo: t.efectivo, Nequi: t.transferencias, Nota: t.descripcion ?? '' })) },
+				{ name: 'Gastos', rows: data.listaGastos.map((x) => ({ Fecha: formatDateTime(x.fecha), Concepto: x.descripcion, Monto: x.monto })) },
+				{ name: 'Compras', rows: data.compras.map((c) => ({ Fecha: formatDateTime(c.fecha), Tipo: c.tipo === 'entrada' ? 'Compra' : 'Conteo', Insumo: c.productoNombre, Unidad: c.unidadMedida, Cantidad: c.cantidad, 'Costo unitario': c.costoUnitario, 'Costo total': c.costoTotal })) }
+			]);
+			if (!ok) exportMsg = 'No hay datos en este período para exportar.';
+		} finally {
+			busy = null;
+		}
+	}
 </script>
 
-<div class="max-w-7xl mx-auto space-y-6">
-  <!-- Encabezado con Botón Exportar -->
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-    <div>
-      <div class="inline-flex items-center gap-2 px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-bold mb-2">
-        <Sparkles class="w-3.5 h-3.5" /> Panel Ejecutivo de Finanzas
-      </div>
-      <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Rendimiento y Caja</h1>
-      <p class="text-slate-500 text-sm mt-1">Monitorea el flujo de dinero, desglose de pagos e historial diario de turnos.</p>
-    </div>
+<div class="flex flex-col gap-6">
+	<!-- Filtros + exportación -->
+	<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+		<div class="flex flex-wrap items-end gap-2">
+			<div class="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm">
+				<CalendarRange size={15} class="text-muted-foreground" />
+				<input type="date" bind:value={inicio} aria-label="Desde" class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<span class="text-muted-foreground">–</span>
+				<input type="date" bind:value={fin} aria-label="Hasta" class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+			</div>
+			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => aplicar()} disabled={inicio === data.inicio && fin === data.fin}>Aplicar</button>
+			<div class="flex gap-1">
+				{#each [{ k: 'mes', l: 'Este mes' }, { k: 'anterior', l: 'Mes anterior' }, { k: '7', l: '7 días' }, { k: '30', l: '30 días' }] as p (p.k)}
+					<button type="button" class={cn(btn.base, btn.ghost, btn.sm)} onclick={() => preset(p.k as 'mes')}>{p.l}</button>
+				{/each}
+			</div>
+		</div>
+		<div class="flex gap-2">
+			<button type="button" class={cn(btn.base, btn.outline)} onclick={excel} disabled={busy !== null}>
+				{#if busy === 'xlsx'}<LoaderCircle size={15} class="animate-spin" />{:else}<FileSpreadsheet size={15} />{/if} Excel
+			</button>
+			<button type="button" class={cn(btn.base, btn.primary)} onclick={pdf} disabled={busy !== null || data.historialDias.length === 0}>
+				{#if busy === 'pdf'}<LoaderCircle size={15} class="animate-spin" />{:else}<FileText size={15} />{/if} Reporte PDF
+			</button>
+		</div>
+	</div>
+	{#if exportMsg}<p class="-mt-3 text-sm text-muted-foreground">{exportMsg}</p>{/if}
 
-    <div class="flex flex-wrap items-center gap-3">
-      <button 
-        onclick={exportComprasToExcel}
-        class="py-3.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-all shadow-sm hover:shadow flex items-center gap-2 text-sm cursor-pointer transform active:scale-98"
-        title="Descargar archivo Excel con todo el historial de compras de insumos por fecha"
-      >
-        <FileSpreadsheet class="w-4 h-4" /> Exportar Compras (Excel)
-      </button>
+	{#if data.historialDias.length === 0 && !loading}
+		<Card>
+			<EmptyState icon={ChartLine} title="Sin movimientos en este período" description="Elige otro rango o registra cierres de turno para ver el análisis." />
+		</Card>
+	{:else}
+		<section class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+			{#if loading}
+				{#each Array(6) as _, i (i)}<Skeleton class="h-[92px]" />{/each}
+			{:else}
+				<StatTile label="Ventas brutas" value={formatCOP(g.ventasBrutas)} icon={Wallet} hint={`${formatCOP(data.promedioDiario)} / día`} />
+				<StatTile label="Efectivo" value={formatCOP(g.efectivo)} icon={Banknote} hint={g.ventasBrutas ? `${formatPct(g.efectivo / g.ventasBrutas, 0)} de las ventas` : undefined} />
+				<StatTile label="Nequi" value={formatCOP(g.transferencias)} icon={Smartphone} hint={g.ventasBrutas ? `${formatPct(g.transferencias / g.ventasBrutas, 0)} de las ventas` : undefined} />
+				<StatTile label="Gastos de caja" value={formatCOP(g.gastos)} icon={Receipt} />
+				<StatTile label="Compras insumos" value={formatCOP(g.compras)} icon={ShoppingCart} hint={`Food cost ${formatPct(foodCost)}`} tone={foodCostStatus(foodCost) === 'riesgo' ? 'danger' : foodCostStatus(foodCost) === 'vigilar' ? 'warning' : 'default'} />
+				<StatTile label="Utilidad neta" value={formatCOP(g.utilidadNeta)} icon={ChartLine} hint={margen === null ? undefined : `Margen ${formatPct(margen)}`} tone={g.utilidadNeta < 0 ? 'danger' : 'success'} />
+			{/if}
+		</section>
 
-      {#if data.historialDias && data.historialDias.length > 0}
-        <button 
-          onclick={exportToPDF}
-          class="py-3.5 px-6 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-2xl transition-all shadow-md hover:shadow-lg flex items-center gap-2 text-sm cursor-pointer transform active:scale-98"
-        >
-          <FileText class="w-4 h-4" /> Informe Auditoría (PDF)
-        </button>
-      {/if}
-    </div>
-  </div>
+		<Card title="Flujo de caja diario" description={periodo}>
+			{#if loading}<Skeleton class="h-72 w-full" />{:else}<CashflowChart data={serie} bind:canvasEl={chartCanvas} />{/if}
+		</Card>
 
-  <!-- Filtro de Rango -->
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
-    <form method="GET" class="flex flex-col md:flex-row gap-4 items-end">
-      <div class="flex-1 w-full">
-        <label for="inicio" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Desde</label>
-        <input 
-          type="date" 
-          id="inicio" 
-          name="inicio" 
-          value={data.inicio}
-          class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-bold text-slate-800 text-base"
-        />
-      </div>
-      <div class="flex-1 w-full">
-        <label for="fin" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Hasta</label>
-        <input 
-          type="date" 
-          id="fin" 
-          name="fin" 
-          value={data.fin}
-          class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none transition-all font-bold text-slate-800 text-base"
-        />
-      </div>
-      <button 
-        type="submit" 
-        class="w-full md:w-auto py-4 px-10 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 text-base cursor-pointer transform active:scale-98"
-      >
-        <span class="text-lg">🔍</span> Filtrar
-      </button>
-    </form>
-  </div>
-
-  {#if !data.historialDias || data.historialDias.length === 0}
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-16 text-center text-slate-400">
-      <span class="text-6xl block mb-4">📊</span>
-      <h3 class="text-lg font-bold text-slate-700">Sin datos financieros para este rango</h3>
-      <p class="text-sm text-slate-400 mt-1">Realiza cierres diarios de caja para ver gráficos e historial aquí.</p>
-    </div>
-  {:else}
-    <!-- Tarjetas KPI Principales -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- Ventas Brutas -->
-      <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-black tracking-wider uppercase text-slate-400">Venta Bruta Total</span>
-          <span class="p-2 bg-orange-100 text-orange-600 rounded-xl text-lg">💰</span>
-        </div>
-        <div class="text-3xl font-black text-slate-900">${data.granTotal.ventasBrutas.toLocaleString('es-CO')}</div>
-        <p class="text-xs text-slate-400 mt-2">Promedio: <strong class="text-slate-700">${Math.round(data.promedioDiario).toLocaleString('es-CO')}</strong> / día</p>
-      </div>
-
-      <!-- Efectivo Recibido -->
-      <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-black tracking-wider uppercase text-slate-400">Efectivo en Caja</span>
-          <span class="p-2 bg-blue-100 text-blue-600 rounded-xl text-lg">💵</span>
-        </div>
-        <div class="text-3xl font-black text-slate-900">${data.granTotal.efectivo.toLocaleString('es-CO')}</div>
-        <p class="text-xs text-slate-400 mt-2">Dinero físico ingresado</p>
-      </div>
-
-      <!-- Nequi / Transferencias -->
-      <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-black tracking-wider uppercase text-slate-400">Nequi (Transferencias)</span>
-          <span class="p-2 bg-purple-100 text-purple-600 rounded-xl text-lg">📱</span>
-        </div>
-        <div class="text-3xl font-black text-slate-900">${data.granTotal.transferencias.toLocaleString('es-CO')}</div>
-        <p class="text-xs text-slate-400 mt-2">Total bancarizado</p>
-      </div>
-
-      <!-- Utilidad Neta / Libre -->
-      <div class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-black tracking-wider uppercase text-emerald-100">Dinero Libre (Neto)</span>
-          <span class="p-2 bg-white/20 rounded-xl text-lg">📈</span>
-        </div>
-        <div class="text-3xl font-black">${data.granTotal.utilidadNeta.toLocaleString('es-CO')}</div>
-        <p class="text-xs text-emerald-100 mt-2">Menos <strong class="text-white">${data.granTotal.gastos.toLocaleString('es-CO')}</strong> en gastos</p>
-      </div>
-    </div>
-
-    <!-- Gráfico y Resumen de Métodos -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Gráfico de tendencia -->
-      <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-base font-extrabold text-slate-900 uppercase tracking-wider text-xs">Histórico de Ventas vs Gastos</h2>
-          <span class="text-xs text-slate-400">Últimos días</span>
-        </div>
-        <div class="flex-1 w-full relative min-h-[300px]">
-          <canvas use:renderChart={{ semanas: data.semanas, dias: data.historialDias }}></canvas>
-        </div>
-      </div>
-
-      <!-- Desglose de Canales y Gastos -->
-      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between space-y-6">
-        <div>
-          <h3 class="font-extrabold text-slate-900 text-sm mb-4 uppercase tracking-wider text-xs">Canales de Pago</h3>
-          <div class="space-y-3">
-            <div>
-              <div class="flex justify-between text-xs font-bold text-slate-600 mb-1">
-                <span>Efectivo ({data.granTotal.ventasBrutas > 0 ? Math.round((data.granTotal.efectivo / data.granTotal.ventasBrutas) * 100) : 0}%)</span>
-                <span>${data.granTotal.efectivo.toLocaleString('es-CO')}</span>
-              </div>
-              <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-500 rounded-full" style="width: {data.granTotal.ventasBrutas > 0 ? (data.granTotal.efectivo / data.granTotal.ventasBrutas) * 100 : 0}%"></div>
-              </div>
-            </div>
-
-            <div>
-              <div class="flex justify-between text-xs font-bold text-slate-600 mb-1">
-                <span>Nequi ({data.granTotal.ventasBrutas > 0 ? Math.round((data.granTotal.transferencias / data.granTotal.ventasBrutas) * 100) : 0}%)</span>
-                <span>${data.granTotal.transferencias.toLocaleString('es-CO')}</span>
-              </div>
-              <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-purple-500 rounded-full" style="width: {data.granTotal.ventasBrutas > 0 ? (data.granTotal.transferencias / data.granTotal.ventasBrutas) * 100 : 0}%"></div>
-              </div>
-            </div>
-
-            <div>
-              <div class="flex justify-between text-xs font-bold text-slate-600 mb-1">
-                <span>Gastos Menores en Turno</span>
-                <span class="text-red-500">-${data.granTotal.gastos.toLocaleString('es-CO')}</span>
-              </div>
-              <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-red-400 rounded-full" style="width: {data.granTotal.ventasBrutas > 0 ? (data.granTotal.gastos / data.granTotal.ventasBrutas) * 100 : 0}%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Gastos Recientes -->
-        <div class="border-t border-slate-100 pt-4">
-          <h4 class="text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Gastos de Caja Registrados</h4>
-          {#if data.listaGastos && data.listaGastos.length > 0}
-            <div class="space-y-2">
-              {#each data.listaGastos.slice(0, 4) as g}
-                <div class="flex justify-between items-center text-xs p-2 rounded-xl bg-slate-50">
-                  <span class="text-slate-700 font-medium truncate max-w-[150px]">{g.descripcion}</span>
-                  <span class="text-red-600 font-bold">-${Number(g.monto).toLocaleString('es-CO')}</span>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <p class="text-xs text-slate-400 italic">No hay gastos en este rango.</p>
-          {/if}
-        </div>
-      </div>
-    </div>
-
-    <!-- TABLA: Historial de Días -->
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-      <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 class="text-lg font-extrabold text-slate-900">Historial Diario de Turnos</h2>
-          <p class="text-xs text-slate-400 mt-0.5">Detalle día a día de lo que entró y salió de caja.</p>
-        </div>
-        <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl text-xs font-bold">
-          <button 
-            onclick={() => vistaActiva = 'diario'}
-            class="px-4 py-2 rounded-xl transition-all {vistaActiva === 'diario' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}"
-          >
-            Vista Diaria ({data.historialDias.length})
-          </button>
-          <button 
-            onclick={() => vistaActiva = 'semanal'}
-            class="px-4 py-2 rounded-xl transition-all {vistaActiva === 'semanal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}"
-          >
-            Agrupado Semanas ({data.semanas.length})
-          </button>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        {#if vistaActiva === 'diario'}
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider font-extrabold border-b border-slate-100">
-                <th class="p-4 pl-6">Fecha</th>
-                <th class="p-4 text-right">Efectivo</th>
-                <th class="p-4 text-right">Nequi</th>
-                <th class="p-4 text-right text-red-500">Gastos</th>
-                <th class="p-4 text-right font-black text-slate-700">Venta Bruta</th>
-                <th class="p-4 text-right font-black text-emerald-600 pr-6">Libre (Neto)</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-sm">
-              {#each data.historialDias as dia}
-                <tr class="hover:bg-slate-50/70 transition-colors">
-                  <td class="p-4 pl-6 font-bold text-slate-800 flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-orange-400"></span>
-                    {dia.fecha}
-                  </td>
-                  <td class="p-4 text-right text-slate-600 font-semibold">${dia.efectivo.toLocaleString('es-CO')}</td>
-                  <td class="p-4 text-right text-purple-600 font-semibold">${dia.transferencias.toLocaleString('es-CO')}</td>
-                  <td class="p-4 text-right text-red-500 font-semibold">-${dia.gastos.toLocaleString('es-CO')}</td>
-                  <td class="p-4 text-right font-bold text-slate-900">${dia.ventasBrutas.toLocaleString('es-CO')}</td>
-                  <td class="p-4 text-right font-black text-emerald-600 pr-6">${dia.utilidadNeta.toLocaleString('es-CO')}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {:else}
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider font-extrabold border-b border-slate-100">
-                <th class="p-4 pl-6">Semana</th>
-                <th class="p-4 text-right">Días</th>
-                <th class="p-4 text-right">Venta Bruta</th>
-                <th class="p-4 text-right text-red-500">Gastos</th>
-                <th class="p-4 text-right font-black text-emerald-600 pr-6">Utilidad Neta</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 text-sm">
-              {#each data.semanas as sem}
-                <tr class="hover:bg-slate-50/70 transition-colors">
-                  <td class="p-4 pl-6 font-bold text-slate-800">
-                    Semana del {new Date(sem.lunes).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                  </td>
-                  <td class="p-4 text-right text-slate-500 font-medium">{sem.diasContados} días</td>
-                  <td class="p-4 text-right font-bold text-slate-900">${sem.ventasBrutas.toLocaleString('es-CO')}</td>
-                  <td class="p-4 text-right text-red-500 font-semibold">-${sem.gastos.toLocaleString('es-CO')}</td>
-                  <td class="p-4 text-right font-black text-emerald-600 pr-6">${sem.utilidadNeta.toLocaleString('es-CO')}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-      </div>
-    </div>
-  {/if}
+		<Card>
+			<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+				<SegmentedControl
+					label="Vista de detalle"
+					value={vista}
+					onchange={(v) => (vista = v)}
+					options={[
+						{ value: 'dias', label: 'Días' },
+						{ value: 'semanas', label: 'Semanas' },
+						{ value: 'turnos', label: 'Turnos' },
+						{ value: 'gastos', label: 'Gastos' },
+						{ value: 'compras', label: 'Compras' }
+					]}
+				/>
+				{#if data.pagosDesglose.length}
+					<div class="flex flex-wrap gap-1.5">
+						{#each data.pagosDesglose as p (p.plataforma)}<Badge variant="outline">{p.plataforma}: {formatCOP(p.total)}</Badge>{/each}
+					</div>
+				{/if}
+			</div>
+			{#if vista === 'dias'}
+				<DataTable {loading} rows={data.historialDias} columns={diaCols} rowKey={(d) => d.fecha} initialSort={{ id: 'fecha', dir: 'desc' }} searchPlaceholder="Buscar día…">
+					{#snippet cell(d, c)}
+						{#if c.id === 'neto'}<span class="font-medium {d.utilidadNeta < 0 ? 'text-danger' : ''}">{money(d.utilidadNeta)}</span>{:else}{c.format ? c.format(c.accessor(d), d) : c.accessor(d)}{/if}
+					{/snippet}
+				</DataTable>
+			{:else if vista === 'semanas'}
+				<DataTable {loading} rows={data.semanas} columns={semCols} rowKey={(s) => s.lunes} initialSort={{ id: 'lunes', dir: 'desc' }} searchPlaceholder="Buscar semana…" />
+			{:else if vista === 'turnos'}
+				<DataTable {loading} rows={data.turnosDetallados} columns={turnoCols} rowKey={(t) => t.id} initialSort={{ id: 'fecha', dir: 'desc' }} searchPlaceholder="Buscar turno…" emptyTitle="Sin turnos" />
+			{:else if vista === 'gastos'}
+				<DataTable {loading} rows={data.listaGastos} columns={gastoCols} rowKey={(x) => x.id} initialSort={{ id: 'fecha', dir: 'desc' }} searchPlaceholder="Buscar gasto…" emptyTitle="Sin gastos" />
+			{:else}
+				<DataTable {loading} rows={data.compras} columns={compraCols} rowKey={(x) => x.id} initialSort={{ id: 'fecha', dir: 'desc' }} searchPlaceholder="Buscar insumo…" emptyTitle="Sin compras" emptyDescription="Las compras se registran en Bodega." />
+			{/if}
+		</Card>
+	{/if}
 </div>
-

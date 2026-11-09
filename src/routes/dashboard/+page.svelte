@@ -1,356 +1,225 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
-  import { 
-    BarChart2, 
-    Bell, 
-    Calendar, 
-    TrendingUp, 
-    DollarSign, 
-    PieChart, 
-    ShoppingBag, 
-    Flame, 
-    Layers,
-    Pizza,
-    Boxes,
-    Wallet,
-    Banknote,
-    Smartphone,
-    Receipt,
-    CheckCircle2
-  } from '@lucide/svelte';
-  let { data } = $props();
+	import { goto } from '$app/navigation';
+	import { page, navigating } from '$app/state';
+	import {
+		Banknote,
+		Wallet,
+		Receipt,
+		ReceiptText,
+		CalendarDays,
+		X,
+		Table2,
+		ChartColumn,
+		Flame,
+		Pizza
+	} from '@lucide/svelte';
+	import KpiCard from '$lib/components/ui/KpiCard.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import CashflowChart from '$lib/components/charts/CashflowChart.svelte';
+	import PaymentMixCard from '$lib/features/finance/components/PaymentMixCard.svelte';
+	import FoodCostCard from '$lib/features/finance/components/FoodCostCard.svelte';
+	import TopProductsCard from '$lib/features/finance/components/TopProductsCard.svelte';
+	import StockAlertsCard from '$lib/features/finance/components/StockAlertsCard.svelte';
+	import ShiftsTable from '$lib/features/finance/components/ShiftsTable.svelte';
+	import SalesByLineCard from '$lib/features/finance/components/SalesByLineCard.svelte';
+	import { businessDayKey, type RangeType } from '$lib/features/finance/domain/period';
+	import { formatCOP, formatDate, formatNumber, formatPct } from '$lib/utils/format';
 
-  let rangoSeleccionado = $derived(data.rangoActual || 'diario');
-  let fechaInput = $state(data.fechaSeleccionada || '');
+	let { data } = $props();
 
-  function cambiarRango(nuevoRango: string) {
-    const params = new URLSearchParams($page.url.searchParams);
-    params.set('rango', nuevoRango);
-    if (fechaInput) {
-      params.set('fecha', fechaInput);
-    } else {
-      params.delete('fecha');
-    }
-    goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
-  }
+	const RANGES: { value: RangeType; label: string }[] = [
+		{ value: 'diario', label: 'Hoy' },
+		{ value: 'semanal', label: 'Semana' },
+		{ value: 'mensual', label: 'Mes' },
+		{ value: 'anual', label: 'Año' }
+	];
+	const COMPARISON: Record<RangeType, string> = {
+		diario: 'vs. ayer',
+		semanal: 'vs. semana anterior',
+		mensual: 'vs. mes anterior',
+		anual: 'vs. año anterior'
+	};
 
-  function filtrarFecha() {
-    const params = new URLSearchParams($page.url.searchParams);
-    params.set('rango', rangoSeleccionado);
-    if (fechaInput) {
-      params.set('fecha', fechaInput);
-    } else {
-      params.delete('fecha');
-    }
-    goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
-  }
+	let fecha = $state('');
+	$effect.pre(() => {
+		fecha = data.range.dateKey;
+	});
 
-  function limpiarFecha() {
-    fechaInput = '';
-    const params = new URLSearchParams($page.url.searchParams);
-    params.set('rango', rangoSeleccionado);
-    params.delete('fecha');
-    goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
-  }
+	// Skeletons mientras se recalcula el mismo dashboard (cambio de período/fecha)
+	let loading = $derived(navigating.to?.url.pathname === '/dashboard');
+	let showTable = $state(false);
 
-  // Textos explicativos según el período
-  let etiquetaPeriodo = $derived(
-    rangoSeleccionado === 'diario' ? 'del Día' :
-    rangoSeleccionado === 'semanal' ? 'de la Semana' :
-    rangoSeleccionado === 'mensual' ? 'del Mes' : 'del Año'
-  );
+	let s = $derived(data.summary);
+	let cmp = $derived(COMPARISON[data.range.type] + (data.range.partial ? ' (mismo tramo)' : ''));
+	let pasado = $derived(data.cashflow.filter((p) => !p.future));
+	let sparkVentas = $derived(pasado.map((p) => p.efectivo + p.transferencias));
+	let sparkNeto = $derived(pasado.map((p) => p.neto));
+	let periodLabel = $derived.by(() => {
+		// Fechas por día de negocio (la jornada termina a las 04:00 del día siguiente)
+		const day = (iso: string) => formatDate(businessDayKey(iso) + 'T12:00:00-05:00');
+		const lastDay = new Date(new Date(data.range.end).getTime() - 1).toISOString();
+		return data.range.type === 'diario'
+			? day(data.range.start)
+			: `${day(data.range.start)} – ${day(lastDay)}`;
+	});
 
-  let masasUsadas = $derived(Math.floor(data.totalPorcionesVendidas / 8));
-  let masasDisponibles = $derived(data.stockMasasActual || 0);
-
-  // Meta estimada de ventas según periodo para el medidor visual
-  let metaVentas = $derived(
-    rangoSeleccionado === 'diario' ? 1000000 :
-    rangoSeleccionado === 'semanal' ? 7000000 :
-    rangoSeleccionado === 'mensual' ? 30000000 : 360000000
-  );
-
-  const perc = (value: number, total: number) => total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+	function navigate(params: { rango?: RangeType; fecha?: string }) {
+		const q = new URLSearchParams(page.url.searchParams);
+		if (params.rango) q.set('rango', params.rango);
+		if (params.fecha !== undefined) {
+			if (params.fecha) q.set('fecha', params.fecha);
+			else q.delete('fecha');
+		}
+		goto(`?${q}`, { keepFocus: true, noScroll: true, replaceState: true });
+	}
 </script>
 
-<div class="font-sans text-sm space-y-6">
-  <!-- Barra Superior: Filtro de Periodo y Selección de Fecha -->
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-    <div>
-      <div class="flex items-center gap-2">
-        <span class="p-2 bg-orange-100 text-orange-600 rounded-xl">
-          <BarChart2 size={24} />
-        </span>
-        <div>
-          <h1 class="text-2xl font-black text-slate-900 tracking-tight">Estadísticas y Ventas</h1>
-          <p class="text-xs text-slate-500 font-medium">Control en tiempo real de ventas, inventario y rendimiento por período.</p>
-        </div>
-      </div>
-    </div>
+<svelte:head><title>Dashboard · MesaCapital</title></svelte:head>
 
-    <!-- Botonera de Períodos y Fecha -->
-    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full lg:w-auto">
-      <!-- Selector de Pestañas: Día / Semana / Mes / Año (Responsive scroll / wrap) -->
-      <div class="bg-slate-100 p-1 rounded-2xl flex items-center justify-between sm:justify-start gap-1 border border-slate-200/80 shadow-inner overflow-x-auto max-w-full">
-        <button
-          onclick={() => cambiarRango('diario')}
-          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'diario' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
-        >
-          Hoy
-        </button>
-        <button
-          onclick={() => cambiarRango('semanal')}
-          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'semanal' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
-        >
-          Semana
-        </button>
-        <button
-          onclick={() => cambiarRango('mensual')}
-          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'mensual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
-        >
-          Mes
-        </button>
-        <button
-          onclick={() => cambiarRango('anual')}
-          class="flex-1 sm:flex-initial px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition-all {rangoSeleccionado === 'anual' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-600 hover:text-slate-900'}"
-        >
-          Año
-        </button>
-      </div>
+<div class="mx-auto flex max-w-7xl flex-col gap-6">
+	<!-- Encabezado + filtros (una sola fila sobre los gráficos) -->
+	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+		<div>
+			<p class="text-[13px] text-muted-foreground">{periodLabel}</p>
+			<h1 class="text-2xl font-semibold tracking-tight">Resumen financiero</h1>
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<SegmentedControl label="Período" options={RANGES} value={data.range.type} onchange={(v) => navigate({ rango: v })} />
+			<div class="flex h-9 items-center gap-2 rounded-md border border-input bg-card pr-1 pl-3 shadow-sm">
+				<CalendarDays size={15} class="text-muted-foreground" />
+				<label class="sr-only" for="ref-date">Fecha de referencia</label>
+				<input
+					id="ref-date"
+					type="date"
+					bind:value={fecha}
+					onchange={() => navigate({ fecha })}
+					class="bg-transparent text-[13px] outline-none dark:[color-scheme:dark]"
+				/>
+				{#if fecha}
+					<button
+						type="button"
+						class="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+						onclick={() => navigate({ fecha: '' })}
+						aria-label="Volver a hoy"><X size={14} /></button
+					>
+				{/if}
+			</div>
+		</div>
+	</div>
 
-      <!-- Selector de Fecha Específica (Opcional) -->
-      <div class="flex items-center justify-between gap-2 bg-slate-50 p-2 px-3 sm:px-4 rounded-2xl border border-slate-200 w-full sm:w-auto">
-        <div class="flex items-center gap-2">
-          <Calendar size="18" class="text-slate-500 shrink-0" />
-          <input
-            type="date"
-            bind:value={fechaInput}
-            onchange={filtrarFecha}
-            class="bg-transparent text-xs sm:text-sm font-bold text-slate-800 outline-none cursor-pointer py-1"
-            title="Selecciona una fecha de referencia"
-          />
-        </div>
-        {#if fechaInput}
-          <button
-            onclick={limpiarFecha}
-            class="text-base text-slate-400 hover:text-red-500 font-black px-1.5"
-            title="Restablecer a fecha actual"
-          >
-            ×
-          </button>
-        {/if}
-      </div>
-    </div>
-  </div>
+	<!-- KPIs principales -->
+	<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores clave">
+		<KpiCard
+			label="Ventas brutas"
+			icon={Wallet}
+			value={formatCOP(s.ventasBrutas)}
+			delta={data.deltas.ventas}
+			comparison={cmp}
+			spark={sparkVentas}
+			{loading}
+		/>
+		<KpiCard
+			label="Utilidad neta"
+			icon={Banknote}
+			value={formatCOP(s.utilidadNeta)}
+			delta={data.deltas.utilidad}
+			comparison={cmp}
+			spark={sparkNeto}
+			{loading}
+		>
+			{#snippet footer()}
+				{#if s.margen !== null}
+					<Badge variant={s.margen < 0 ? 'danger' : 'outline'}>Margen {formatPct(s.margen)}</Badge>
+				{/if}
+			{/snippet}
+		</KpiCard>
+		<KpiCard
+			label="Gastos operativos"
+			icon={Receipt}
+			value={formatCOP(s.gastos)}
+			delta={data.deltas.gastos}
+			inverse
+			comparison={cmp}
+			{loading}
+		/>
+		<KpiCard
+			label="Ticket promedio por turno"
+			icon={ReceiptText}
+			value={s.ticketPorTurno === null ? '—' : formatCOP(s.ticketPorTurno)}
+			delta={data.deltas.ticket}
+			comparison={`${s.turnos} ${s.turnos === 1 ? 'turno' : 'turnos'}`}
+			{loading}
+		/>
+	</section>
 
-  <!-- KPI Cards Principales del Período -->
-  <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-    <!-- Venta Bruta del Período -->
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-      <div class="flex items-center gap-4">
-        <div class="w-16 h-16 relative">
-          <svg viewBox="0 0 36 36" class="w-full h-full transform -rotate-90">
-            <path d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831" fill="none" stroke="#FFEDD5" stroke-width="4" />
-            <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831" fill="none" stroke="#FF5B29" stroke-width="4" stroke-dasharray="{perc(data.ventasBrutas, metaVentas)} 100" stroke-linecap="round" />
-          </svg>
-          <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-[#FF5B29]">{perc(data.ventasBrutas, metaVentas)}%</span>
-        </div>
-        <div>
-          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Venta Bruta {etiquetaPeriodo}</span>
-          <p class="text-2xl font-black text-slate-900 mt-0.5">${data.ventasBrutas.toLocaleString('es-CO')}</p>
-          <span class="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
-            <TrendingUp size={14} /> {data.cantidadTurnos} {data.cantidadTurnos === 1 ? 'turno cerrado' : 'turnos cerrados'}
-          </span>
-        </div>
-      </div>
-    </div>
+	<!-- Flujo de caja + mezcla de cobro -->
+	<section class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+		<Card
+			class="xl:col-span-2"
+			title="Flujo de caja"
+			description={data.range.type === 'diario' ? 'Últimos 7 días' : data.range.type === 'anual' ? 'Por mes' : 'Por día'}
+		>
+			{#snippet actions()}
+				<button
+					type="button"
+					onclick={() => (showTable = !showTable)}
+					class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-card px-2.5 text-xs font-medium text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
+					aria-pressed={showTable}
+				>
+					{#if showTable}<ChartColumn size={14} /> Gráfico{:else}<Table2 size={14} /> Tabla{/if}
+				</button>
+			{/snippet}
+			{#if loading}
+				<Skeleton class="h-72 w-full" />
+			{:else}
+				<CashflowChart data={data.cashflow} {showTable} />
+			{/if}
+		</Card>
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
+			<PaymentMixCard summary={s} {loading} />
+			<FoodCostCard summary={s} status={data.foodCostStatus} delta={data.deltas.foodCost} {loading} />
+		</div>
+	</section>
 
-    <!-- Dinero Libre / Neto -->
-    <div class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-3xl shadow-md p-6 flex items-center justify-between relative overflow-hidden group">
-      <div>
-        <span class="text-xs font-bold text-emerald-100 uppercase tracking-wider block">Dinero Libre (Neto)</span>
-        <p class="text-2xl font-black mt-1">${data.utilidadNeta.toLocaleString('es-CO')}</p>
-        <span class="text-xs text-emerald-100 font-medium block mt-1">
-          Menos <strong class="text-white font-bold">${data.gastosPeriodo.toLocaleString('es-CO')}</strong> en gastos
-        </span>
-      </div>
-      <div class="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-white">
-        <DollarSign size={28} />
-      </div>
-    </div>
+	<!-- Operación -->
+	<section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+		<Card title="Producción" description="Porciones y desperdicio">
+			{#if loading}
+				<Skeleton class="h-24 w-full" />
+			{:else}
+				<dl class="grid grid-cols-2 gap-4">
+					<div>
+						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Pizza size={13} /> Vendidas</dt>
+						<dd class="mt-1 text-xl font-semibold tabular-nums">{formatNumber(s.porciones)}</dd>
+					</div>
+					<div>
+						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Flame size={13} /> Mermas</dt>
+						<dd class="mt-1 text-xl font-semibold tabular-nums">{formatNumber(s.mermas)}</dd>
+					</div>
+					<div>
+						<dt class="text-xs text-muted-foreground">Tasa de merma</dt>
+						<dd class="mt-1 flex items-center gap-2 text-sm font-medium tabular-nums">
+							{formatPct(s.tasaMerma)}
+							{#if s.tasaMerma !== null && s.tasaMerma > 0.05}<Badge variant="warning">Alta</Badge>{/if}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-xs text-muted-foreground">Masas en bodega</dt>
+						<dd class="mt-1 text-sm font-medium tabular-nums">{formatNumber(data.stockMasa)}</dd>
+					</div>
+				</dl>
+			{/if}
+		</Card>
+		<SalesByLineCard lineas={data.ventasPorLinea} {loading} />
+		<TopProductsCard items={data.topSabores} {loading} />
+		<StockAlertsCard items={data.lowStock} {loading} />
+	</section>
 
-    <!-- Pinchos / Porciones y Unidades Vendidas -->
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between">
-      <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Pinchos / Porciones Vendidas</span>
-        <p class="text-2xl font-black text-slate-900 mt-1">{data.totalPorcionesVendidas} <span class="text-sm font-bold text-slate-400">unid.</span></p>
-        <p class="text-xs text-slate-500 font-medium mt-1">
-          Equivalente a <strong class="text-slate-800 font-bold">{masasUsadas} tandas / pizzas</strong>
-        </p>
-      </div>
-      <div class="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center text-2xl" title="Pinchos o porciones despachadas">
-        🍢
-      </div>
-    </div>
-
-    <!-- Insumos Crudos en Bodega y Mermas -->
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex items-center justify-between">
-      <div>
-        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Insumos Base en Bodega</span>
-        <p class="text-2xl font-black text-slate-900 mt-1">{masasDisponibles} <span class="text-sm font-bold text-slate-400">unid. crudas</span></p>
-        <p class="text-xs text-rose-600 font-medium mt-1 flex items-center gap-1">
-          Mermas: <strong>{data.totalMermas} quemadas/dañadas</strong>
-        </p>
-      </div>
-      <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center" title="Inventario físico de materia prima">
-        <Boxes size={28} />
-      </div>
-    </div>
-  </section>
-
-  <!-- Desglose de Canales de Pago del Período -->
-  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
-    <h2 class="text-sm font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
-      <Wallet size={16} class="text-slate-500" /> Desglose de Canales de Pago {etiquetaPeriodo}
-    </h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <!-- Efectivo -->
-      <div class="p-4 bg-blue-50/70 border border-blue-200/70 rounded-2xl flex items-center justify-between">
-        <div>
-          <span class="text-xs font-bold uppercase text-blue-800 tracking-wider block">Efectivo en Caja</span>
-          <p class="text-xl font-black text-blue-900 mt-1">${data.totalEfectivo.toLocaleString('es-CO')}</p>
-          <span class="text-[11px] text-blue-600 font-semibold">
-            {data.ventasBrutas > 0 ? Math.round((data.totalEfectivo / data.ventasBrutas) * 100) : 0}% de las ventas
-          </span>
-        </div>
-        <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 font-bold">
-          <Banknote size={20} />
-        </div>
-      </div>
-
-      <!-- Nequi -->
-      <div class="p-4 bg-purple-50/70 border border-purple-200/70 rounded-2xl flex items-center justify-between">
-        <div>
-          <span class="text-xs font-bold uppercase text-purple-800 tracking-wider block">Nequi (Transferencias)</span>
-          <p class="text-xl font-black text-purple-900 mt-1">${data.totalTransferencias.toLocaleString('es-CO')}</p>
-          <span class="text-[11px] text-purple-600 font-semibold">
-            {data.ventasBrutas > 0 ? Math.round((data.totalTransferencias / data.ventasBrutas) * 100) : 0}% de las ventas
-          </span>
-        </div>
-        <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 font-bold">
-          <Smartphone size={20} />
-        </div>
-      </div>
-
-      <!-- Gastos -->
-      <div class="p-4 bg-rose-50/70 border border-rose-200/70 rounded-2xl flex items-center justify-between">
-        <div>
-          <span class="text-xs font-bold uppercase text-rose-800 tracking-wider block">Gastos Pagados</span>
-          <p class="text-xl font-black text-rose-900 mt-1">-${data.gastosPeriodo.toLocaleString('es-CO')}</p>
-          <span class="text-[11px] text-rose-600 font-semibold">Compras menores del período</span>
-        </div>
-        <div class="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600 font-bold">
-          <Receipt size={20} />
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sección Inferior: Ranking de Sabores Vendidos y Alertas de Inventario -->
-  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <!-- Top Sabores Vendidos -->
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
-      <div>
-        <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-          <h2 class="text-base font-black text-slate-800 flex items-center gap-2">
-            <BarChart2 class="text-[#FF5B29]" size="20" /> Ranking de Sabores Más Vendidos {etiquetaPeriodo}
-          </h2>
-          <span class="text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">
-            Top Sabores
-          </span>
-        </div>
-
-        {#if data.saboresVendidos && data.saboresVendidos.length > 0}
-          <div class="space-y-3">
-            {#each data.saboresVendidos as sabor, index}
-              <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                <div class="flex items-center gap-3">
-                  <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {index === 0 ? 'bg-amber-400 text-slate-900' : index === 1 ? 'bg-slate-300 text-slate-800' : 'bg-orange-100 text-orange-700'}">
-                    #{index + 1}
-                  </span>
-                  <span class="font-bold text-slate-800 text-sm">{sabor.nombre}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs font-bold text-slate-500">
-                    ${(sabor.vendidas * 7000).toLocaleString('es-CO')}
-                  </span>
-                  <span class="bg-orange-100 text-orange-700 font-black px-3 py-1 rounded-xl text-xs">
-                    {sabor.vendidas} porc.
-                  </span>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <div class="text-center py-12 text-slate-400">
-            <Pizza size={40} class="mx-auto mb-2 text-slate-300" />
-            <p class="font-medium text-slate-600 text-sm">No hay registros de ventas procesados {etiquetaPeriodo.toLowerCase()}.</p>
-            <p class="text-xs text-slate-400 mt-1">Al cerrar turnos en esta fecha, aquí verás qué sabor es el más vendido.</p>
-          </div>
-        {/if}
-      </div>
-
-      {#if data.saboresVendidos && data.saboresVendidos.length > 0}
-        <div class="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400 text-right">
-          Total porciones contabilizadas en el ranking: <strong class="text-slate-700 font-bold">{data.saboresVendidos.reduce((acc, s) => acc + s.vendidas, 0)}</strong>
-        </div>
-      {/if}
-    </div>
-
-    <!-- Alertas de Inventario Crítico -->
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
-      <div>
-        <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-          <h2 class="text-base font-black text-slate-800 flex items-center gap-2">
-            <Bell class="text-rose-500" size="20" /> Alertas de Inventario en Bodega
-          </h2>
-          <span class="text-xs font-bold text-slate-500">Stock Mínimo</span>
-        </div>
-
-        {#if data.inventarioBajo && data.inventarioBajo.length > 0}
-          <div class="space-y-3">
-            {#each data.inventarioBajo as item}
-              <div class="flex items-center justify-between p-3 rounded-2xl bg-rose-50/50 border border-rose-100">
-                <div class="flex items-center gap-2.5">
-                  <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                  <span class="font-bold text-slate-800 text-sm">{item.nombre}</span>
-                </div>
-                <div class="text-right">
-                  <span class="text-rose-700 font-black px-2.5 py-1 bg-rose-100 rounded-lg text-xs">
-                    Quedan: {item.stockActual} {item.unidadMedida}s
-                  </span>
-                  <span class="text-[11px] text-slate-400 block mt-0.5">Mínimo: {item.stockMinimo}</span>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <div class="text-center py-12 text-slate-400">
-            <CheckCircle2 size={40} class="mx-auto mb-2 text-emerald-500" />
-            <p class="font-bold text-emerald-700 text-sm">Inventario en niveles óptimos</p>
-            <p class="text-xs text-slate-400 mt-1">Todos los ingredientes y masas superan el stock mínimo de seguridad.</p>
-          </div>
-        {/if}
-      </div>
-
-      <div class="mt-4 pt-3 border-t border-slate-100 text-right">
-        <a href="/bodega" class="text-xs font-bold text-orange-600 hover:text-orange-700">
-          Gestionar Bodega e Insumos →
-        </a>
-      </div>
-    </div>
-  </section>
+	<!-- Transacciones -->
+	<Card title="Cierres de turno" description="Detalle de los turnos del período">
+		<ShiftsTable rows={data.transactions} {loading} />
+	</Card>
 </div>
-
-
