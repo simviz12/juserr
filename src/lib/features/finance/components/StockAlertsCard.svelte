@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { PackageCheck, ArrowRight } from '@lucide/svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -18,13 +19,13 @@
 
 <Card title="Inventario crítico" description="Insumos en o bajo el stock mínimo">
 	{#snippet actions()}
-		<a href="/bodega" class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+		<a href={resolve('/bodega')} class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
 			Bodega <ArrowRight size={13} />
 		</a>
 	{/snippet}
 
 	{#if loading}
-		<div class="space-y-3">{#each Array(3) as _, i (i)}<Skeleton class="h-10 w-full" />{/each}</div>
+		<div class="space-y-3">{#each { length: 3 }, i (i)}<Skeleton class="h-10 w-full" />{/each}</div>
 	{:else if items.length === 0}
 		<EmptyState icon={PackageCheck} title="Todo en orden" description="Ningún insumo está bajo el mínimo." />
 	{:else}

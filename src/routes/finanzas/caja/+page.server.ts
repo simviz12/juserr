@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { turnos, gastos, cierresDia } from '$lib/server/schema';
-import { and, gte, lt, desc, eq } from 'drizzle-orm';
+import { and, gte, lt, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { gotoWithQuery } from '$lib/utils/navigation';
 	import { navigating } from '$app/state';
 	import { FileText, LoaderCircle, Wallet, Banknote, Receipt, ShoppingCart, ChevronLeft, ChevronRight, Scale } from '@lucide/svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -29,7 +29,7 @@
 	function mover(delta: number) {
 		const [y, m] = data.mes.split('-').map(Number);
 		const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-		goto(`?mes=${d.toISOString().slice(0, 7)}`, { noScroll: true, keepFocus: true });
+		gotoWithQuery({ mes: d.toISOString().slice(0, 7) });
 	}
 
 	let chartCanvas = $state<HTMLCanvasElement | null>(null);
@@ -113,7 +113,7 @@
 			<input
 				type="month"
 				value={data.mes}
-				onchange={(e) => e.currentTarget.value && goto(`?mes=${e.currentTarget.value}`, { noScroll: true, keepFocus: true })}
+				onchange={(e) => e.currentTarget.value && gotoWithQuery({ mes: e.currentTarget.value })}
 				aria-label="Mes"
 				class="h-9 min-w-0 rounded-md border border-input bg-card px-3 text-sm shadow-sm dark:[color-scheme:dark]"
 			/>

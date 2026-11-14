@@ -18,7 +18,7 @@
 
 <Card title="Productos más vendidos" description="Sabores de pizza y platos, por ingresos">
 	{#if loading}
-		<div class="space-y-4">{#each Array(4) as _, i (i)}<Skeleton class="h-7 w-full" />{/each}</div>
+		<div class="space-y-4">{#each { length: 4 }, i (i)}<Skeleton class="h-7 w-full" />{/each}</div>
 	{:else if items.length === 0}
 		<EmptyState icon={Pizza} title="Sin ventas registradas" description="Al cerrar turnos verás aquí el ranking." />
 	{:else}

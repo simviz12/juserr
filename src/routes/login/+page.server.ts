@@ -4,6 +4,7 @@ import { usuarios } from '$lib/server/schema';
 import { eq } from 'drizzle-orm';
 import { verify } from '@node-rs/argon2';
 import { createSession, generateSessionToken } from '$lib/server/auth';
+import { limpiarFallos, minutosBloqueo, registrarFallo } from '$lib/server/login-throttle';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -23,8 +24,15 @@ export const actions: Actions = {
             return fail(400, { message: 'Datos invalidos' });
         }
 
+        const claves = [`ip:${event.getClientAddress()}`, `user:${username.trim().toLowerCase()}`];
+        const bloqueo = minutosBloqueo(claves);
+        if (bloqueo > 0) {
+            return fail(429, { message: `Demasiados intentos fallidos. Intenta de nuevo en ${bloqueo} min.` });
+        }
+
         const results = await db.select().from(usuarios).where(eq(usuarios.nombre, username));
         if (results.length === 0) {
+            registrarFallo(claves);
             return fail(400, { message: 'Usuario o contraseña incorrectos' });
         }
 
@@ -32,11 +40,13 @@ export const actions: Actions = {
         const validPassword = await verify(user.passwordHash, password);
 
         if (!validPassword) {
+            registrarFallo(claves);
             return fail(400, { message: 'Usuario o contraseña incorrectos' });
         }
+        limpiarFallos(claves);
 
         const token = generateSessionToken();
-        const session = await createSession(token, user.id);
+        await createSession(token, user.id);
 
         event.cookies.set('session', token, {
             path: '/',

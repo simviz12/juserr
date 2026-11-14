@@ -17,7 +17,7 @@
 
 <Card title="Ventas por línea" description="Estimadas por conteo de inventario en cada cierre">
 	{#if loading}
-		<div class="space-y-4">{#each Array(3) as _, i (i)}<Skeleton class="h-7 w-full" />{/each}</div>
+		<div class="space-y-4">{#each { length: 3 }, i (i)}<Skeleton class="h-7 w-full" />{/each}</div>
 	{:else if lineas.length === 0}
 		<EmptyState icon={Store} title="Sin cierres con inventario" description="Al cerrar turnos contando panes, chuzos o porciones verás cada línea aquí." />
 	{:else}

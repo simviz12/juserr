@@ -150,7 +150,7 @@
 			</thead>
 			<tbody>
 				{#if loading}
-					{#each Array(5) as _, i (i)}
+					{#each { length: 5 }, i (i)}
 						<tr class="border-b border-border last:border-0">
 							{#each columns as c (c.id)}
 								<td class={cn('px-3 py-3', c.hideOnMobile && 'hidden md:table-cell')}><Skeleton class="h-4 w-full max-w-28" /></td>

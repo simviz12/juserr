@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import type { ResolvedPathname } from '$app/types';
 	import { cn } from '$lib/utils/cn';
 
 	type Variant = 'default' | 'secondary' | 'outline' | 'ghost' | 'danger';
@@ -9,7 +10,8 @@
 	interface Props extends HTMLButtonAttributes {
 		variant?: Variant;
 		size?: Size;
-		href?: string;
+		/** Ruta interna ya resuelta con resolve() de $app/paths. */
+		href?: ResolvedPathname;
 		children: Snippet;
 	}
 

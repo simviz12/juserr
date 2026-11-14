@@ -1,4 +1,4 @@
-const http = require('http');
+import http from 'node:http';
 
 const URL = 'http://localhost:3001/login';
 const TOTAL_REQUESTS = 300;
@@ -23,7 +23,7 @@ function sendRequest() {
       else errors++;
       next();
     });
-  }).on('error', (err) => {
+  }).on('error', () => {
     errors++;
     next();
   });

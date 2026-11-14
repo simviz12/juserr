@@ -18,6 +18,8 @@ export interface PdfTable {
 	numeric?: number[];
 	/** Fila de totales opcional, en negrita. */
 	foot?: (string | number)[];
+	/** Índices de filas del cuerpo resaltadas en negrita (subtotales). */
+	boldRows?: number[];
 }
 
 export interface PdfReport {
@@ -46,9 +48,9 @@ const WINANSI_EXTRA = new Set(['–', '—', '‘', '’', '“', '”', '•', 
  */
 export function pdfText(s: string): string {
 	return s
-		.replace(/−/g, '-')
-		.replace(/[   ]/g, ' ')
-		.replace(/≈/g, '~')
+		.replace(/\u2212/g, '-')
+		.replace(/[\u00a0\u202f\u2009]/g, ' ')
+		.replace(/\u2248/g, '~')
 		.replace(/[^ -ÿ\n]/g, (c) => (WINANSI_EXTRA.has(c) ? c : ''));
 }
 
@@ -150,6 +152,7 @@ export async function buildPdfReport(input: PdfReport) {
 		doc.setTextColor(...INK);
 		doc.text(t.title, M, y);
 		const numeric = new Set(t.numeric ?? []);
+		const bold = new Set(t.boldRows ?? []);
 		autoTable(doc, {
 			startY: y + 3,
 			margin: { left: M, right: M },
@@ -165,6 +168,10 @@ export async function buildPdfReport(input: PdfReport) {
 			columnStyles: Object.fromEntries([...numeric].map((i) => [i, { halign: 'right' as const }])),
 			didParseCell: (d) => {
 				if (numeric.has(d.column.index) && (d.section === 'head' || d.section === 'foot')) d.cell.styles.halign = 'right';
+				if (d.section === 'body' && bold.has(d.row.index)) {
+					d.cell.styles.fontStyle = 'bold';
+					d.cell.styles.fillColor = SOFT;
+				}
 			}
 		});
 		y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 9;

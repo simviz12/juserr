@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { page, navigating } from '$app/state';
+	import { gotoWithQuery } from '$lib/utils/navigation';
+	import { navigating } from '$app/state';
 	import {
 		Banknote,
 		Wallet,
@@ -43,10 +43,8 @@
 		anual: 'vs. año anterior'
 	};
 
-	let fecha = $state('');
-	$effect.pre(() => {
-		fecha = data.range.dateKey;
-	});
+	// Editable por el selector, pero se resincroniza al navegar.
+	let fecha = $derived(data.range.dateKey);
 
 	// Skeletons mientras se recalcula el mismo dashboard (cambio de período/fecha)
 	let loading = $derived(navigating.to?.url.pathname === '/dashboard');
@@ -67,13 +65,10 @@
 	});
 
 	function navigate(params: { rango?: RangeType; fecha?: string }) {
-		const q = new URLSearchParams(page.url.searchParams);
-		if (params.rango) q.set('rango', params.rango);
-		if (params.fecha !== undefined) {
-			if (params.fecha) q.set('fecha', params.fecha);
-			else q.delete('fecha');
-		}
-		goto(`?${q}`, { keepFocus: true, noScroll: true, replaceState: true });
+		gotoWithQuery(
+			{ ...(params.rango ? { rango: params.rango } : {}), ...(params.fecha !== undefined ? { fecha: params.fecha } : {}) },
+			{ merge: true, replaceState: true }
+		);
 	}
 </script>
 

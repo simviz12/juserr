@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { gotoWithQuery } from '$lib/utils/navigation';
 	import { CalendarRange, Layers, Pizza, Flame, Percent, Download } from '@lucide/svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -57,7 +57,7 @@
 				<span class="text-muted-foreground">–</span>
 				<input type="date" bind:value={fin} aria-label="Hasta" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
 			</div>
-			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => goto(`?inicio=${inicio}&fin=${fin}`, { noScroll: true, keepFocus: true })}>Aplicar</button>
+			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => gotoWithQuery({ inicio, fin })}>Aplicar</button>
 			<button type="button" class={cn(btn.base, btn.outline)} onclick={exportar} disabled={data.produccion.length === 0}><Download size={15} /> Excel</button>
 		{/snippet}
 	</PageHeader>

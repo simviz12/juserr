@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { turnos, gastos, productos, pizzaSabores, pizzaSobras, pizzaRuedas, pizzaVentas, transaccionesTurno } from '$lib/server/schema';
+import { turnos, gastos, productos, pizzaSabores, pizzaSobras, transaccionesTurno } from '$lib/server/schema';
 
 import type { Actions, PageServerLoad } from './$types';
 import { eq, desc, inArray, sql } from 'drizzle-orm';

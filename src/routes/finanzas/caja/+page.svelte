@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { gotoWithQuery } from '$lib/utils/navigation';
 	import { navigating } from '$app/state';
 	import { LockKeyhole, LoaderCircle, CircleCheck, Banknote, Smartphone, Receipt, ClipboardList } from '@lucide/svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -21,10 +21,8 @@
 	let p = $derived(data.preview);
 	let loading = $derived(navigating.to?.url.pathname === '/finanzas/caja');
 	let submitting = $state(false);
-	let fecha = $state('');
-	$effect.pre(() => {
-		fecha = p.dayKey;
-	});
+	// Editable por el selector, pero se resincroniza al navegar.
+	let fecha = $derived(p.dayKey);
 	const hoy = businessDayKey(new Date());
 	const dayLabel = (k: string) => formatDate(k + 'T12:00:00-05:00');
 
@@ -56,7 +54,7 @@
 				}}
 			>
 				<Field label="Jornada" for="fecha" hint="De 04:00 a 04:00 del día siguiente">
-					<input id="fecha" name="fecha" type="date" max={hoy} bind:value={fecha} onchange={() => goto(`?fecha=${fecha}`, { keepFocus: true, noScroll: true, replaceState: true })} required class={inputClass} />
+					<input id="fecha" name="fecha" type="date" max={hoy} bind:value={fecha} onchange={() => gotoWithQuery({ fecha }, { replaceState: true })} required class={inputClass} />
 				</Field>
 				{#if p.yaCerrado}
 					<Badge variant="success" class="self-start"><CircleCheck size={12} /> Este día ya está cerrado</Badge>
@@ -73,7 +71,7 @@
 
 		<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
 			{#if loading}
-				{#each Array(4) as _, i (i)}<Skeleton class="h-[92px]" />{/each}
+				{#each { length: 4 }, i (i)}<Skeleton class="h-[92px]" />{/each}
 			{:else}
 				<StatTile label="Turnos" value={String(p.turnos)} icon={ClipboardList} hint={dayLabel(p.dayKey)} />
 				<StatTile label="Efectivo" value={formatCOP(p.efectivo)} icon={Banknote} />

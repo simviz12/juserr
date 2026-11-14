@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { ChartPie, Inbox, Scale, FileText } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
+	import { ChartPie, Inbox, Scale, FileText, ReceiptText } from '@lucide/svelte';
 	let { children } = $props();
 
 	const tabs = [
-		{ name: 'Resumen', path: '/finanzas/resumen', icon: ChartPie },
-		{ name: 'Caja diaria', path: '/finanzas/caja', icon: Inbox },
-		{ name: 'Corte semanal', path: '/finanzas/semanal', icon: Scale },
-		{ name: 'Reporte mensual', path: '/finanzas/mensual', icon: FileText }
+		{ name: 'Resumen', path: '/finanzas/resumen', href: resolve('/finanzas/resumen'), icon: ChartPie },
+		{ name: 'Estado de resultados', path: '/finanzas/estado-resultados', href: resolve('/finanzas/estado-resultados'), icon: ReceiptText },
+		{ name: 'Caja diaria', path: '/finanzas/caja', href: resolve('/finanzas/caja'), icon: Inbox },
+		{ name: 'Corte semanal', path: '/finanzas/semanal', href: resolve('/finanzas/semanal'), icon: Scale },
+		{ name: 'Reporte mensual', path: '/finanzas/mensual', href: resolve('/finanzas/mensual'), icon: FileText }
 	];
 </script>
 
@@ -24,7 +26,7 @@
 			{@const Icon = tab.icon}
 			{@const active = page.url.pathname === tab.path}
 			<a
-				href={tab.path}
+				href={tab.href}
 				aria-current={active ? 'page' : undefined}
 				class="flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm whitespace-nowrap transition-colors {active
 					? 'border-foreground font-medium text-foreground'

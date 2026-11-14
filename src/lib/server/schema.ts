@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, numeric, boolean, real } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, timestamp, numeric, boolean, real, index } from 'drizzle-orm/pg-core';
 
 export const usuarios = pgTable('usuarios', {
   id: serial('id').primaryKey(),
@@ -120,6 +120,8 @@ export const gastos = pgTable('gastos', {
   descripcion: text('descripcion').notNull(),
   monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
   fecha: timestamp('fecha').defaultNow(),
+  // Categoría contable para el estado de resultados. null = se clasifica sola por el concepto.
+  categoria: text('categoria'),
 });
 
 export const cierresDia = pgTable('cierres_dia', {
@@ -223,3 +225,24 @@ export const saasSuscripciones = pgTable('saas_suscripciones', {
 });
 
 
+// ── ESTADO DE RESULTADOS (movimientos contables que no pasan por la caja del turno) ──
+// Devoluciones/descuentos en ventas, otros ingresos no operacionales y gastos pagados
+// por fuera del turno (arriendo, nómina, impuestos, comisiones bancarias...).
+// Nunca se borran: se anulan (estado = 'anulado') para conservar la trazabilidad.
+export const movimientosContables = pgTable(
+  'movimientos_contables',
+  {
+    id: serial('id').primaryKey(),
+    tipo: text('tipo').notNull(), // 'devolucion' | 'descuento' | 'otro_ingreso' | 'gasto'
+    categoria: text('categoria'), // solo para tipo 'gasto' (ver CATEGORIAS_GASTO)
+    descripcion: text('descripcion').notNull(),
+    monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),
+    fecha: timestamp('fecha').notNull(), // mediodía (Colombia) del día de negocio al que pertenece
+    estado: text('estado').notNull().default('confirmado'), // 'confirmado' | 'anulado'
+    usuarioId: integer('usuario_id').references(() => usuarios.id),
+    anuladoPor: integer('anulado_por').references(() => usuarios.id),
+    anuladoEn: timestamp('anulado_en'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (t) => [index('movimientos_contables_fecha_idx').on(t.fecha)]
+);

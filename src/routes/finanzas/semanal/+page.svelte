@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { gotoWithQuery } from '$lib/utils/navigation';
 	import { navigating } from '$app/state';
 	import { Scale, LoaderCircle, Banknote, Smartphone, Receipt, ClipboardList } from '@lucide/svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -33,7 +33,7 @@
 	let diferencia = $derived(contadoNum === null || !Number.isFinite(contadoNum) ? null : contadoNum - p.efectivo);
 
 	function previsualizar() {
-		if (desde && hasta) goto(`?desde=${desde}&hasta=${hasta}`, { keepFocus: true, noScroll: true, replaceState: true });
+		if (desde && hasta) gotoWithQuery({ desde, hasta }, { replaceState: true });
 	}
 
 	type Corte = (typeof data.cortes)[number];
@@ -96,7 +96,7 @@
 			<p class="text-sm text-muted-foreground">Según los turnos del {dayLabel(data.desde)} al {dayLabel(data.hasta)}:</p>
 			<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
 				{#if loading}
-					{#each Array(4) as _, i (i)}<Skeleton class="h-[92px]" />{/each}
+					{#each { length: 4 }, i (i)}<Skeleton class="h-[92px]" />{/each}
 				{:else}
 					<StatTile label="Efectivo esperado" value={formatCOP(p.efectivo)} icon={Banknote} hint="Ya descontados los gastos" />
 					<StatTile label="Turnos" value={String(p.turnos)} icon={ClipboardList} />

@@ -72,6 +72,30 @@ src/
 - Utilidad neta real (Ventas Brutas - Gastos).
 - Historial día por día con exportación directa a **informe en PDF**.
 
+### 5. Estado de Resultados (`/finanzas/estado-resultados`)
+Informe de Pérdidas y Ganancias en cascada para cualquier rango de fechas (jornadas de 04:00 a 04:00, hora de Colombia):
+
+| Línea | Origen de la cifra |
+| :--- | :--- |
+| (+) Ingresos operacionales | Cierres de turno (efectivo + transferencias) |
+| (−) Devoluciones y descuentos | Movimientos contables manuales |
+| (−) Costo de ventas | Compras de Bodega (`movimientos_inventario` tipo `entrada`) + gastos de categoría *Insumos* |
+| (−) Gastos operacionales | Gastos de caja del turno + gastos manuales, agrupados por categoría |
+| (+/−) Otros ingresos y egresos | Movimientos manuales y gastos financieros / extraordinarios |
+| (−) Impuestos | Gastos de categoría *Impuestos y provisiones fiscales* |
+
+- **Precisión:** todos los cálculos se hacen en centavos enteros (`domain/money.ts`), sin errores de coma flotante.
+- **Categorías:** los gastos de caja se clasifican automáticamente por su concepto ("arriendo", "luz", "nómina"…) y el administrador puede reasignarlos desde el desglose.
+- **Movimientos manuales** (arriendo, nómina, impuestos, devoluciones, otros ingresos) se registran desde el mismo informe; nunca se borran, se **anulan** y dejan de contar.
+- Comparativo contra el periodo anterior o el mismo periodo del año pasado, KPIs, gráfico, desglose por línea y exportación a **PDF, Excel y CSV**.
+- Acceso exclusivo del rol **Jefe** (guard central en `hooks.server.ts` + verificación en cada acción).
+
+**Migración (una sola vez, idempotente y aditiva):**
+```bash
+node scripts/migrate-estado-resultados.mjs
+```
+Agrega `gastos.categoria`, la tabla `movimientos_contables` e índices por fecha en `turnos`, `gastos` y `movimientos_inventario`.
+
 ---
 
 ## 🛠️ Despliegue en Producción

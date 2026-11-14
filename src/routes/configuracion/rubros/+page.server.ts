@@ -16,16 +16,15 @@ const DEFAULT_LINES = [
 ];
 
 export const load: PageServerLoad = async () => {
-	let lineas = await db.select().from(lineasGastronomicas).orderBy(asc(lineasGastronomicas.id));
-	if (lineas.length === 0) {
+	const existentes = await db.select({ id: lineasGastronomicas.id }).from(lineasGastronomicas).limit(1);
+	if (existentes.length === 0) {
 		await db.insert(lineasGastronomicas).values(DEFAULT_LINES).onConflictDoNothing();
-		lineas = await db.select().from(lineasGastronomicas).orderBy(asc(lineasGastronomicas.id));
 	}
 
 	const config = await getBusinessConfig();
 	// Cada línea activa (no pizza) necesita un insumo de control para el cierre por inventario
 	await ensureControlProducts(lineasActivas(config));
-	lineas = await db.select().from(lineasGastronomicas).orderBy(asc(lineasGastronomicas.id));
+	const lineas = await db.select().from(lineasGastronomicas).orderBy(asc(lineasGastronomicas.id));
 
 	const [items, insumos] = await Promise.all([
 		db.select().from(itemsLinea).orderBy(asc(itemsLinea.nombre)),

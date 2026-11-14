@@ -47,13 +47,13 @@ async function simular4DiasFlujoCompleto() {
   ]).returning();
 
   // 3. Sabores de pizza
-  const [sabHaw] = await db.insert(pizzaSabores).values([
+  await db.insert(pizzaSabores).values([
     { nombre: 'Hawaiana', precioPorcion: '5000', precioRueda: '38000', activo: true }
   ]).returning();
-  const [sabPep] = await db.insert(pizzaSabores).values([
+  await db.insert(pizzaSabores).values([
     { nombre: 'Pepperoni', precioPorcion: '5000', precioRueda: '38000', activo: true }
   ]).returning();
-  const [sabPol] = await db.insert(pizzaSabores).values([
+  await db.insert(pizzaSabores).values([
     { nombre: 'Pollo Champiñones', precioPorcion: '5500', precioRueda: '42000', activo: true }
   ]).returning();
 
@@ -78,7 +78,7 @@ async function simular4DiasFlujoCompleto() {
   const [pMasa] = await db.insert(productos).values([
     { nombre: 'Masa', categoriaId: catMasa.id, unidadMedida: 'unidad', stockActual: 10, precio: '0', precioCosto: '4500' }
   ]).returning();
-  const [pPizzaPorc] = await db.insert(productos).values([
+  await db.insert(productos).values([
     { nombre: 'Pizza (Porciones)', categoriaId: catMasa.id, unidadMedida: 'porcion', stockActual: 6, precio: '5000', precioCosto: '1500' }
   ]).returning();
   const [pQueso] = await db.insert(productos).values([

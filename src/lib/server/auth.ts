@@ -82,11 +82,3 @@ export async function invalidateSession(sessionId: string) {
   sessionCache.delete(sessionId);
   await db.delete(sesiones).where(eq(sesiones.id, sessionId));
 }
- 
-import { error } from '@sveltejs/kit';
-import type { RequestEvent } from '@sveltejs/kit';
-export function requireRole(event: RequestEvent, role: string) {
-  if (!event.locals.user || event.locals.user.rol !== role) {
-    throw error(403, 'Acceso denegado');
-  }
-}

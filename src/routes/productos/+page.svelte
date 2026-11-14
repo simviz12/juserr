@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
 	import { Plus, Pencil, Trash2, Tags } from '@lucide/svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
@@ -58,7 +59,7 @@
 <div class="mx-auto flex max-w-6xl flex-col gap-6">
 	<PageHeader title="Productos e insumos" description="Catálogo de lo que entra a bodega. El stock y el costo promedio se actualizan desde Bodega.">
 		{#snippet actions()}
-			<a href="/configuracion/categorias" class={cn(btn.base, btn.outline)}><Tags size={15} /> Categorías</a>
+			<a href={resolve('/configuracion/categorias')} class={cn(btn.base, btn.outline)}><Tags size={15} /> Categorías</a>
 			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => openForm(null)}><Plus size={15} /> Nuevo producto</button>
 		{/snippet}
 	</PageHeader>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import { page, navigating } from '$app/state';
+	import { resolve } from '$app/paths';
 	import {
 		LayoutDashboard,
 		LockKeyhole,
@@ -32,27 +33,27 @@
 		{
 			group: 'General',
 			items: [
-				{ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-				{ name: 'Finanzas', path: '/finanzas', href: '/finanzas/resumen', icon: Landmark },
-				{ name: 'Producción', path: '/reportes/produccion', icon: ChartColumn }
+				{ name: 'Dashboard', path: '/dashboard', href: resolve('/dashboard'), icon: LayoutDashboard },
+				{ name: 'Finanzas', path: '/finanzas', href: resolve('/finanzas/resumen'), icon: Landmark },
+				{ name: 'Producción', path: '/reportes/produccion', href: resolve('/reportes/produccion'), icon: ChartColumn }
 			]
 		},
 		{
 			group: 'Operación',
 			items: [
-				{ name: 'Cierre de turno', path: '/turnos/cierre', icon: LockKeyhole },
-				{ name: 'Bodega e insumos', path: '/bodega', icon: Boxes },
-				{ name: 'Productos e insumos', path: '/productos', icon: Beef }
+				{ name: 'Cierre de turno', path: '/turnos/cierre', href: resolve('/turnos/cierre'), icon: LockKeyhole },
+				{ name: 'Bodega e insumos', path: '/bodega', href: resolve('/bodega'), icon: Boxes },
+				{ name: 'Productos e insumos', path: '/productos', href: resolve('/productos'), icon: Beef }
 			]
 		},
 		{
 			group: 'Configuración',
 			items: [
-				{ name: 'Líneas y combos', path: '/configuracion/rubros', icon: UtensilsCrossed },
-				{ name: 'Sabores', path: '/configuracion/sabores', icon: Pizza },
-				{ name: 'Categorías', path: '/configuracion/categorias', icon: Tags },
-				{ name: 'Personal', path: '/configuracion/personal', icon: Users },
-				{ name: 'Suscripción', path: '/saas/suscripcion', icon: CreditCard }
+				{ name: 'Líneas y combos', path: '/configuracion/rubros', href: resolve('/configuracion/rubros'), icon: UtensilsCrossed },
+				{ name: 'Sabores', path: '/configuracion/sabores', href: resolve('/configuracion/sabores'), icon: Pizza },
+				{ name: 'Categorías', path: '/configuracion/categorias', href: resolve('/configuracion/categorias'), icon: Tags },
+				{ name: 'Personal', path: '/configuracion/personal', href: resolve('/configuracion/personal'), icon: Users },
+				{ name: 'Suscripción', path: '/saas/suscripcion', href: resolve('/saas/suscripcion'), icon: CreditCard }
 			]
 		}
 	];
@@ -90,7 +91,7 @@
 <svelte:window onkeydown={onKey} />
 
 {#snippet brand()}
-	<a href="/" class="flex items-center gap-2.5 px-2">
+	<a href={resolve('/')} class="flex items-center gap-2.5 px-2">
 		<span class="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
 			<svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
@@ -114,7 +115,7 @@
 						{@const active = isActive(item.path)}
 						<li>
 							<a
-								href={item.href ?? item.path}
+								href={item.href}
 								aria-current={active ? 'page' : undefined}
 								class="group flex h-9 items-center gap-2.5 rounded-md px-3 text-sm transition-colors {active
 									? 'bg-accent font-medium text-foreground'
@@ -257,7 +258,7 @@
 								{/if}
 							</div>
 							{#if data.user && canAccess(data.user.rol, '/bodega')}
-								<a href="/bodega" class="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground">
+								<a href={resolve('/bodega')} class="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground">
 									Reponer stock en bodega <ArrowRight size={13} />
 								</a>
 							{/if}

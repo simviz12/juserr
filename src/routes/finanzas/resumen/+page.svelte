@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { gotoWithQuery } from '$lib/utils/navigation';
 	import { navigating } from '$app/state';
 	import { FileText, FileSpreadsheet, LoaderCircle, Wallet, Banknote, Smartphone, Receipt, ShoppingCart, ChartLine, CalendarRange } from '@lucide/svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -17,6 +17,7 @@
 	import { exportExcel, safeFileName } from '$lib/utils/export';
 	import { downloadPdfReport, pdfMoney } from '$lib/features/finance/reports/pdf';
 	import { businessDayKey, currentRange } from '$lib/features/finance/domain/period';
+	import { addDays } from '$lib/features/finance/domain/statement-period';
 	import { foodCostStatus } from '$lib/features/finance/domain/metrics';
 	import type { CashflowPoint } from '$lib/features/finance/domain/metrics';
 
@@ -36,15 +37,11 @@
 		fin = data.fin;
 	});
 	function aplicar(i = inicio, f = fin) {
-		goto(`?inicio=${i}&fin=${f}`, { keepFocus: true, noScroll: true });
+		gotoWithQuery({ inicio: i, fin: f });
 	}
 	function preset(p: 'mes' | 'anterior' | '7' | '30') {
 		const hoy = businessDayKey(new Date());
-		const shift = (k: string, d: number) => {
-			const x = new Date(k + 'T12:00:00Z');
-			x.setUTCDate(x.getUTCDate() + d);
-			return x.toISOString().slice(0, 10);
-		};
+		const shift = addDays;
 		if (p === 'mes') {
 			const r = currentRange('mensual');
 			aplicar(businessDayKey(r.start), businessDayKey(new Date(r.end.getTime() - 1)));
@@ -235,7 +232,7 @@
 	{:else}
 		<section class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
 			{#if loading}
-				{#each Array(6) as _, i (i)}<Skeleton class="h-[92px]" />{/each}
+				{#each { length: 6 }, i (i)}<Skeleton class="h-[92px]" />{/each}
 			{:else}
 				<StatTile label="Ventas brutas" value={formatCOP(g.ventasBrutas)} icon={Wallet} hint={`${formatCOP(data.promedioDiario)} / día`} />
 				<StatTile label="Efectivo" value={formatCOP(g.efectivo)} icon={Banknote} hint={g.ventasBrutas ? `${formatPct(g.efectivo / g.ventasBrutas, 0)} de las ventas` : undefined} />

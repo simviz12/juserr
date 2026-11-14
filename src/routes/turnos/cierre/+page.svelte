@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
 	import {
 		Banknote,
@@ -310,7 +311,7 @@
 
 						{#if l.platos.length === 0}
 							<Alert variant="warning" class="mt-4">
-								Esta línea no tiene platos con precio. Agrégalos en <a href="/configuracion/rubros" class="underline">Líneas y combos</a> para calcular la venta esperada.
+								Esta línea no tiene platos con precio. Agrégalos en <a href={resolve('/configuracion/rubros')} class="underline">Líneas y combos</a> para calcular la venta esperada.
 							</Alert>
 						{:else}
 							<details class="group mt-4 rounded-md border border-border" open={l.tieneDesglose}>
@@ -463,7 +464,7 @@
 					{#if submitting}<LoaderCircle size={17} class="animate-spin" /> Guardando…{:else}<LockKeyhole size={17} /> Guardar y cerrar turno{/if}
 				</button>
 				<div class="grid grid-cols-2 gap-2">
-					<a href={whatsappUrl} target="_blank" rel="noopener noreferrer" class={cn(btn.base, btn.outline)}><Send size={15} /> WhatsApp</a>
+					<a href={whatsappUrl} target="_blank" rel="external noopener noreferrer" class={cn(btn.base, btn.outline)}><Send size={15} /> WhatsApp</a>
 					<button type="button" class={cn(btn.base, btn.outline)} onclick={() => window.print()}><Printer size={15} /> Tirilla</button>
 				</div>
 				{#if refRepetida}<p class="flex items-center gap-1.5 text-xs text-danger"><TriangleAlert size={13} /> Corrige el comprobante repetido para guardar.</p>{/if}
