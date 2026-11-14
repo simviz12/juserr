@@ -21,7 +21,11 @@
 <span
 	class={cn(
 		'inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums',
-		good === null ? 'bg-muted text-muted-foreground' : good ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger',
+		good === null
+			? 'bg-muted text-muted-foreground'
+			: good
+				? 'bg-success-soft text-success'
+				: 'bg-danger-soft text-danger',
 		className
 	)}
 	aria-label={`Variación ${delta.trend === 'up' ? 'al alza' : delta.trend === 'down' ? 'a la baja' : 'estable'} ${label}`}

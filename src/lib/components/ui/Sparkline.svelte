@@ -35,6 +35,14 @@
 			</linearGradient>
 		</defs>
 		<path d="{path} L{W},{H} L0,{H} Z" fill="url(#{gid})" />
-		<path d={path} fill="none" stroke={color} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+		<path
+			d={path}
+			fill="none"
+			stroke={color}
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			vector-effect="non-scaling-stroke"
+		/>
 	</svg>
 {/if}

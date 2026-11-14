@@ -30,6 +30,11 @@ export function businessDayKey(instant: Date | string): string {
 	return new Date(t - (COLOMBIA_OFFSET_H + BUSINESS_DAY_START_H) * HOUR).toISOString().slice(0, 10);
 }
 
+/** Suma (o resta) días a una clave "YYYY-MM-DD" sin depender de la zona horaria. */
+export function addDays(key: string, days: number): string {
+	return new Date(Date.parse(key + 'T00:00:00Z') + days * DAY).toISOString().slice(0, 10);
+}
+
 export function isValidDateKey(value: string | null | undefined): value is string {
 	return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 }
@@ -43,12 +48,19 @@ export function currentRange(type: RangeType, dateKey?: string): DateRange {
  * Si el período actual está EN CURSO, el anterior se recorta al mismo tiempo
  * transcurrido (p. ej. 1–9 nov se compara con 1–9 oct, no con octubre completo).
  */
-export function previousRange(type: RangeType, current: DateRange, now: Date = new Date()): DateRange {
+export function previousRange(
+	type: RangeType,
+	current: DateRange,
+	now: Date = new Date()
+): DateRange {
 	const prev = getRange(type, businessDayKey(new Date(current.start.getTime() - 1)));
 	const t = now.getTime();
 	if (t > current.start.getTime() && t < current.end.getTime()) {
 		const elapsed = t - current.start.getTime();
-		return { start: prev.start, end: new Date(Math.min(prev.end.getTime(), prev.start.getTime() + elapsed)) };
+		return {
+			start: prev.start,
+			end: new Date(Math.min(prev.end.getTime(), prev.start.getTime() + elapsed))
+		};
 	}
 	return prev;
 }
@@ -89,9 +101,7 @@ export function buildBuckets(type: RangeType, window: DateRange): SeriesBucket[]
 		const key = businessDayKey(new Date(t));
 		const d = new Date(key + 'T12:00:00Z');
 		const label =
-			type === 'mensual'
-				? String(d.getUTCDate())
-				: `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`;
+			type === 'mensual' ? String(d.getUTCDate()) : `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`;
 		buckets.push({ key, label });
 	}
 	return buckets;

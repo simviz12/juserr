@@ -145,7 +145,14 @@ export function buildCashflow(
 	const map = new Map<string, CashflowPoint>(
 		buckets.map((b) => [
 			b.key,
-			{ ...b, efectivo: 0, transferencias: 0, gastos: 0, neto: 0, future: todayKey ? b.key > todayKey : false }
+			{
+				...b,
+				efectivo: 0,
+				transferencias: 0,
+				gastos: 0,
+				neto: 0,
+				future: todayKey ? b.key > todayKey : false
+			}
 		])
 	);
 	for (const s of shifts) {

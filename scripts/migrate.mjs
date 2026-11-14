@@ -1,0 +1,87 @@
+/**
+ * Runner de migraciones con historial.
+ *
+ *   node scripts/migrate.mjs            aplica las pendientes de migrations/*.sql
+ *   node scripts/migrate.mjs --estado   solo muestra cuáles están aplicadas y cuáles no
+ *
+ * Cada archivo se ejecuta en UNA transacción y se registra en `_migraciones`
+ * (nombre + checksum). Un archivo ya aplicado nunca se vuelve a ejecutar; si su
+ * contenido cambió después de aplicarse, el runner se detiene en lugar de
+ * aplicar algo distinto a lo que corrió en producción.
+ */
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// En local se lee .env; en Docker/Vercel las variables ya vienen del entorno (dotenv no se instala).
+await import('dotenv/config').catch(() => {});
+
+if (!process.env.DATABASE_URL) {
+	console.error('Falta DATABASE_URL en el entorno (.env).');
+	process.exit(1);
+}
+if (typeof WebSocket !== 'undefined') neonConfig.webSocketConstructor = WebSocket;
+
+const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+const archivos = readdirSync(dir)
+	.filter((f) => /^\d{4}_.+\.sql$/.test(f))
+	.sort();
+const soloEstado = process.argv.includes('--estado');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const client = await pool.connect();
+let codigo = 0;
+
+try {
+	await client.query(`CREATE TABLE IF NOT EXISTS _migraciones (
+		nombre text PRIMARY KEY,
+		checksum text NOT NULL,
+		aplicada_en timestamptz NOT NULL DEFAULT now()
+	)`);
+	const { rows } = await client.query('SELECT nombre, checksum FROM _migraciones');
+	const aplicadas = new Map(rows.map((r) => [r.nombre, r.checksum]));
+
+	for (const archivo of archivos) {
+		const contenido = readFileSync(path.join(dir, archivo), 'utf8');
+		const checksum = createHash('sha256').update(contenido).digest('hex');
+		const previa = aplicadas.get(archivo);
+
+		if (previa) {
+			if (previa !== checksum) {
+				throw new Error(
+					`${archivo} cambió después de aplicarse. Crea una migración nueva en vez de editarla.`
+				);
+			}
+			console.log(`✓ ${archivo} (ya aplicada)`);
+			continue;
+		}
+		if (soloEstado) {
+			console.log(`· ${archivo} (pendiente)`);
+			continue;
+		}
+
+		console.log(`→ Aplicando ${archivo}…`);
+		await client.query('BEGIN');
+		try {
+			await client.query(contenido);
+			await client.query('INSERT INTO _migraciones (nombre, checksum) VALUES ($1, $2)', [
+				archivo,
+				checksum
+			]);
+			await client.query('COMMIT');
+			console.log(`✓ ${archivo} aplicada`);
+		} catch (err) {
+			await client.query('ROLLBACK');
+			throw new Error(`${archivo} falló y se revirtió completa: ${err.message}`, { cause: err });
+		}
+	}
+} catch (err) {
+	console.error(`✗ ${err.message}`);
+	codigo = 1;
+} finally {
+	client.release();
+	await pool.end();
+}
+process.exit(codigo);

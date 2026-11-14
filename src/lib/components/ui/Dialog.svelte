@@ -36,7 +36,9 @@
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={titleId}
-			class="relative flex max-h-[90dvh] w-full {widths[size]} flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-2xl"
+			class="relative flex max-h-[90dvh] w-full {widths[
+				size
+			]} flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-2xl"
 			transition:scale={{ start: 0.96, duration: 180 }}
 		>
 			<header class="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
@@ -51,9 +53,11 @@
 					onclick={() => (open = false)}><X size={16} /></button
 				>
 			</header>
-			<div class="overflow-y-auto px-5 py-4 custom-scrollbar">{@render children()}</div>
+			<div class="custom-scrollbar overflow-y-auto px-5 py-4">{@render children()}</div>
 			{#if footer}
-				<footer class="flex justify-end gap-2 border-t border-border bg-muted/30 px-5 py-3">{@render footer()}</footer>
+				<footer class="flex justify-end gap-2 border-t border-border bg-muted/30 px-5 py-3">
+					{@render footer()}
+				</footer>
 			{/if}
 		</div>
 	</div>

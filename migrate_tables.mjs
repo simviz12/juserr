@@ -4,9 +4,9 @@ import 'dotenv/config';
 const sql = neon(process.env.DATABASE_URL);
 
 async function run() {
-  console.log('Creando tablas en Neon PostgreSQL...');
-  
-  await sql`
+	console.log('Creando tablas en Neon PostgreSQL...');
+
+	await sql`
     CREATE TABLE IF NOT EXISTS lineas_gastronomicas (
       id serial PRIMARY KEY,
       codigo text NOT NULL UNIQUE,
@@ -17,9 +17,9 @@ async function run() {
       activo boolean DEFAULT true
     );
   `;
-  console.log('✓ lineas_gastronomicas OK');
+	console.log('✓ lineas_gastronomicas OK');
 
-  await sql`
+	await sql`
     CREATE TABLE IF NOT EXISTS items_linea (
       id serial PRIMARY KEY,
       linea_id integer REFERENCES lineas_gastronomicas(id),
@@ -29,9 +29,9 @@ async function run() {
       activo boolean DEFAULT true
     );
   `;
-  console.log('✓ items_linea OK');
+	console.log('✓ items_linea OK');
 
-  await sql`
+	await sql`
     CREATE TABLE IF NOT EXISTS rubros_config (
       id serial PRIMARY KEY,
       nombre_negocio text DEFAULT 'Mi Gastro-Negocio' NOT NULL,
@@ -44,9 +44,9 @@ async function run() {
       created_at timestamp DEFAULT now()
     );
   `;
-  console.log('✓ rubros_config OK');
+	console.log('✓ rubros_config OK');
 
-  await sql`
+	await sql`
     CREATE TABLE IF NOT EXISTS saas_suscripciones (
       id serial PRIMARY KEY,
       plan_codigo text DEFAULT 'pro' NOT NULL,
@@ -62,11 +62,11 @@ async function run() {
       actualizado_en timestamp DEFAULT now()
     );
   `;
-  console.log('✓ saas_suscripciones OK');
-  console.log('Todas las tablas multi-rubro y saas fueron creadas con éxito.');
+	console.log('✓ saas_suscripciones OK');
+	console.log('Todas las tablas multi-rubro y saas fueron creadas con éxito.');
 }
 
-run().catch(err => {
-  console.error('Error al migrar tablas:', err);
-  process.exit(1);
+run().catch((err) => {
+	console.error('Error al migrar tablas:', err);
+	process.exit(1);
 });

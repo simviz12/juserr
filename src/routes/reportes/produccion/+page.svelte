@@ -32,16 +32,44 @@
 	type Dia = (typeof data.produccion)[number];
 	const columns: Column<Dia>[] = [
 		{ id: 'fecha', header: 'Día', accessor: (d) => d.fecha, format: (v) => dayLabel(String(v)) },
-		{ id: 'turnos', header: 'Turnos', accessor: (d) => d.turnos, align: 'right', hideOnMobile: true },
-		{ id: 'masas', header: 'Masas usadas', accessor: (d) => d.masas, format: (v) => formatNumber(Number(v)), align: 'right' },
+		{
+			id: 'turnos',
+			header: 'Turnos',
+			accessor: (d) => d.turnos,
+			align: 'right',
+			hideOnMobile: true
+		},
+		{
+			id: 'masas',
+			header: 'Masas usadas',
+			accessor: (d) => d.masas,
+			format: (v) => formatNumber(Number(v)),
+			align: 'right'
+		},
 		{ id: 'vendidas', header: 'Vendidas', accessor: (d) => d.vendidas, align: 'right' },
 		{ id: 'mermas', header: 'Mermas', accessor: (d) => d.mermas, align: 'right' },
-		{ id: 'rend', header: 'Porc./masa', accessor: (d) => (d.masas > 0 ? d.vendidas / d.masas : 0), format: (v) => (Number(v) > 0 ? formatNumber(Number(v)) : '—'), align: 'right', hideOnMobile: true }
+		{
+			id: 'rend',
+			header: 'Porc./masa',
+			accessor: (d) => (d.masas > 0 ? d.vendidas / d.masas : 0),
+			format: (v) => (Number(v) > 0 ? formatNumber(Number(v)) : '—'),
+			align: 'right',
+			hideOnMobile: true
+		}
 	];
 
 	async function exportar() {
 		await exportExcel(`MesaCapital_Produccion_${data.inicio}_a_${data.fin}`, [
-			{ name: 'Producción', rows: data.produccion.map((d) => ({ Día: d.fecha, Turnos: d.turnos, 'Masas usadas': d.masas, Vendidas: d.vendidas, Mermas: d.mermas })) }
+			{
+				name: 'Producción',
+				rows: data.produccion.map((d) => ({
+					Día: d.fecha,
+					Turnos: d.turnos,
+					'Masas usadas': d.masas,
+					Vendidas: d.vendidas,
+					Mermas: d.mermas
+				}))
+			}
 		]);
 	}
 </script>
@@ -49,16 +77,40 @@
 <svelte:head><title>Producción · MesaCapital</title></svelte:head>
 
 <div class="mx-auto flex max-w-6xl flex-col gap-6">
-	<PageHeader title="Producción" description="Masas usadas, porciones vendidas y desperdicio por día.">
+	<PageHeader
+		title="Producción"
+		description="Masas usadas, porciones vendidas y desperdicio por día."
+	>
 		{#snippet actions()}
-			<div class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm sm:w-auto">
+			<div
+				class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-card px-3 shadow-sm sm:w-auto"
+			>
 				<CalendarRange size={15} class="text-muted-foreground" />
-				<input type="date" bind:value={inicio} aria-label="Desde" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<input
+					type="date"
+					bind:value={inicio}
+					aria-label="Desde"
+					class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]"
+				/>
 				<span class="text-muted-foreground">–</span>
-				<input type="date" bind:value={fin} aria-label="Hasta" class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]" />
+				<input
+					type="date"
+					bind:value={fin}
+					aria-label="Hasta"
+					class="min-w-0 flex-1 bg-transparent text-[13px] outline-none dark:[color-scheme:dark]"
+				/>
 			</div>
-			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => gotoWithQuery({ inicio, fin })}>Aplicar</button>
-			<button type="button" class={cn(btn.base, btn.outline)} onclick={exportar} disabled={data.produccion.length === 0}><Download size={15} /> Excel</button>
+			<button
+				type="button"
+				class={cn(btn.base, btn.primary)}
+				onclick={() => gotoWithQuery({ inicio, fin })}>Aplicar</button
+			>
+			<button
+				type="button"
+				class={cn(btn.base, btn.outline)}
+				onclick={exportar}
+				disabled={data.produccion.length === 0}><Download size={15} /> Excel</button
+			>
 		{/snippet}
 	</PageHeader>
 
@@ -68,30 +120,69 @@
 		<section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 			<StatTile label="Masas usadas" value={formatNumber(t.masas)} icon={Layers} />
 			<StatTile label="Porciones vendidas" value={formatNumber(t.vendidas)} icon={Pizza} />
-			<StatTile label="Mermas" value={formatNumber(t.mermas)} icon={Flame} hint={`Tasa ${formatPct(tasaMerma)}`} tone={tasaMerma !== null && tasaMerma > 0.05 ? 'warning' : 'default'} />
-			<StatTile label="Rendimiento" value={rendimiento === null ? '—' : `${formatNumber(rendimiento)} porc./masa`} icon={Percent} hint={`Ideal: ${PORCIONES_POR_MASA}`} tone={rendimiento !== null && rendimiento < PORCIONES_POR_MASA * 0.9 ? 'warning' : 'default'} />
+			<StatTile
+				label="Mermas"
+				value={formatNumber(t.mermas)}
+				icon={Flame}
+				hint={`Tasa ${formatPct(tasaMerma)}`}
+				tone={tasaMerma !== null && tasaMerma > 0.05 ? 'warning' : 'default'}
+			/>
+			<StatTile
+				label="Rendimiento"
+				value={rendimiento === null ? '—' : `${formatNumber(rendimiento)} porc./masa`}
+				icon={Percent}
+				hint={`Ideal: ${PORCIONES_POR_MASA}`}
+				tone={rendimiento !== null && rendimiento < PORCIONES_POR_MASA * 0.9
+					? 'warning'
+					: 'default'}
+			/>
 		</section>
 
 		<Card title="Porciones por día" description="Vendidas y mermas">
-			<ul class="flex h-56 items-end gap-1.5 overflow-x-auto pb-6 custom-scrollbar" aria-label="Porciones por día">
+			<ul
+				class="custom-scrollbar flex h-56 items-end gap-1.5 overflow-x-auto pb-6"
+				aria-label="Porciones por día"
+			>
 				{#each data.produccion as d (d.fecha)}
-					<li class="group relative flex h-full min-w-6 flex-1 flex-col justify-end" title={`${dayLabel(d.fecha)}: ${d.vendidas} vendidas, ${d.mermas} mermas`}>
+					<li
+						class="group relative flex h-full min-w-6 flex-1 flex-col justify-end"
+						title={`${dayLabel(d.fecha)}: ${d.vendidas} vendidas, ${d.mermas} mermas`}
+					>
 						<div class="flex w-full flex-col gap-[2px]">
-							{#if d.mermas > 0}<div class="w-full rounded-t-[3px] bg-series-2" style="height:{(d.mermas / max) * 190}px"></div>{/if}
-							<div class="w-full bg-series-1 {d.mermas > 0 ? '' : 'rounded-t-[3px]'}" style="height:{(d.vendidas / max) * 190}px"></div>
+							{#if d.mermas > 0}<div
+									class="w-full rounded-t-[3px] bg-series-2"
+									style="height:{(d.mermas / max) * 190}px"
+								></div>{/if}
+							<div
+								class="w-full bg-series-1 {d.mermas > 0 ? '' : 'rounded-t-[3px]'}"
+								style="height:{(d.vendidas / max) * 190}px"
+							></div>
 						</div>
-						<span class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] whitespace-nowrap text-muted-foreground">{Number(d.fecha.slice(8))}</span>
+						<span
+							class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] whitespace-nowrap text-muted-foreground"
+							>{Number(d.fecha.slice(8))}</span
+						>
 					</li>
 				{/each}
 			</ul>
 			<div class="mt-2 flex gap-4 text-xs text-muted-foreground">
-				<span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-[3px] bg-series-1"></span>Vendidas</span>
-				<span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-[3px] bg-series-2"></span>Mermas</span>
+				<span class="flex items-center gap-1.5"
+					><span class="h-2.5 w-2.5 rounded-[3px] bg-series-1"></span>Vendidas</span
+				>
+				<span class="flex items-center gap-1.5"
+					><span class="h-2.5 w-2.5 rounded-[3px] bg-series-2"></span>Mermas</span
+				>
 			</div>
 		</Card>
 
 		<Card title="Detalle diario">
-			<DataTable rows={data.produccion} {columns} rowKey={(d) => d.fecha} initialSort={{ id: 'fecha', dir: 'desc' }} searchPlaceholder="Buscar día…" />
+			<DataTable
+				rows={data.produccion}
+				{columns}
+				rowKey={(d) => d.fecha}
+				initialSort={{ id: 'fecha', dir: 'desc' }}
+				searchPlaceholder="Buscar día…"
+			/>
 		</Card>
 	{/if}
 </div>

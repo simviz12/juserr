@@ -16,14 +16,14 @@ import {
 	type Movimiento,
 	type MovimientoGasto,
 	type StatementInput
-} from '../src/lib/features/finance/domain/income-statement';
+} from '../src/lib/modules/estado-resultados/domain/income-statement';
 import {
 	comparisonRange,
 	diasDelRango,
 	presetActivo,
 	presetRange,
 	resolveRange
-} from '../src/lib/features/finance/domain/statement-period';
+} from '../src/lib/modules/estado-resultados/domain/statement-period';
 import { toCsv } from '../src/lib/utils/export';
 import { canAccess } from '../src/lib/auth/access';
 

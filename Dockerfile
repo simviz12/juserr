@@ -1,36 +1,33 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Build stage ----------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Enable pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm fijado (misma versión que "packageManager" en package.json): builds reproducibles.
+RUN corepack enable && corepack prepare pnpm@12.18.0 --activate
 
-# Copy package manifests and pnpm workspace config
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Install dependencies allowing configured builds
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
 COPY . .
-
-# Build the SvelteKit app (produces .svelte-kit and build)
-RUN pnpm build
+RUN pnpm build && pnpm prune --prod
 
 # ---------- Runtime stage ----------
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
-
-# Copy only the needed files from builder
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/node_modules ./node_modules
-
-# Expose the server port
-EXPOSE 3000
 ENV NODE_ENV=production
 
-# Run the node server
+# Solo dependencias de producción y el build; se ejecuta sin privilegios de root.
+COPY --from=builder --chown=node:node /app/package.json ./
+COPY --from=builder --chown=node:node /app/build ./build
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/migrations ./migrations
+COPY --from=builder --chown=node:node /app/scripts/migrate.mjs ./scripts/migrate.mjs
+USER node
+
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+	CMD wget -qO- http://127.0.0.1:3000/health > /dev/null || exit 1
+
 CMD ["node", "build/index.js"]

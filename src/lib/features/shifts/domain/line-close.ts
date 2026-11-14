@@ -81,7 +81,10 @@ export function cerrarLinea(
 }
 
 /** Insumo de control sugerido por línea, creado automáticamente si no existe. */
-export const CONTROL_POR_DEFECTO: Record<string, { nombre: string; unidad: string; etiqueta: string }> = {
+export const CONTROL_POR_DEFECTO: Record<
+	string,
+	{ nombre: string; unidad: string; etiqueta: string }
+> = {
 	burger: { nombre: 'Pan de hamburguesa', unidad: 'unidad', etiqueta: 'panes' },
 	chuzo: { nombre: 'Chuzos armados', unidad: 'unidad', etiqueta: 'chuzos' },
 	lasana: { nombre: 'Porciones de lasaña', unidad: 'unidad', etiqueta: 'porciones' },

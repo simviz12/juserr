@@ -1,6 +1,14 @@
 <script lang="ts" generics="T">
 	import type { Snippet } from 'svelte';
-	import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown, Search, Inbox } from '@lucide/svelte';
+	import {
+		ArrowDown,
+		ArrowUp,
+		ChevronLeft,
+		ChevronRight,
+		ChevronsUpDown,
+		Search,
+		Inbox
+	} from '@lucide/svelte';
 	import Skeleton from '../ui/Skeleton.svelte';
 	import EmptyState from '../ui/EmptyState.svelte';
 	import type { Column, SortDir } from './types';
@@ -55,7 +63,12 @@
 			columns.some((c) => {
 				const raw = c.accessor(r);
 				const shown = c.format ? c.format(raw, r) : String(raw ?? '');
-				return shown.toLowerCase().includes(q) || String(raw ?? '').toLowerCase().includes(q);
+				return (
+					shown.toLowerCase().includes(q) ||
+					String(raw ?? '')
+						.toLowerCase()
+						.includes(q)
+				);
 			})
 		);
 	});
@@ -103,7 +116,10 @@
 	<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 		<label class="relative w-full sm:max-w-xs">
 			<span class="sr-only">Buscar</span>
-			<Search size={15} class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground" />
+			<Search
+				size={15}
+				class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+			/>
 			<input
 				type="search"
 				bind:value={query}
@@ -114,14 +130,18 @@
 		{#if toolbar}<div class="flex flex-wrap items-center gap-2">{@render toolbar()}</div>{/if}
 	</div>
 
-	<div class="overflow-x-auto rounded-md border border-border custom-scrollbar">
+	<div class="custom-scrollbar overflow-x-auto rounded-md border border-border">
 		<table class="w-full text-sm">
 			<thead class="bg-muted/60 text-left">
 				<tr class="border-b border-border">
 					{#each columns as c (c.id)}
 						<th
 							scope="col"
-							aria-sort={sortId === c.id ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+							aria-sort={sortId === c.id
+								? sortDir === 'asc'
+									? 'ascending'
+									: 'descending'
+								: 'none'}
 							class={cn(
 								'h-10 px-3 text-xs font-medium whitespace-nowrap text-muted-foreground',
 								c.align === 'right' && 'text-right',
@@ -132,7 +152,10 @@
 								<button
 									type="button"
 									onclick={() => toggleSort(c.id)}
-									class={cn('-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground', c.align === 'right' && 'flex-row-reverse')}
+									class={cn(
+										'-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground',
+										c.align === 'right' && 'flex-row-reverse'
+									)}
 								>
 									{c.header}
 									{#if sortId === c.id}
@@ -153,14 +176,20 @@
 					{#each { length: 5 }, i (i)}
 						<tr class="border-b border-border last:border-0">
 							{#each columns as c (c.id)}
-								<td class={cn('px-3 py-3', c.hideOnMobile && 'hidden md:table-cell')}><Skeleton class="h-4 w-full max-w-28" /></td>
+								<td class={cn('px-3 py-3', c.hideOnMobile && 'hidden md:table-cell')}
+									><Skeleton class="h-4 w-full max-w-28" /></td
+								>
 							{/each}
 						</tr>
 					{/each}
 				{:else if page.length === 0}
 					<tr>
 						<td colspan={columns.length}>
-							<EmptyState icon={Inbox} title={emptyTitle} description={query ? `Nada coincide con “${query}”.` : emptyDescription} />
+							<EmptyState
+								icon={Inbox}
+								title={emptyTitle}
+								description={query ? `Nada coincide con “${query}”.` : emptyDescription}
+							/>
 						</td>
 					</tr>
 				{:else}
@@ -184,7 +213,9 @@
 		</table>
 	</div>
 
-	<div class="flex flex-col-reverse items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
+	<div
+		class="flex flex-col-reverse items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row"
+	>
 		<p class="tabular-nums">
 			{sorted.length === 0
 				? '0 registros'
@@ -193,7 +224,10 @@
 		<div class="flex items-center gap-3">
 			<label class="flex items-center gap-2">
 				Filas
-				<select bind:value={pageSize} class="h-8 rounded-md border border-input bg-card px-2 text-xs text-foreground">
+				<select
+					bind:value={pageSize}
+					class="h-8 rounded-md border border-input bg-card px-2 text-xs text-foreground"
+				>
 					{#each pageSizes as s (s)}<option value={s}>{s}</option>{/each}
 				</select>
 			</label>

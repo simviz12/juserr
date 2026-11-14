@@ -3,7 +3,11 @@ import { buildPdfReport, pdfMoney, pdfText } from '../src/lib/features/finance/r
 
 describe('reporte PDF', () => {
 	it('genera un documento con KPIs, tablas largas paginadas y pie de página', async () => {
-		const dias = Array.from({ length: 60 }, (_, i) => [`${i + 1} nov`, pdfMoney(350000 + i * 1000), pdfMoney(-2000)]);
+		const dias = Array.from({ length: 60 }, (_, i) => [
+			`${i + 1} nov`,
+			pdfMoney(350000 + i * 1000),
+			pdfMoney(-2000)
+		]);
 		const doc = await buildPdfReport({
 			fileName: 'test',
 			negocio: 'Pizzería Prueba',
@@ -15,7 +19,13 @@ describe('reporte PDF', () => {
 				{ label: 'Food cost', value: '31,2%' }
 			],
 			tables: [
-				{ title: 'Ventas por día', head: ['Día', 'Ventas', 'Gastos'], numeric: [1, 2], body: dias, foot: ['Total', pdfMoney(1), pdfMoney(2)] },
+				{
+					title: 'Ventas por día',
+					head: ['Día', 'Ventas', 'Gastos'],
+					numeric: [1, 2],
+					body: dias,
+					foot: ['Total', pdfMoney(1), pdfMoney(2)]
+				},
 				{ title: 'Vacía', head: ['A'], body: [] }
 			],
 			notes: ['Nota de prueba']

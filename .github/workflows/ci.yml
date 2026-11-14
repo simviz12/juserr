@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Formato y lint
+        run: pnpm lint
+      - name: Tipos
+        run: pnpm check
+      - name: Pruebas (incluye aislamiento entre restaurantes y ensayo de migraciones)
+        run: pnpm vitest run
+      - name: Build
+        run: pnpm build
+      - name: Ninguna consulta de negocio sin filtro de restaurante
+        run: |
+          # Todo acceso a tablas de negocio debe pasar por delTenant()/tenantId.
+          # Falla si aparece un db.update/db.delete sin filtro en rutas o servicios.
+          if grep -rnE "db\s*\.\s*(update|delete)\([a-zA-Z]+\)\s*\.\s*(set\([^)]*\)\s*\.\s*)?where\(eq\([a-zA-Z]+\.id," src/routes src/lib/features src/lib/modules; then
+            echo "Hay updates/deletes por id sin delTenant(). Revisa el aislamiento por restaurante." && exit 1
+          fi

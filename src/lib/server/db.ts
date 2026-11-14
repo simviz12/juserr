@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 import { building } from '$app/environment';
 
 if (!env.DATABASE_URL && !building) {
-    throw new Error('DATABASE_URL is not set in the environment variables.');
+	throw new Error('DATABASE_URL is not set in the environment variables.');
 }
 
 const sql = neon(env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/postgres');

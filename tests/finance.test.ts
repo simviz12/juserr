@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { summarize, delta, foodCostStatus, buildCashflow } from '../src/lib/features/finance/domain/metrics';
+import {
+	summarize,
+	delta,
+	foodCostStatus,
+	buildCashflow
+} from '../src/lib/features/finance/domain/metrics';
 import {
 	businessDayKey,
 	currentRange,
@@ -21,7 +26,11 @@ const shift = (fecha: string, efectivo: number, transferencias = 0, porciones = 
 
 describe('summarize', () => {
 	it('reporta pérdidas como utilidad negativa (antes se ocultaban como 0)', () => {
-		const s = summarize([shift('2026-11-05T20:00:00Z', 100_000)], [{ fecha: null, monto: 150_000 }], []);
+		const s = summarize(
+			[shift('2026-11-05T20:00:00Z', 100_000)],
+			[{ fecha: null, monto: 150_000 }],
+			[]
+		);
 		expect(s.utilidadNeta).toBe(-50_000);
 		expect(s.margen).toBeCloseTo(-0.5);
 	});
@@ -94,7 +103,11 @@ describe('periodos de negocio (Colombia, jornada desde 04:00)', () => {
 	});
 
 	it('la utilidad descuenta gastos de caja y compras de insumos', () => {
-		const s = summarize([shift('x', 1_000_000)], [{ fecha: null, monto: 50_000 }], [{ fecha: null, costo: 300_000 }]);
+		const s = summarize(
+			[shift('x', 1_000_000)],
+			[{ fecha: null, monto: 50_000 }],
+			[{ fecha: null, costo: 300_000 }]
+		);
 		expect(s.utilidadNeta).toBe(650_000);
 		expect(s.margen).toBeCloseTo(0.65);
 	});

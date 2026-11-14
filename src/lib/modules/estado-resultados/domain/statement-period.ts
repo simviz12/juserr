@@ -3,7 +3,7 @@
  * de negocio "YYYY-MM-DD" y aritmética UTC, así no dependen de la zona horaria
  * del servidor ni del navegador.
  */
-import { isValidDateKey } from './period';
+import { addDays, isValidDateKey } from '$lib/features/finance/domain/period';
 
 export interface KeyRange {
 	/** Primer día incluido. */
@@ -46,9 +46,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const parts = (key: string) => key.split('-').map(Number) as [number, number, number];
 const lastDayOfMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
 
-export function addDays(key: string, days: number): string {
-	return toKey(toUtc(key) + days * DAY_MS);
-}
+export { addDays };
 
 /** Días incluidos en el rango (ambos extremos cuentan). */
 export function diasDelRango(r: KeyRange): number {

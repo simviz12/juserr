@@ -1,84 +1,135 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { usuarios, pizzaSabores, bebidas, categorias, productos, movimientosInventario, movimientosBebidas, pizzaRuedas, pizzaSobras, pizzaVentas, turnos, gastos, cierresDia, cortesSemanales, sesiones } from './schema';
-import * as dotenv from 'dotenv';
+/**
+ * Reinicia UN restaurante con un catálogo inicial vacío (sin historia).
+ *
+ *   npm run db:seed -- --tenant <código> --confirmar
+ *
+ * Borra TODOS los datos de ese restaurante (turnos, bodega, usuarios...) y deja
+ * un usuario Jefe "Gabo" con contraseña "password123". Nunca toca otros restaurantes.
+ */
+import { eq } from 'drizzle-orm';
 import * as argon2 from '@node-rs/argon2';
-dotenv.config();
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not set');
-}
-
-const sql = neon(process.env.DATABASE_URL);
-const db = drizzle(sql);
+import {
+	usuarios,
+	pizzaSabores,
+	bebidas,
+	categorias,
+	productos,
+	movimientosInventario,
+	movimientosBebidas,
+	pizzaRuedas,
+	pizzaSobras,
+	pizzaVentas,
+	turnos,
+	gastos,
+	cierresDia,
+	cortesSemanales,
+	transaccionesTurno,
+	cierresLinea,
+	ventasItems,
+	movimientosContables
+} from './schema';
+import { borrarSesionesDe, conectar, restauranteObjetivo } from './scripts/tenant-cli';
 
 async function seed() {
-  console.log('Seeding database...');
+	const db = conectar();
+	const t = await restauranteObjetivo(db, { destructivo: true });
+	const tid = t.id;
+	console.log(`Reiniciando "${t.nombre}"...`);
 
-  // Limpiar tablas en orden inverso a sus dependencias (FK)
-  console.log('Clearing existing data...');
-  await db.delete(cortesSemanales);
-  await db.delete(cierresDia);
-  await db.delete(gastos);
-  await db.delete(turnos);
-  await db.delete(pizzaVentas);
-  await db.delete(pizzaSobras);
-  await db.delete(pizzaRuedas);
-  await db.delete(movimientosBebidas);
-  await db.delete(movimientosInventario);
-  await db.delete(sesiones);
-  await db.delete(productos);
-  await db.delete(categorias);
-  await db.delete(bebidas);
-  await db.delete(pizzaSabores);
-  await db.delete(usuarios);
+	// Hijos antes que padres (FK)
+	for (const tabla of [
+		movimientosContables,
+		ventasItems,
+		cierresLinea,
+		cortesSemanales,
+		cierresDia,
+		transaccionesTurno,
+		gastos,
+		pizzaVentas,
+		pizzaSobras,
+		pizzaRuedas,
+		turnos,
+		movimientosBebidas,
+		movimientosInventario
+	]) {
+		await db.delete(tabla).where(eq(tabla.tenantId, tid));
+	}
+	await borrarSesionesDe(db, tid);
+	await db.delete(productos).where(eq(productos.tenantId, tid));
+	await db.delete(categorias).where(eq(categorias.tenantId, tid));
+	await db.delete(bebidas).where(eq(bebidas.tenantId, tid));
+	await db.delete(pizzaSabores).where(eq(pizzaSabores.tenantId, tid));
+	await db.delete(usuarios).where(eq(usuarios.tenantId, tid));
 
-  // Insertar Usuarios
-  console.log('Inserting users...');
-  const defaultPassword = await argon2.hash('password123');
-  await db.insert(usuarios).values([
-    { nombre: 'Gabo', rol: 'jefe', passwordHash: defaultPassword },
-    { nombre: 'Empleado 1', rol: 'empleado', passwordHash: defaultPassword },
-  ]);
+	const defaultPassword = await argon2.hash('password123');
+	await db.insert(usuarios).values([
+		{ tenantId: tid, nombre: 'Gabo', rol: 'jefe', passwordHash: defaultPassword },
+		{ tenantId: tid, nombre: 'Empleado 1', rol: 'empleado', passwordHash: defaultPassword }
+	]);
 
-  // Insertar Sabores de Pizza
-  console.log('Inserting pizza flavors...');
-  await db.insert(pizzaSabores).values([
-    { nombre: 'Hawaiana', precioPorcion: '4500', precioRueda: '35000' },
-    { nombre: 'Pepperoni', precioPorcion: '4000', precioRueda: '32000' },
-    { nombre: 'Margarita', precioPorcion: '3500', precioRueda: '28000' },
-  ]);
+	await db.insert(pizzaSabores).values([
+		{ tenantId: tid, nombre: 'Hawaiana', precioPorcion: '4500', precioRueda: '35000' },
+		{ tenantId: tid, nombre: 'Pepperoni', precioPorcion: '4000', precioRueda: '32000' },
+		{ tenantId: tid, nombre: 'Margarita', precioPorcion: '3500', precioRueda: '28000' }
+	]);
 
-  // Insertar Bebidas (stock inicial en 0)
-  console.log('Inserting beverages with 0 stock...');
-  await db.insert(bebidas).values([
-    { nombre: 'Coca Cola 400ml', precio: '3000', stockActual: 0 },
-    { nombre: 'Jugo de Mora', precio: '4000', stockActual: 0 },
-    { nombre: 'Agua Manantial', precio: '2500', stockActual: 0 },
-  ]);
+	await db.insert(bebidas).values([
+		{ tenantId: tid, nombre: 'Coca Cola 400ml', precio: '3000', stockActual: 0 },
+		{ tenantId: tid, nombre: 'Jugo de Mora', precio: '4000', stockActual: 0 },
+		{ tenantId: tid, nombre: 'Agua Manantial', precio: '2500', stockActual: 0 }
+	]);
 
-  // Insertar Categorias
-  console.log('Inserting categories...');
-  const catInserted = await db.insert(categorias).values([
-    { nombre: 'Lácteos' },
-    { nombre: 'Cárnicos' },
-    { nombre: 'Vegetales' },
-    { nombre: 'Insumos Generales' }
-  ]).returning();
+	const cats = await db
+		.insert(categorias)
+		.values([
+			{ tenantId: tid, nombre: 'Lácteos' },
+			{ tenantId: tid, nombre: 'Cárnicos' },
+			{ tenantId: tid, nombre: 'Vegetales' },
+			{ tenantId: tid, nombre: 'Insumos Generales' }
+		])
+		.returning();
 
-  // Insertar Productos de Catálogo (stock inicial en 0)
-  console.log('Inserting initial catalog products with 0 stock...');
-  await db.insert(productos).values([
-    { nombre: 'Masas', categoriaId: catInserted[3].id, unidadMedida: 'unidad', stockActual: 0, precio: '0' },
-    { nombre: 'Queso Mozzarella', categoriaId: catInserted[0].id, unidadMedida: 'fraccion', stockActual: 0, precio: '0' },
-    { nombre: 'Pechuga de Pollo', categoriaId: catInserted[1].id, unidadMedida: 'pechuga', stockActual: 0, precio: '0' },
-    { nombre: 'Piña', categoriaId: catInserted[2].id, unidadMedida: 'fraccion', stockActual: 0, precio: '0' },
-  ]);
+	await db.insert(productos).values([
+		{
+			tenantId: tid,
+			nombre: 'Masas',
+			categoriaId: cats[3].id,
+			unidadMedida: 'unidad',
+			stockActual: 0,
+			precio: '0'
+		},
+		{
+			tenantId: tid,
+			nombre: 'Queso Mozzarella',
+			categoriaId: cats[0].id,
+			unidadMedida: 'fraccion',
+			stockActual: 0,
+			precio: '0'
+		},
+		{
+			tenantId: tid,
+			nombre: 'Pechuga de Pollo',
+			categoriaId: cats[1].id,
+			unidadMedida: 'pechuga',
+			stockActual: 0,
+			precio: '0'
+		},
+		{
+			tenantId: tid,
+			nombre: 'Piña',
+			categoriaId: cats[2].id,
+			unidadMedida: 'fraccion',
+			stockActual: 0,
+			precio: '0'
+		}
+	]);
 
-  console.log('Database seeding completed successfully!');
+	console.log(
+		`Listo: "${t.nombre}" quedó con el catálogo inicial. Usuario Jefe: Gabo / password123 (cámbiala).`
+	);
 }
 
 seed().catch((err) => {
-  console.error('Error seeding database:', err);
-  process.exit(1);
+	console.error(`✗ ${err instanceof Error ? err.message : err}`);
+	process.exit(1);
 });

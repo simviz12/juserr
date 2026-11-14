@@ -1,51 +1,54 @@
 export function getTodayRange() {
-    return getRange('diario');
+	return getRange('diario');
 }
 
-export function getRange(type: 'diario' | 'semanal' | 'mensual' | 'anual', specificDateStr?: string) {
-    const now = specificDateStr ? new Date(specificDateStr + 'T00:00:00') : new Date();
-    const offset = -5; // Hora de Colombia
-    
-    // Si pasamos fecha específica, asumimos que es inicio de ese día en Colombia
-    // Si no, usamos el ajuste normal de hora y "business day"
-    let localTime: Date;
-    if (specificDateStr) {
-        localTime = new Date(now.getTime() - offset * 3600 * 1000);
-        localTime.setUTCHours(12, 0, 0, 0); // Mitad del día local para evitar cortes
-    } else {
-        localTime = new Date(now.getTime() + offset * 3600 * 1000);
-    }
-    
-    // Ajuste de jornada (Business Day): Si son antes de las 4 AM, sigue siendo el día anterior
-    const businessTime = new Date(localTime.getTime() - 4 * 3600 * 1000);
-    
-    const startLocal = new Date(businessTime);
-    startLocal.setUTCHours(4, 0, 0, 0); // El día de negocio empieza a las 4 AM
+export function getRange(
+	type: 'diario' | 'semanal' | 'mensual' | 'anual',
+	specificDateStr?: string
+) {
+	const now = specificDateStr ? new Date(specificDateStr + 'T00:00:00') : new Date();
+	const offset = -5; // Hora de Colombia
 
-    if (type === 'semanal') {
-        const day = startLocal.getUTCDay();
-        const diff = startLocal.getUTCDate() - day + (day === 0 ? -6 : 1);
-        startLocal.setUTCDate(diff);
-    } else if (type === 'mensual') {
-        startLocal.setUTCDate(1);
-    } else if (type === 'anual') {
-        startLocal.setUTCMonth(0, 1);
-    }
+	// Si pasamos fecha específica, asumimos que es inicio de ese día en Colombia
+	// Si no, usamos el ajuste normal de hora y "business day"
+	let localTime: Date;
+	if (specificDateStr) {
+		localTime = new Date(now.getTime() - offset * 3600 * 1000);
+		localTime.setUTCHours(12, 0, 0, 0); // Mitad del día local para evitar cortes
+	} else {
+		localTime = new Date(now.getTime() + offset * 3600 * 1000);
+	}
 
-    const start = new Date(startLocal.getTime() - offset * 3600 * 1000);
+	// Ajuste de jornada (Business Day): Si son antes de las 4 AM, sigue siendo el día anterior
+	const businessTime = new Date(localTime.getTime() - 4 * 3600 * 1000);
 
-    const endLocal = new Date(startLocal);
-    if (type === 'diario') {
-        endLocal.setUTCDate(endLocal.getUTCDate() + 1);
-    } else if (type === 'semanal') {
-        endLocal.setUTCDate(endLocal.getUTCDate() + 7);
-    } else if (type === 'mensual') {
-        endLocal.setUTCMonth(endLocal.getUTCMonth() + 1);
-    } else if (type === 'anual') {
-        endLocal.setUTCFullYear(endLocal.getUTCFullYear() + 1);
-    }
+	const startLocal = new Date(businessTime);
+	startLocal.setUTCHours(4, 0, 0, 0); // El día de negocio empieza a las 4 AM
 
-    const end = new Date(endLocal.getTime() - offset * 3600 * 1000);
+	if (type === 'semanal') {
+		const day = startLocal.getUTCDay();
+		const diff = startLocal.getUTCDate() - day + (day === 0 ? -6 : 1);
+		startLocal.setUTCDate(diff);
+	} else if (type === 'mensual') {
+		startLocal.setUTCDate(1);
+	} else if (type === 'anual') {
+		startLocal.setUTCMonth(0, 1);
+	}
 
-    return { start, end };
+	const start = new Date(startLocal.getTime() - offset * 3600 * 1000);
+
+	const endLocal = new Date(startLocal);
+	if (type === 'diario') {
+		endLocal.setUTCDate(endLocal.getUTCDate() + 1);
+	} else if (type === 'semanal') {
+		endLocal.setUTCDate(endLocal.getUTCDate() + 7);
+	} else if (type === 'mensual') {
+		endLocal.setUTCMonth(endLocal.getUTCMonth() + 1);
+	} else if (type === 'anual') {
+		endLocal.setUTCFullYear(endLocal.getUTCFullYear() + 1);
+	}
+
+	const end = new Date(endLocal.getTime() - offset * 3600 * 1000);
+
+	return { start, end };
 }

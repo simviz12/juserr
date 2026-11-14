@@ -3,6 +3,10 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"packageManager": "pnpm@12.18.0",
+	"engines": {
+		"node": ">=22"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -13,10 +17,14 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test": "vitest",
+		"db:migrate": "node scripts/migrate.mjs",
+		"db:migrate:estado": "node scripts/migrate.mjs --estado",
 		"db:seed": "tsx src/lib/server/seed.ts",
-		"db:reset-counts": "tsx src/lib/server/reset-counts.ts"
+		"db:reset-counts": "tsx src/lib/server/reset-counts.ts",
+		"plataforma:admin": "node scripts/create-platform-admin.mjs"
 	},
 	"devDependencies": {
+		"@electric-sql/pglite": "0.3.14",
 		"@eslint/js": "^10.0.1",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-node": "^5.5.7",

@@ -11,8 +11,24 @@ import { formatFraction } from '../src/lib/utils/fractions';
 
 describe('cierre de turno', () => {
 	it('calcula porciones vendidas con vitrina de ayer y mermas', () => {
-		expect(porcionesVendidas({ masasIniciales: 10, masasSobrantes: 7, porcionesAyer: 5, porcionesSobrantes: 4, porcionesMermadas: 2 })).toBe(23);
-		expect(porcionesVendidas({ masasIniciales: 1, masasSobrantes: 1, porcionesAyer: 0, porcionesSobrantes: 3, porcionesMermadas: 0 })).toBe(0);
+		expect(
+			porcionesVendidas({
+				masasIniciales: 10,
+				masasSobrantes: 7,
+				porcionesAyer: 5,
+				porcionesSobrantes: 4,
+				porcionesMermadas: 2
+			})
+		).toBe(23);
+		expect(
+			porcionesVendidas({
+				masasIniciales: 1,
+				masasSobrantes: 1,
+				porcionesAyer: 0,
+				porcionesSobrantes: 3,
+				porcionesMermadas: 0
+			})
+		).toBe(0);
 	});
 
 	it('calcula ventas por sabor', () => {
@@ -26,7 +42,9 @@ describe('cierre de turno', () => {
 	});
 
 	it('descarta gastos vacíos o inválidos', () => {
-		expect(parseGastos(['Hielo', '', 'Gas'], ['3000', '500', 'abc'])).toEqual([{ descripcion: 'Hielo', monto: 3000 }]);
+		expect(parseGastos(['Hielo', '', 'Gas'], ['3000', '500', 'abc'])).toEqual([
+			{ descripcion: 'Hielo', monto: 3000 }
+		]);
 		expect(nonNegInt('-3')).toBe(0);
 		expect(nonNegInt('')).toBe(0);
 	});

@@ -1,41 +1,98 @@
 import type { PageServerLoad, Actions } from './$types';
 import { db } from '$lib/server/db';
-import { rubrosConfig, lineasGastronomicas, itemsLinea, productos, ventasItems } from '$lib/server/schema';
+import {
+	rubrosConfig,
+	lineasGastronomicas,
+	itemsLinea,
+	productos,
+	ventasItems
+} from '$lib/server/schema';
 import { asc, count, eq } from 'drizzle-orm';
+import { delTenant, tenantDe } from '$lib/server/tenancy';
 import { fail } from '@sveltejs/kit';
 import { getBusinessConfig } from '$lib/features/business/server/config';
 import { LINE_TOGGLES, isRubro } from '$lib/features/business/domain/lines';
 import { ensureControlProducts, lineasActivas } from '$lib/features/shifts/server/lines';
 
 const DEFAULT_LINES = [
-	{ codigo: 'pizza', nombre: 'Pizzas y calzones', icono: 'Pizza', unidadPorcion: 'porción', precioPromedio: '7000' },
-	{ codigo: 'chuzo', nombre: 'Chuzos y parrilla', icono: 'Flame', unidadPorcion: 'pincho', precioPromedio: '6000' },
-	{ codigo: 'burger', nombre: 'Hamburguesas y combos', icono: 'Sandwich', unidadPorcion: 'combo', precioPromedio: '16000' },
-	{ codigo: 'lasana', nombre: 'Lasañas al horno', icono: 'Layers', unidadPorcion: 'bandeja', precioPromedio: '18000' },
-	{ codigo: 'carne', nombre: 'Carnes y asados', icono: 'Beef', unidadPorcion: 'libra', precioPromedio: '22000' }
+	{
+		codigo: 'pizza',
+		nombre: 'Pizzas y calzones',
+		icono: 'Pizza',
+		unidadPorcion: 'porción',
+		precioPromedio: '7000'
+	},
+	{
+		codigo: 'chuzo',
+		nombre: 'Chuzos y parrilla',
+		icono: 'Flame',
+		unidadPorcion: 'pincho',
+		precioPromedio: '6000'
+	},
+	{
+		codigo: 'burger',
+		nombre: 'Hamburguesas y combos',
+		icono: 'Sandwich',
+		unidadPorcion: 'combo',
+		precioPromedio: '16000'
+	},
+	{
+		codigo: 'lasana',
+		nombre: 'Lasañas al horno',
+		icono: 'Layers',
+		unidadPorcion: 'bandeja',
+		precioPromedio: '18000'
+	},
+	{
+		codigo: 'carne',
+		nombre: 'Carnes y asados',
+		icono: 'Beef',
+		unidadPorcion: 'libra',
+		precioPromedio: '22000'
+	}
 ];
 
-export const load: PageServerLoad = async () => {
-	const existentes = await db.select({ id: lineasGastronomicas.id }).from(lineasGastronomicas).limit(1);
+export const load: PageServerLoad = async ({ locals }) => {
+	const tid = tenantDe(locals);
+	const existentes = await db
+		.select({ id: lineasGastronomicas.id })
+		.from(lineasGastronomicas)
+		.where(delTenant(lineasGastronomicas, tid))
+		.limit(1);
 	if (existentes.length === 0) {
-		await db.insert(lineasGastronomicas).values(DEFAULT_LINES).onConflictDoNothing();
+		await db
+			.insert(lineasGastronomicas)
+			.values(DEFAULT_LINES.map((l) => ({ ...l, tenantId: tid })))
+			.onConflictDoNothing();
 	}
 
-	const config = await getBusinessConfig();
+	const config = await getBusinessConfig(tid);
 	// Cada línea activa (no pizza) necesita un insumo de control para el cierre por inventario
-	await ensureControlProducts(lineasActivas(config));
-	const lineas = await db.select().from(lineasGastronomicas).orderBy(asc(lineasGastronomicas.id));
+	await ensureControlProducts(tid, lineasActivas(config));
+	const lineas = await db
+		.select()
+		.from(lineasGastronomicas)
+		.where(delTenant(lineasGastronomicas, tid))
+		.orderBy(asc(lineasGastronomicas.id));
 
 	const [items, insumos] = await Promise.all([
-		db.select().from(itemsLinea).orderBy(asc(itemsLinea.nombre)),
+		db.select().from(itemsLinea).where(delTenant(itemsLinea, tid)).orderBy(asc(itemsLinea.nombre)),
 		db
-			.select({ id: productos.id, nombre: productos.nombre, unidad: productos.unidadMedida, stock: productos.stockActual })
+			.select({
+				id: productos.id,
+				nombre: productos.nombre,
+				unidad: productos.unidadMedida,
+				stock: productos.stockActual
+			})
 			.from(productos)
+			.where(delTenant(productos, tid))
 			.orderBy(asc(productos.nombre))
 	]);
 
 	// Los interruptores de configuración son la fuente de verdad del estado de cada línea
-	const activoPorCodigo = new Map(LINE_TOGGLES.map((t) => [t.codigo as string, Boolean(config[t.field] ?? true)]));
+	const activoPorCodigo = new Map(
+		LINE_TOGGLES.map((t) => [t.codigo as string, Boolean(config[t.field] ?? true)])
+	);
 	return {
 		config,
 		lineas: lineas.map((l) => ({ ...l, activo: activoPorCodigo.get(l.codigo) ?? l.activo })),
@@ -54,12 +111,16 @@ function parseItemForm(formData: FormData) {
 	const precioVenta = parseMoney(formData.get('precio_venta'));
 	const precioCosto = parseMoney(formData.get('precio_costo')) ?? 0;
 	if (!nombre) return { error: 'El nombre del plato es obligatorio.' } as const;
-	if (precioVenta === null || precioVenta <= 0) return { error: 'El precio de venta debe ser mayor a 0.' } as const;
+	if (precioVenta === null || precioVenta <= 0)
+		return { error: 'El precio de venta debe ser mayor a 0.' } as const;
 	if (precioCosto > precioVenta) {
-		return { error: 'El costo no puede ser mayor que el precio de venta (venderías a pérdida).' } as const;
+		return {
+			error: 'El costo no puede ser mayor que el precio de venta (venderías a pérdida).'
+		} as const;
 	}
 	const u = parseFloat(formData.get('unidades_control')?.toString() || '1');
-	if (!Number.isFinite(u) || u <= 0 || u > 50) return { error: 'Las unidades por venta deben estar entre 0 y 50.' } as const;
+	if (!Number.isFinite(u) || u <= 0 || u > 50)
+		return { error: 'Las unidades por venta deben estar entre 0 y 50.' } as const;
 	return { nombre, precioVenta, precioCosto, unidadesControl: u } as const;
 }
 
@@ -70,7 +131,8 @@ export const actions: Actions = {
 	 *  - interruptores → activan/desactivan la línea en el catálogo; "Pizzas"
 	 *    además muestra u oculta la conciliación de pizzas en el cierre de turno.
 	 */
-	actualizarRubros: async ({ request }) => {
+	actualizarRubros: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const nombreNegocio = formData.get('nombre_negocio')?.toString().trim().slice(0, 80) ?? '';
 		const rubroPrincipal = formData.get('rubro_principal')?.toString() ?? 'mixto';
@@ -78,40 +140,59 @@ export const actions: Actions = {
 		if (!nombreNegocio) return fail(400, { error: 'El nombre del negocio es obligatorio.' });
 		if (!isRubro(rubroPrincipal)) return fail(400, { error: 'Tipo de negocio inválido.' });
 
-		const flags = Object.fromEntries(LINE_TOGGLES.map((t) => [t.field, formData.get(t.form) === 'on'])) as Record<
-			(typeof LINE_TOGGLES)[number]['field'],
-			boolean
-		>;
+		const flags = Object.fromEntries(
+			LINE_TOGGLES.map((t) => [t.field, formData.get(t.form) === 'on'])
+		) as Record<(typeof LINE_TOGGLES)[number]['field'], boolean>;
 		if (!Object.values(flags).some(Boolean)) {
 			return fail(400, { error: 'Debes dejar al menos una línea activa.' });
 		}
 
 		const values = { nombreNegocio, rubroPrincipal, ...flags };
-		const [existe] = await db.select({ id: rubrosConfig.id }).from(rubrosConfig).limit(1);
+		const [existe] = await db
+			.select({ id: rubrosConfig.id })
+			.from(rubrosConfig)
+			.where(delTenant(rubrosConfig, tid))
+			.limit(1);
 
 		await db.batch([
 			existe
-				? db.update(rubrosConfig).set(values).where(eq(rubrosConfig.id, existe.id))
-				: db.insert(rubrosConfig).values(values),
+				? db
+						.update(rubrosConfig)
+						.set(values)
+						.where(delTenant(rubrosConfig, tid, eq(rubrosConfig.id, existe.id)))
+				: db.insert(rubrosConfig).values({ ...values, tenantId: tid }),
 			...LINE_TOGGLES.map((t) =>
-				db.update(lineasGastronomicas).set({ activo: flags[t.field] }).where(eq(lineasGastronomicas.codigo, t.codigo))
+				db
+					.update(lineasGastronomicas)
+					.set({ activo: flags[t.field] })
+					.where(delTenant(lineasGastronomicas, tid, eq(lineasGastronomicas.codigo, t.codigo)))
 			)
 		]);
 
-		await ensureControlProducts(LINE_TOGGLES.filter((t) => t.codigo !== 'pizza' && flags[t.field]).map((t) => t.codigo));
+		await ensureControlProducts(
+			tid,
+			LINE_TOGGLES.filter((t) => t.codigo !== 'pizza' && flags[t.field]).map((t) => t.codigo)
+		);
 		const activas = LINE_TOGGLES.filter((t) => flags[t.field]).map((t) => t.label);
 		return { success: true, message: `Ajustes guardados. Líneas activas: ${activas.join(', ')}.` };
 	},
 
-	crearItem: async ({ request }) => {
+	crearItem: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const lineaId = parseInt(formData.get('linea_id')?.toString() ?? '', 10);
 		if (!Number.isFinite(lineaId)) return fail(400, { error: 'Línea inválida.' });
+		const [linea] = await db
+			.select({ id: lineasGastronomicas.id })
+			.from(lineasGastronomicas)
+			.where(delTenant(lineasGastronomicas, tid, eq(lineasGastronomicas.id, lineaId)));
+		if (!linea) return fail(404, { error: 'La línea no existe.' });
 
 		const parsed = parseItemForm(formData);
 		if ('error' in parsed) return fail(400, { error: parsed.error });
 
 		await db.insert(itemsLinea).values({
+			tenantId: tid,
 			lineaId,
 			nombre: parsed.nombre,
 			precioVenta: parsed.precioVenta.toString(),
@@ -121,7 +202,8 @@ export const actions: Actions = {
 		return { success: true, message: `"${parsed.nombre}" agregado al menú.` };
 	},
 
-	actualizarItem: async ({ request }) => {
+	actualizarItem: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const id = parseInt(formData.get('id')?.toString() ?? '', 10);
 		if (!Number.isFinite(id)) return fail(400, { error: 'Plato inválido.' });
@@ -129,42 +211,83 @@ export const actions: Actions = {
 		const parsed = parseItemForm(formData);
 		if ('error' in parsed) return fail(400, { error: parsed.error });
 
-		await db
+		const actualizados = await db
 			.update(itemsLinea)
-			.set({ nombre: parsed.nombre, precioVenta: parsed.precioVenta.toString(), precioCosto: parsed.precioCosto.toString(), unidadesControl: parsed.unidadesControl })
-			.where(eq(itemsLinea.id, id));
+			.set({
+				nombre: parsed.nombre,
+				precioVenta: parsed.precioVenta.toString(),
+				precioCosto: parsed.precioCosto.toString(),
+				unidadesControl: parsed.unidadesControl
+			})
+			.where(delTenant(itemsLinea, tid, eq(itemsLinea.id, id)))
+			.returning({ id: itemsLinea.id });
+		if (actualizados.length === 0) return fail(404, { error: 'El plato no existe.' });
 		return { success: true, message: `"${parsed.nombre}" actualizado.` };
 	},
 
-	toggleItem: async ({ request }) => {
+	toggleItem: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const id = parseInt(formData.get('id')?.toString() ?? '', 10);
 		if (!Number.isFinite(id)) return fail(400, { error: 'Plato inválido.' });
-		const [item] = await db.select().from(itemsLinea).where(eq(itemsLinea.id, id));
+		const [item] = await db
+			.select()
+			.from(itemsLinea)
+			.where(delTenant(itemsLinea, tid, eq(itemsLinea.id, id)));
 		if (!item) return fail(404, { error: 'El plato no existe.' });
-		await db.update(itemsLinea).set({ activo: !item.activo }).where(eq(itemsLinea.id, id));
-		return { success: true, message: `"${item.nombre}" ${item.activo ? 'pausado' : 'reactivado'}.` };
+		await db
+			.update(itemsLinea)
+			.set({ activo: !item.activo })
+			.where(delTenant(itemsLinea, tid, eq(itemsLinea.id, id)));
+		return {
+			success: true,
+			message: `"${item.nombre}" ${item.activo ? 'pausado' : 'reactivado'}.`
+		};
 	},
 
 	/** Cambia el insumo que se cuenta en el cierre para controlar una línea. */
-	actualizarControl: async ({ request }) => {
+	actualizarControl: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const fd = await request.formData();
 		const lineaId = Number(fd.get('linea_id'));
 		const productoId = Number(fd.get('producto_control_id'));
 		if (!lineaId || !productoId) return fail(400, { error: 'Selecciona un insumo.' });
-		const [p] = await db.select({ nombre: productos.nombre }).from(productos).where(eq(productos.id, productoId));
+		const [p] = await db
+			.select({ nombre: productos.nombre })
+			.from(productos)
+			.where(delTenant(productos, tid, eq(productos.id, productoId)));
 		if (!p) return fail(404, { error: 'El insumo no existe.' });
-		await db.update(lineasGastronomicas).set({ productoControlId: productoId }).where(eq(lineasGastronomicas.id, lineaId));
-		return { success: true, message: `Ahora el cierre de turno contará "${p.nombre}" para esta línea.` };
+		const actualizadas = await db
+			.update(lineasGastronomicas)
+			.set({ productoControlId: productoId })
+			.where(delTenant(lineasGastronomicas, tid, eq(lineasGastronomicas.id, lineaId)))
+			.returning({ id: lineasGastronomicas.id });
+		if (actualizadas.length === 0) return fail(404, { error: 'La línea no existe.' });
+		return {
+			success: true,
+			message: `Ahora el cierre de turno contará "${p.nombre}" para esta línea.`
+		};
 	},
 
-	eliminarItem: async ({ request }) => {
+	eliminarItem: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const id = parseInt(formData.get('id')?.toString() ?? '', 10);
 		if (!Number.isFinite(id)) return fail(400, { error: 'Plato inválido.' });
-		const [{ n }] = await db.select({ n: count() }).from(ventasItems).where(eq(ventasItems.itemId, id));
-		if (n > 0) return fail(409, { error: 'Este plato tiene ventas registradas en cierres de turno; páusalo en lugar de eliminarlo.' });
-		const [item] = await db.delete(itemsLinea).where(eq(itemsLinea.id, id)).returning({ nombre: itemsLinea.nombre });
-		return { success: true, message: item ? `"${item.nombre}" eliminado.` : 'Plato eliminado.' };
+		const [{ n }] = await db
+			.select({ n: count() })
+			.from(ventasItems)
+			.where(delTenant(ventasItems, tid, eq(ventasItems.itemId, id)));
+		if (n > 0)
+			return fail(409, {
+				error:
+					'Este plato tiene ventas registradas en cierres de turno; páusalo en lugar de eliminarlo.'
+			});
+		const [item] = await db
+			.delete(itemsLinea)
+			.where(delTenant(itemsLinea, tid, eq(itemsLinea.id, id)))
+			.returning({ nombre: itemsLinea.nombre });
+		if (!item) return fail(404, { error: 'El plato no existe.' });
+		return { success: true, message: `"${item.nombre}" eliminado.` };
 	}
 };

@@ -1,46 +1,64 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { productos, bebidas, turnos, transaccionesTurno, pizzaVentas, pizzaSobras, pizzaRuedas, movimientosInventario, movimientosBebidas, gastos, cierresDia, cortesSemanales } from './schema';
-import * as dotenv from 'dotenv';
-dotenv.config();
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL no está configurada en .env');
-}
-
-const sql = neon(process.env.DATABASE_URL);
-const db = drizzle(sql);
+/**
+ * Deja en cero el historial y los inventarios de UN restaurante (conserva su
+ * catálogo, usuarios y configuración). Útil para arrancar operación real tras
+ * una capacitación con datos de prueba.
+ *
+ *   npm run db:reset-counts -- --tenant <código> --confirmar
+ */
+import { eq } from 'drizzle-orm';
+import {
+	productos,
+	bebidas,
+	turnos,
+	transaccionesTurno,
+	pizzaVentas,
+	pizzaSobras,
+	pizzaRuedas,
+	movimientosInventario,
+	movimientosBebidas,
+	gastos,
+	cierresDia,
+	cortesSemanales,
+	cierresLinea,
+	ventasItems,
+	movimientosContables
+} from './schema';
+import { conectar, restauranteObjetivo } from './scripts/tenant-cli';
 
 async function resetStockAndCounts() {
-  console.log('--- Reiniciando cantidades de inventario, turnos e historial ---');
+	const db = conectar();
+	const t = await restauranteObjetivo(db, { destructivo: true });
+	const tid = t.id;
+	console.log(`--- Reiniciando historial e inventario de "${t.nombre}" ---`);
 
-  // 1. Eliminar históricos de turnos, cierres y movimientos
-  await db.delete(cortesSemanales);
-  await db.delete(cierresDia);
-  await db.delete(transaccionesTurno);
-  await db.delete(gastos);
-  await db.delete(pizzaVentas);
-  await db.delete(pizzaSobras);
-  await db.delete(pizzaRuedas);
-  await db.delete(movimientosInventario);
-  await db.delete(movimientosBebidas);
-  await db.delete(turnos);
+	for (const tabla of [
+		movimientosContables,
+		ventasItems,
+		cierresLinea,
+		cortesSemanales,
+		cierresDia,
+		transaccionesTurno,
+		gastos,
+		pizzaVentas,
+		pizzaSobras,
+		pizzaRuedas,
+		movimientosInventario,
+		movimientosBebidas,
+		turnos
+	]) {
+		await db.delete(tabla).where(eq(tabla.tenantId, tid));
+	}
 
-  // 2. Reiniciar el stock de todos los productos de insumo (incluyendo Masas) a 0
-  await db.update(productos).set({
-    stockActual: 0,
-    precioCosto: '0'
-  });
+	await db
+		.update(productos)
+		.set({ stockActual: 0, precioCosto: '0' })
+		.where(eq(productos.tenantId, tid));
+	await db.update(bebidas).set({ stockActual: 0 }).where(eq(bebidas.tenantId, tid));
 
-  // 3. Reiniciar el stock de bebidas a 0
-  await db.update(bebidas).set({
-    stockActual: 0
-  });
-
-  console.log('✅ Base de datos reiniciada con éxito: Todas las cantidades y stocks están en 0.');
+	console.log(`✅ "${t.nombre}" quedó con historial vacío y stocks en 0.`);
 }
 
 resetStockAndCounts().catch((err) => {
-  console.error('Error al resetear cantidades:', err);
-  process.exit(1);
+	console.error(`✗ ${err instanceof Error ? err.message : err}`);
+	process.exit(1);
 });

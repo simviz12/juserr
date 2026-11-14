@@ -1,84 +1,110 @@
 import { db } from './db';
-import { sesiones, usuarios } from './schema';
-import { eq } from 'drizzle-orm';
+import { sesiones, tenants, usuarios } from './schema';
+import { and, eq, ne } from 'drizzle-orm';
 import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from '@oslojs/encoding';
 import { sha256 } from '@oslojs/crypto/sha2';
 
+const DAY_MS = 86_400_000;
+const SESSION_DAYS = 30;
+const RENEW_BEFORE_DAYS = 15;
+const CACHE_TTL_MS = 60_000;
+
+export type SessionUser = typeof usuarios.$inferSelect;
+export type Session = typeof sesiones.$inferSelect;
+
 export function generateSessionToken(): string {
-  const bytes = new Uint8Array(20);
-  crypto.getRandomValues(bytes);
-  return encodeBase32LowerCaseNoPadding(bytes);
+	const bytes = new Uint8Array(20);
+	crypto.getRandomValues(bytes);
+	return encodeBase32LowerCaseNoPadding(bytes);
 }
 
-export async function createSession(token: string, userId: number): Promise<typeof sesiones.$inferSelect> {
-  const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-  const session: typeof sesiones.$inferInsert = {
-    id: sessionId,
-    userId,
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30) // 30 dias
-  };
-  await db.insert(sesiones).values(session);
-  return session;
+export function sessionIdFromToken(token: string): string {
+	return encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 }
 
-// Caché en memoria para evitar consultar Neon DB en cada clic o navegación SPA (TTL: 60 segundos)
+export async function createSession(token: string, userId: number): Promise<Session> {
+	const session: Session = {
+		id: sessionIdFromToken(token),
+		userId,
+		expiresAt: new Date(Date.now() + SESSION_DAYS * DAY_MS)
+	};
+	await db.insert(sesiones).values(session);
+	return session;
+}
+
+// Caché en memoria para no consultar la BD en cada navegación (TTL 60 s).
 interface CachedSession {
-  user: typeof usuarios.$inferSelect;
-  session: typeof sesiones.$inferSelect;
-  cachedAt: number;
+	user: SessionUser;
+	session: Session;
+	cachedAt: number;
 }
 const sessionCache = new Map<string, CachedSession>();
 
-export async function validateSessionToken(token: string) {
-  const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-  
-  const cached = sessionCache.get(sessionId);
-  if (cached && Date.now() - cached.cachedAt < 60000) {
-    if (Date.now() < cached.session.expiresAt.getTime()) {
-      return { session: cached.session, user: cached.user };
-    }
-    sessionCache.delete(sessionId);
-  }
+/**
+ * Valida el token de sesión. Un usuario de un restaurante cancelado no tiene
+ * sesión válida (los suspendidos sí entran, pero solo ven facturación).
+ */
+export async function validateSessionToken(
+	token: string
+): Promise<{ session: Session | null; user: SessionUser | null }> {
+	const sessionId = sessionIdFromToken(token);
 
-  const result = await db
-    .select({ user: usuarios, session: sesiones })
-    .from(sesiones)
-    .innerJoin(usuarios, eq(sesiones.userId, usuarios.id))
-    .where(eq(sesiones.id, sessionId));
+	const cached = sessionCache.get(sessionId);
+	if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+		if (Date.now() < cached.session.expiresAt.getTime())
+			return { session: cached.session, user: cached.user };
+		sessionCache.delete(sessionId);
+	}
 
-  if (result.length < 1) {
-    sessionCache.delete(sessionId);
-    return { session: null, user: null };
-  }
+	const [row] = await db
+		.select({ user: usuarios, session: sesiones })
+		.from(sesiones)
+		.innerJoin(usuarios, eq(sesiones.userId, usuarios.id))
+		.innerJoin(tenants, and(eq(usuarios.tenantId, tenants.id), ne(tenants.estado, 'cancelado')))
+		.where(eq(sesiones.id, sessionId));
 
-  const { user, session } = result[0];
-  
-  if (Date.now() >= session.expiresAt.getTime()) {
-    sessionCache.delete(sessionId);
-    await db.delete(sesiones).where(eq(sesiones.id, session.id));
-    return { session: null, user: null };
-  }
+	if (!row) {
+		sessionCache.delete(sessionId);
+		return { session: null, user: null };
+	}
 
-  // Renovar si queda menos de 15 dias
-  if (Date.now() >= session.expiresAt.getTime() - 1000 * 60 * 60 * 24 * 15) {
-    session.expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
-    await db.update(sesiones).set({ expiresAt: session.expiresAt }).where(eq(sesiones.id, session.id));
-  }
+	const { user, session } = row;
+	if (Date.now() >= session.expiresAt.getTime()) {
+		sessionCache.delete(sessionId);
+		await db.delete(sesiones).where(eq(sesiones.id, session.id));
+		return { session: null, user: null };
+	}
 
-  sessionCache.set(sessionId, { user, session, cachedAt: Date.now() });
+	if (Date.now() >= session.expiresAt.getTime() - RENEW_BEFORE_DAYS * DAY_MS) {
+		session.expiresAt = new Date(Date.now() + SESSION_DAYS * DAY_MS);
+		await db
+			.update(sesiones)
+			.set({ expiresAt: session.expiresAt })
+			.where(eq(sesiones.id, session.id));
+	}
 
-  return { session, user };
+	sessionCache.set(sessionId, { user, session, cachedAt: Date.now() });
+	return { session, user };
 }
 
-/** Limpia la caché de sesiones de un usuario (cambio de rol, contraseña o borrado). */
+/** Cierra todas las sesiones de un usuario (cambio de rol, contraseña o borrado). */
 export async function invalidateUserSessions(userId: number) {
-  for (const [id, entry] of sessionCache) {
-    if (entry.user.id === userId) sessionCache.delete(id);
-  }
-  await db.delete(sesiones).where(eq(sesiones.userId, userId));
+	for (const [id, entry] of sessionCache) {
+		if (entry.user.id === userId) sessionCache.delete(id);
+	}
+	await db.delete(sesiones).where(eq(sesiones.userId, userId));
+}
+
+/** Cierra todas las sesiones de un restaurante (cancelación desde la consola). */
+export async function invalidateTenantSessions(tenantId: number) {
+	const ids = await db
+		.select({ id: usuarios.id })
+		.from(usuarios)
+		.where(eq(usuarios.tenantId, tenantId));
+	for (const { id } of ids) await invalidateUserSessions(id);
 }
 
 export async function invalidateSession(sessionId: string) {
-  sessionCache.delete(sessionId);
-  await db.delete(sesiones).where(eq(sesiones.id, sessionId));
+	sessionCache.delete(sessionId);
+	await db.delete(sesiones).where(eq(sesiones.id, sessionId));
 }

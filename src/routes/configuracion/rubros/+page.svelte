@@ -1,6 +1,20 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Pizza, Flame, Sandwich, Layers, Beef, UtensilsCrossed, Plus, Pencil, Trash2, Pause, Play, Save, LoaderCircle } from '@lucide/svelte';
+	import {
+		Pizza,
+		Flame,
+		Sandwich,
+		Layers,
+		Beef,
+		UtensilsCrossed,
+		Plus,
+		Pencil,
+		Trash2,
+		Pause,
+		Play,
+		Save,
+		LoaderCircle
+	} from '@lucide/svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -17,7 +31,13 @@
 
 	let { data, form } = $props();
 
-	const ICONS = { pizza: Pizza, chuzo: Flame, burger: Sandwich, lasana: Layers, carne: Beef } as const;
+	const ICONS = {
+		pizza: Pizza,
+		chuzo: Flame,
+		burger: Sandwich,
+		lasana: Layers,
+		carne: Beef
+	} as const;
 	const iconFor = (codigo: string) => ICONS[codigo as keyof typeof ICONS] ?? UtensilsCrossed;
 
 	// Estado del formulario de ajustes (se reinicia cuando llegan datos nuevos)
@@ -27,7 +47,9 @@
 	$effect.pre(() => {
 		nombreNegocio = data.config.nombreNegocio;
 		rubroPrincipal = data.config.rubroPrincipal;
-		flags = Object.fromEntries(LINE_TOGGLES.map((t) => [t.field, Boolean(data.config[t.field] ?? true)]));
+		flags = Object.fromEntries(
+			LINE_TOGGLES.map((t) => [t.field, Boolean(data.config[t.field] ?? true)])
+		);
 	});
 	let dirty = $derived(
 		nombreNegocio !== data.config.nombreNegocio ||
@@ -70,7 +92,13 @@
 
 	const fcVariant = (fc: number | null) => {
 		const s = foodCostStatus(fc);
-		return s === 'saludable' ? 'success' : s === 'vigilar' ? 'warning' : s === 'riesgo' ? 'danger' : 'neutral';
+		return s === 'saludable'
+			? 'success'
+			: s === 'vigilar'
+				? 'warning'
+				: s === 'riesgo'
+					? 'danger'
+					: 'neutral';
 	};
 </script>
 
@@ -96,7 +124,10 @@
 			};
 		}}
 	>
-		<Card title="Identidad del negocio" description="El nombre aparece en el menú lateral, en los reportes PDF y en el reporte de cierre por WhatsApp.">
+		<Card
+			title="Identidad del negocio"
+			description="El nombre aparece en el menú lateral, en los reportes PDF y en el reporte de cierre por WhatsApp."
+		>
 			{#snippet actions()}
 				<button type="submit" class={cn(btn.base, btn.primary)} disabled={!dirty || saving}>
 					{#if saving}<LoaderCircle size={15} class="animate-spin" />{:else}<Save size={15} />{/if}
@@ -106,10 +137,26 @@
 
 			<div class="grid gap-4 md:grid-cols-2">
 				<Field label="Nombre comercial" for="nombre_negocio">
-					<input id="nombre_negocio" name="nombre_negocio" bind:value={nombreNegocio} required maxlength="80" class={inputClass} />
+					<input
+						id="nombre_negocio"
+						name="nombre_negocio"
+						bind:value={nombreNegocio}
+						required
+						maxlength="80"
+						class={inputClass}
+					/>
 				</Field>
-				<Field label="Tipo de negocio" for="rubro_principal" hint="Ajusta los textos del cierre de turno (p. ej. 'pinchos' en vez de 'porciones').">
-					<select id="rubro_principal" name="rubro_principal" bind:value={rubroPrincipal} class={selectClass}>
+				<Field
+					label="Tipo de negocio"
+					for="rubro_principal"
+					hint="Ajusta los textos del cierre de turno (p. ej. 'pinchos' en vez de 'porciones')."
+				>
+					<select
+						id="rubro_principal"
+						name="rubro_principal"
+						bind:value={rubroPrincipal}
+						class={selectClass}
+					>
 						{#each RUBROS as r (r.value)}<option value={r.value}>{r.label}</option>{/each}
 					</select>
 				</Field>
@@ -117,7 +164,10 @@
 
 			<div class="mt-6">
 				<p class="text-sm font-medium">Líneas activas</p>
-				<p class="text-xs text-muted-foreground">Una línea apagada se oculta del catálogo. Apagar Pizzas también oculta la conciliación de pizzas en el cierre de turno.</p>
+				<p class="text-xs text-muted-foreground">
+					Una línea apagada se oculta del catálogo. Apagar Pizzas también oculta la conciliación de
+					pizzas en el cierre de turno.
+				</p>
 				<ul class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
 					{#each LINE_TOGGLES as t (t.field)}
 						{@const Icon = iconFor(t.codigo)}
@@ -128,7 +178,9 @@
 						>
 							<!-- Ícono, nombre e interruptor arriba; la descripción usa todo el ancho (legible en móvil) -->
 							<div class="flex items-center gap-3">
-								<span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted"><Icon size={16} /></span>
+								<span class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted"
+									><Icon size={16} /></span
+								>
 								<p class="min-w-0 flex-1 text-sm font-medium">{t.label}</p>
 								<Switch name={t.form} label={`Activar ${t.label}`} bind:checked={flags[t.field]} />
 							</div>
@@ -144,7 +196,10 @@
 	<div>
 		<h2 class="text-lg font-semibold tracking-tight">Menú y costeo</h2>
 		<p class="text-sm text-muted-foreground">
-			Precio de venta y costo de insumos por plato. El food cost ideal está entre {formatPct(FOOD_COST_TARGET.ideal, 0)} y {formatPct(FOOD_COST_TARGET.max, 0)}.
+			Precio de venta y costo de insumos por plato. El food cost ideal está entre {formatPct(
+				FOOD_COST_TARGET.ideal,
+				0
+			)} y {formatPct(FOOD_COST_TARGET.max, 0)}.
 		</p>
 	</div>
 
@@ -154,23 +209,37 @@
 			{@const items = data.items.filter((i) => i.lineaId === linea.id)}
 			{@const activos = items.filter((i) => i.activo)}
 			{@const avgFc = activos.length
-				? activos.reduce((a, i) => a + (itemEconomics(Number(i.precioVenta), Number(i.precioCosto ?? 0)).foodCost ?? 0), 0) / activos.length
+				? activos.reduce(
+						(a, i) =>
+							a + (itemEconomics(Number(i.precioVenta), Number(i.precioCosto ?? 0)).foodCost ?? 0),
+						0
+					) / activos.length
 				: null}
 			<Card class={linea.activo ? '' : 'opacity-60'} bodyClass="p-0">
-				<header class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+				<header
+					class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5"
+				>
 					<div class="flex min-w-0 items-center gap-3">
-						<span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted"><Icon size={17} /></span>
+						<span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted"
+							><Icon size={17} /></span
+						>
 						<div class="min-w-0">
 							<h3 class="truncate text-sm font-semibold">{linea.nombre}</h3>
 							<p class="text-xs text-muted-foreground">
-								{items.length} {items.length === 1 ? 'plato' : 'platos'} · unidad: {linea.unidadPorcion}
+								{items.length}
+								{items.length === 1 ? 'plato' : 'platos'} · unidad: {linea.unidadPorcion}
 								{#if avgFc !== null}· food cost prom. {formatPct(avgFc, 0)}{/if}
 							</p>
 						</div>
 					</div>
 					<div class="flex items-center gap-2">
 						{#if !linea.activo}<Badge variant="outline">Inactiva</Badge>{/if}
-						<button type="button" class={cn(btn.base, btn.outline, btn.sm)} onclick={() => openNew(linea.id)} disabled={!linea.activo}>
+						<button
+							type="button"
+							class={cn(btn.base, btn.outline, btn.sm)}
+							onclick={() => openNew(linea.id)}
+							disabled={!linea.activo}
+						>
 							<Plus size={14} /> Plato
 						</button>
 					</div>
@@ -178,7 +247,14 @@
 
 				{#if linea.codigo !== 'pizza' && linea.activo}
 					{@const control = controlDe(linea.productoControlId)}
-					<form method="POST" action="?/actualizarControl" use:enhance={() => async ({ update }) => update({ reset: false })} class="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs sm:px-5">
+					<form
+						method="POST"
+						action="?/actualizarControl"
+						use:enhance={() =>
+							async ({ update }) =>
+								update({ reset: false })}
+						class="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs sm:px-5"
+					>
 						<input type="hidden" name="linea_id" value={linea.id} />
 						<span class="text-muted-foreground">En el cierre se cuenta:</span>
 						<select
@@ -186,35 +262,70 @@
 							value={linea.productoControlId ?? ''}
 							onchange={(e) => e.currentTarget.form?.requestSubmit()}
 							aria-label={`Insumo de control de ${linea.nombre}`}
-							class="h-7 min-w-36 max-w-full flex-1 rounded border border-input bg-card px-2 text-xs sm:flex-none"
+							class="h-7 max-w-full min-w-36 flex-1 rounded border border-input bg-card px-2 text-xs sm:flex-none"
 						>
 							{#each data.insumos as p (p.id)}<option value={p.id}>{p.nombre}</option>{/each}
 						</select>
 						{#if control}
-							<span class="ml-auto text-muted-foreground tabular-nums">En bodega: <span class="font-medium text-foreground">{formatNumber(control.stock ?? 0)}</span></span>
+							<span class="ml-auto text-muted-foreground tabular-nums"
+								>En bodega: <span class="font-medium text-foreground"
+									>{formatNumber(control.stock ?? 0)}</span
+								></span
+							>
 						{/if}
 					</form>
 				{/if}
 
 				{#if items.length === 0}
-					<EmptyState icon={Icon} title="Sin platos" description={linea.activo ? 'Agrega el primero con el botón “Plato”.' : 'Activa la línea para agregar platos.'} />
+					<EmptyState
+						icon={Icon}
+						title="Sin platos"
+						description={linea.activo
+							? 'Agrega el primero con el botón “Plato”.'
+							: 'Activa la línea para agregar platos.'}
+					/>
 				{:else}
 					<ul class="divide-y divide-border">
 						{#each items as item (item.id)}
 							{@const venta = Number(item.precioVenta)}
 							{@const eco = itemEconomics(venta, Number(item.precioCosto ?? 0))}
-							<li class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:flex-nowrap sm:px-5 {item.activo ? '' : 'opacity-50'}">
+							<li
+								class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:flex-nowrap sm:px-5 {item.activo
+									? ''
+									: 'opacity-50'}"
+							>
 								<div class="min-w-0 flex-1 basis-full sm:basis-auto">
-									<p class="truncate text-sm font-medium">{item.nombre}{#if !item.activo}<span class="ml-2 text-xs font-normal text-muted-foreground">(pausado)</span>{/if}</p>
-									<p class="text-xs text-muted-foreground tabular-nums">Costo {formatCOP(Number(item.precioCosto ?? 0))} · margen {formatCOP(eco.margen)}</p>
+									<p class="truncate text-sm font-medium">
+										{item.nombre}{#if !item.activo}<span
+												class="ml-2 text-xs font-normal text-muted-foreground">(pausado)</span
+											>{/if}
+									</p>
+									<p class="text-xs text-muted-foreground tabular-nums">
+										Costo {formatCOP(Number(item.precioCosto ?? 0))} · margen {formatCOP(
+											eco.margen
+										)}
+									</p>
 								</div>
 								<Badge variant={fcVariant(eco.foodCost)}>{formatPct(eco.foodCost, 0)}</Badge>
-								<span class="ml-auto text-right text-sm font-semibold tabular-nums sm:ml-0 sm:w-20">{formatCOP(venta)}</span>
+								<span class="ml-auto text-right text-sm font-semibold tabular-nums sm:ml-0 sm:w-20"
+									>{formatCOP(venta)}</span
+								>
 								<div class="flex">
-									<button type="button" class={cn(btn.base, btn.icon)} aria-label={`Editar ${item.nombre}`} onclick={() => openEdit(item)}><Pencil size={14} /></button>
+									<button
+										type="button"
+										class={cn(btn.base, btn.icon)}
+										aria-label={`Editar ${item.nombre}`}
+										onclick={() => openEdit(item)}><Pencil size={14} /></button
+									>
 									<form method="POST" action="?/toggleItem" use:enhance>
 										<input type="hidden" name="id" value={item.id} />
-										<button class={cn(btn.base, btn.icon)} aria-label={item.activo ? `Pausar ${item.nombre}` : `Reactivar ${item.nombre}`} title={item.activo ? 'Pausar' : 'Reactivar'}>
+										<button
+											class={cn(btn.base, btn.icon)}
+											aria-label={item.activo
+												? `Pausar ${item.nombre}`
+												: `Reactivar ${item.nombre}`}
+											title={item.activo ? 'Pausar' : 'Reactivar'}
+										>
 											{#if item.activo}<Pause size={14} />{:else}<Play size={14} />{/if}
 										</button>
 									</form>
@@ -222,11 +333,16 @@
 										method="POST"
 										action="?/eliminarItem"
 										use:enhance={({ cancel }) => {
-											if (!confirm(`¿Eliminar "${item.nombre}"? Esta acción no se puede deshacer.`)) cancel();
+											if (!confirm(`¿Eliminar "${item.nombre}"? Esta acción no se puede deshacer.`))
+												cancel();
 										}}
 									>
 										<input type="hidden" name="id" value={item.id} />
-										<button class={cn(btn.base, btn.icon, 'hover:text-danger')} aria-label={`Eliminar ${item.nombre}`} title="Eliminar"><Trash2 size={14} /></button>
+										<button
+											class={cn(btn.base, btn.icon, 'hover:text-danger')}
+											aria-label={`Eliminar ${item.nombre}`}
+											title="Eliminar"><Trash2 size={14} /></button
+										>
 									</form>
 								</div>
 							</li>
@@ -238,7 +354,11 @@
 	</div>
 </div>
 
-<Dialog bind:open={dialogOpen} title={editing ? 'Editar plato' : 'Nuevo plato'} description={data.lineas.find((l) => l.id === lineaId)?.nombre}>
+<Dialog
+	bind:open={dialogOpen}
+	title={editing ? 'Editar plato' : 'Nuevo plato'}
+	description={data.lineas.find((l) => l.id === lineaId)?.nombre}
+>
 	<form
 		id="item-form"
 		method="POST"
@@ -253,14 +373,39 @@
 		<input type="hidden" name="linea_id" value={lineaId} />
 		{#if editing}<input type="hidden" name="id" value={editing.id} />{/if}
 		<Field label="Nombre" for="item-nombre">
-			<input id="item-nombre" name="nombre" bind:value={nombre} required maxlength="120" placeholder="Ej: Hamburguesa doble queso + papas" class={inputClass} />
+			<input
+				id="item-nombre"
+				name="nombre"
+				bind:value={nombre}
+				required
+				maxlength="120"
+				placeholder="Ej: Hamburguesa doble queso + papas"
+				class={inputClass}
+			/>
 		</Field>
 		<div class="grid grid-cols-2 gap-3">
 			<Field label="Precio de venta" for="item-venta">
-				<input id="item-venta" name="precio_venta" type="number" min="1" step="100" bind:value={precioVenta} required class={inputClass} />
+				<input
+					id="item-venta"
+					name="precio_venta"
+					type="number"
+					min="1"
+					step="100"
+					bind:value={precioVenta}
+					required
+					class={inputClass}
+				/>
 			</Field>
 			<Field label="Costo de insumos" for="item-costo">
-				<input id="item-costo" name="precio_costo" type="number" min="0" step="100" bind:value={precioCosto} class={inputClass} />
+				<input
+					id="item-costo"
+					name="precio_costo"
+					type="number"
+					min="0"
+					step="100"
+					bind:value={precioCosto}
+					class={inputClass}
+				/>
 			</Field>
 		</div>
 		{#if lineaDialog && lineaDialog.codigo !== 'pizza'}
@@ -270,20 +415,40 @@
 				for="item-unidades"
 				hint="Normalmente 1. Ej: un combo doble que lleva 2 panes = 2. Así el cierre sabe cuántas ventas salieron de lo contado."
 			>
-				<input id="item-unidades" name="unidades_control" type="number" min="0.25" max="50" step="0.25" bind:value={unidadesControl} required class={cn(inputClass, 'w-28')} />
+				<input
+					id="item-unidades"
+					name="unidades_control"
+					type="number"
+					min="0.25"
+					max="50"
+					step="0.25"
+					bind:value={unidadesControl}
+					required
+					class={cn(inputClass, 'w-28')}
+				/>
 			</Field>
 		{:else}
 			<input type="hidden" name="unidades_control" value="1" />
 		{/if}
 		{#if Number(precioVenta) > 0}
 			<div class="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm">
-				<span class="text-muted-foreground">Margen <span class="font-medium text-foreground tabular-nums">{formatCOP(preview.margen)}</span></span>
-				<Badge variant={fcVariant(preview.foodCost)}>Food cost {formatPct(preview.foodCost, 0)}</Badge>
+				<span class="text-muted-foreground"
+					>Margen <span class="font-medium text-foreground tabular-nums"
+						>{formatCOP(preview.margen)}</span
+					></span
+				>
+				<Badge variant={fcVariant(preview.foodCost)}
+					>Food cost {formatPct(preview.foodCost, 0)}</Badge
+				>
 			</div>
 		{/if}
 	</form>
 	{#snippet footer()}
-		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (dialogOpen = false)}>Cancelar</button>
-		<button type="submit" form="item-form" class={cn(btn.base, btn.primary)}>{editing ? 'Guardar cambios' : 'Agregar plato'}</button>
+		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (dialogOpen = false)}
+			>Cancelar</button
+		>
+		<button type="submit" form="item-form" class={cn(btn.base, btn.primary)}
+			>{editing ? 'Guardar cambios' : 'Agregar plato'}</button
+		>
 	{/snippet}
 </Dialog>

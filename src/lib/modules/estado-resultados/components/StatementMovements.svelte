@@ -11,7 +11,7 @@
 	import { cn } from '$lib/utils/cn';
 	import { formatCOP, formatDateTime, formatDate } from '$lib/utils/format';
 	import { fromCents } from '$lib/features/finance/domain/money';
-	import type { Movimiento } from '$lib/features/finance/domain/income-statement';
+	import type { Movimiento } from '$lib/modules/estado-resultados/domain/income-statement';
 
 	interface Props {
 		movimientos: Movimiento[];

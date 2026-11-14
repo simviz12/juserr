@@ -18,9 +18,15 @@
 
 <Card title="Productos más vendidos" description="Sabores de pizza y platos, por ingresos">
 	{#if loading}
-		<div class="space-y-4">{#each { length: 4 }, i (i)}<Skeleton class="h-7 w-full" />{/each}</div>
+		<div class="space-y-4">
+			{#each { length: 4 }, i (i)}<Skeleton class="h-7 w-full" />{/each}
+		</div>
 	{:else if items.length === 0}
-		<EmptyState icon={Pizza} title="Sin ventas registradas" description="Al cerrar turnos verás aquí el ranking." />
+		<EmptyState
+			icon={Pizza}
+			title="Sin ventas registradas"
+			description="Al cerrar turnos verás aquí el ranking."
+		/>
 	{:else}
 		<ol class="space-y-3.5">
 			{#each items as item, i (item.nombre)}
@@ -31,11 +37,18 @@
 							<span class="truncate font-medium">{item.nombre}</span>
 						</span>
 						<span class="shrink-0 text-xs text-muted-foreground tabular-nums">
-							{formatNumber(item.vendidas)} und.{#if item.ingresos > 0}<span class="text-foreground"> · {formatCOP(item.ingresos)}</span>{/if}
+							{formatNumber(item.vendidas)} und.{#if item.ingresos > 0}<span
+									class="text-foreground"
+								>
+									· {formatCOP(item.ingresos)}</span
+								>{/if}
 						</span>
 					</div>
 					<div class="ml-6 h-1.5 rounded-full bg-muted">
-						<div class="h-full rounded-full bg-series-1 transition-[width] duration-700" style="width:{(valor(item) / max) * 100}%"></div>
+						<div
+							class="h-full rounded-full bg-series-1 transition-[width] duration-700"
+							style="width:{(valor(item) / max) * 100}%"
+						></div>
 					</div>
 				</li>
 			{/each}

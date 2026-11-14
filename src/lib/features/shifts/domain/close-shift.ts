@@ -29,11 +29,21 @@ export function porcionesVendidas(i: InventoryInput): number {
 	const masasUsadas = Math.max(0, i.masasIniciales - i.masasSobrantes);
 	return Math.max(
 		0,
-		Math.round(masasUsadas * PORCIONES_POR_MASA + i.porcionesAyer - i.porcionesSobrantes - i.porcionesMermadas)
+		Math.round(
+			masasUsadas * PORCIONES_POR_MASA +
+				i.porcionesAyer -
+				i.porcionesSobrantes -
+				i.porcionesMermadas
+		)
 	);
 }
 
-export function ventasPorSabor(sobrasAyer: number, ruedas: number, sobras: number, quemadas: number): number {
+export function ventasPorSabor(
+	sobrasAyer: number,
+	ruedas: number,
+	sobras: number,
+	quemadas: number
+): number {
 	return Math.max(0, sobrasAyer + ruedas * PORCIONES_POR_MASA - sobras - quemadas);
 }
 

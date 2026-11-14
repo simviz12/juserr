@@ -20,7 +20,16 @@
 	import type { CashflowPoint } from '$lib/features/finance/domain/metrics';
 	import { formatCOP, formatCompactCOP } from '$lib/utils/format';
 
-	Chart.register(BarController, BarElement, LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip);
+	Chart.register(
+		BarController,
+		BarElement,
+		LineController,
+		LineElement,
+		PointElement,
+		CategoryScale,
+		LinearScale,
+		Tooltip
+	);
 
 	interface Props {
 		data: CashflowPoint[];
@@ -32,11 +41,14 @@
 	let { data, showTable = false, canvasEl = $bindable(null), height = 'h-72' }: Props = $props();
 
 	let canvas = $state<HTMLCanvasElement>();
-	let vacio = $derived(data.every((p) => p.future || (p.efectivo === 0 && p.transferencias === 0 && p.gastos === 0)));
+	let vacio = $derived(
+		data.every((p) => p.future || (p.efectivo === 0 && p.transferencias === 0 && p.gastos === 0))
+	);
 	let chart: Chart | null = null;
 	let themeTick = $state(0);
 
-	const token = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+	const token = (name: string) =>
+		getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 	function build(points: CashflowPoint[]): ChartConfiguration {
 		const surface = token('--card');
@@ -132,7 +144,12 @@
 						beginAtZero: true,
 						grid: { color: grid },
 						border: { display: false },
-						ticks: { color: muted, font, maxTicksLimit: 5, callback: (v) => formatCompactCOP(Number(v)) }
+						ticks: {
+							color: muted,
+							font,
+							maxTicksLimit: 5,
+							callback: (v) => formatCompactCOP(Number(v))
+						}
 					}
 				}
 			}
@@ -165,7 +182,10 @@
 </script>
 
 <div class="flex flex-col gap-3">
-	<ul class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Leyenda">
+	<ul
+		class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground"
+		aria-label="Leyenda"
+	>
 		{#each legend as l (l.label)}
 			<li class="flex items-center gap-1.5">
 				{#if l.kind === 'bar'}
@@ -179,14 +199,18 @@
 	</ul>
 
 	{#if vacio}
-		<div class="grid {height} place-items-center rounded-md border border-dashed border-border text-center">
+		<div
+			class="grid {height} place-items-center rounded-md border border-dashed border-border text-center"
+		>
 			<div>
 				<p class="text-sm font-medium">Sin movimientos en este período</p>
-				<p class="mt-1 text-[13px] text-muted-foreground">Los cierres de turno y gastos aparecerán aquí.</p>
+				<p class="mt-1 text-[13px] text-muted-foreground">
+					Los cierres de turno y gastos aparecerán aquí.
+				</p>
 			</div>
 		</div>
 	{:else if showTable}
-		<div class="max-h-72 overflow-auto rounded-md border border-border custom-scrollbar">
+		<div class="custom-scrollbar max-h-72 overflow-auto rounded-md border border-border">
 			<table class="w-full text-sm">
 				<thead class="sticky top-0 bg-muted text-xs text-muted-foreground">
 					<tr>
@@ -204,7 +228,9 @@
 							<td class="px-3 py-2 text-right">{formatCOP(p.efectivo)}</td>
 							<td class="px-3 py-2 text-right">{formatCOP(p.transferencias)}</td>
 							<td class="px-3 py-2 text-right">{formatCOP(p.gastos)}</td>
-							<td class="px-3 py-2 text-right font-medium {p.neto < 0 ? 'text-danger' : ''}">{formatCOP(p.neto)}</td>
+							<td class="px-3 py-2 text-right font-medium {p.neto < 0 ? 'text-danger' : ''}"
+								>{formatCOP(p.neto)}</td
+							>
 						</tr>
 					{/each}
 				</tbody>
@@ -212,7 +238,8 @@
 		</div>
 	{:else}
 		<div class="relative {height} w-full">
-			<canvas bind:this={canvas} aria-label="Gráfico de flujo de caja: ingresos por canal y gastos"></canvas>
+			<canvas bind:this={canvas} aria-label="Gráfico de flujo de caja: ingresos por canal y gastos"
+			></canvas>
 		</div>
 	{/if}
 </div>

@@ -18,12 +18,21 @@
 		footer?: Snippet;
 	}
 
-	let { label, value, icon: Icon, delta, inverse, comparison, spark, loading = false, footer }: Props =
-		$props();
+	let {
+		label,
+		value,
+		icon: Icon,
+		delta,
+		inverse,
+		comparison,
+		spark,
+		loading = false,
+		footer
+	}: Props = $props();
 </script>
 
 <article
-	class="group relative flex flex-col gap-3 overflow-hidden rounded-lg border border-border bg-card p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition-shadow duration-200 hover:shadow-md animate-slide-up"
+	class="group relative flex animate-slide-up flex-col gap-3 overflow-hidden rounded-lg border border-border bg-card p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition-shadow duration-200 hover:shadow-md"
 >
 	<div class="flex items-center justify-between gap-2">
 		<p class="text-[13px] font-medium text-muted-foreground">{label}</p>

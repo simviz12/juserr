@@ -41,4 +41,6 @@ await sql.transaction([
 	sql`CREATE INDEX IF NOT EXISTS ventas_items_fecha_idx ON ventas_items (fecha)`
 ]);
 
-console.log('Migración aplicada: cierres_linea, ventas_items, producto_control_id, unidades_control.');
+console.log(
+	'Migración aplicada: cierres_linea, ventas_items, producto_control_id, unidades_control.'
+);

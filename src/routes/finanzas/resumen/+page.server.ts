@@ -1,10 +1,17 @@
 import { db } from '$lib/server/db';
-import { turnos, transaccionesTurno, gastos, movimientosInventario, productos } from '$lib/server/schema';
+import {
+	turnos,
+	transaccionesTurno,
+	gastos,
+	movimientosInventario,
+	productos
+} from '$lib/server/schema';
 import { sql, and, gte, lt, desc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
 import { getBusinessConfig } from '$lib/features/business/server/config';
+import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 /** Lunes (YYYY-MM-DD) de la semana de una clave de día, sin depender de la zona del servidor. */
 function mondayOf(dayKey: string): string {
@@ -14,7 +21,8 @@ function mondayOf(dayKey: string): string {
 	return d.toISOString().slice(0, 10);
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const tid = tenantDe(locals);
 	// Mes en curso según la jornada de negocio en Colombia (no la hora del servidor).
 	const mes = currentRange('mensual');
 	const inicioRaw = url.searchParams.get('inicio');
@@ -31,12 +39,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		db
 			.select()
 			.from(turnos)
-			.where(and(gte(turnos.fecha, start), lt(turnos.fecha, end)))
+			.where(delTenant(turnos, tid, gte(turnos.fecha, start), lt(turnos.fecha, end)))
 			.orderBy(desc(turnos.fecha)),
 		db
 			.select()
 			.from(gastos)
-			.where(and(gte(gastos.fecha, start), lt(gastos.fecha, end)))
+			.where(delTenant(gastos, tid, gte(gastos.fecha, start), lt(gastos.fecha, end)))
 			.orderBy(desc(gastos.fecha)),
 		db
 			.select({
@@ -44,7 +52,14 @@ export const load: PageServerLoad = async ({ url }) => {
 				total: sql<string>`COALESCE(SUM(CAST(${transaccionesTurno.monto} AS NUMERIC)), 0)`
 			})
 			.from(transaccionesTurno)
-			.where(and(gte(transaccionesTurno.fecha, start), lt(transaccionesTurno.fecha, end)))
+			.where(
+				delTenant(
+					transaccionesTurno,
+					tid,
+					gte(transaccionesTurno.fecha, start),
+					lt(transaccionesTurno.fecha, end)
+				)
+			)
 			.groupBy(transaccionesTurno.plataforma),
 		db
 			.select({
@@ -58,18 +73,39 @@ export const load: PageServerLoad = async ({ url }) => {
 				fecha: movimientosInventario.fecha
 			})
 			.from(movimientosInventario)
-			.innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
-			.where(and(gte(movimientosInventario.fecha, start), lt(movimientosInventario.fecha, end)))
+			.innerJoin(
+				productos,
+				and(eq(movimientosInventario.productoId, productos.id), eq(productos.tenantId, tid))
+			)
+			.where(
+				delTenant(
+					movimientosInventario,
+					tid,
+					gte(movimientosInventario.fecha, start),
+					lt(movimientosInventario.fecha, end)
+				)
+			)
 			.orderBy(desc(movimientosInventario.fecha)),
-		getBusinessConfig()
+		getBusinessConfig(tid)
 	]);
 
 	// ── Agrupación por día de negocio ───────────────────────
-	type Dia = { fecha: string; efectivo: number; transferencias: number; gastos: number; compras: number; turnos: number };
+	type Dia = {
+		fecha: string;
+		efectivo: number;
+		transferencias: number;
+		gastos: number;
+		compras: number;
+		turnos: number;
+	};
 	const dias = new Map<string, Dia>();
 	const dia = (k: string) => {
 		let d = dias.get(k);
-		if (!d) dias.set(k, (d = { fecha: k, efectivo: 0, transferencias: 0, gastos: 0, compras: 0, turnos: 0 }));
+		if (!d)
+			dias.set(
+				k,
+				(d = { fecha: k, efectivo: 0, transferencias: 0, gastos: 0, compras: 0, turnos: 0 })
+			);
 		return d;
 	};
 	for (const t of turnosRango) {
@@ -79,8 +115,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		d.transferencias += toNumber(t.transferencias);
 		d.turnos += 1;
 	}
-	for (const g of gastosRango) if (g.fecha) dia(businessDayKey(g.fecha)).gastos += toNumber(g.monto);
-	for (const c of compras) if (c.fecha && c.tipo === 'entrada') dia(businessDayKey(c.fecha)).compras += toNumber(c.costoTotal);
+	for (const g of gastosRango)
+		if (g.fecha) dia(businessDayKey(g.fecha)).gastos += toNumber(g.monto);
+	for (const c of compras)
+		if (c.fecha && c.tipo === 'entrada')
+			dia(businessDayKey(c.fecha)).compras += toNumber(c.costoTotal);
 
 	const historialDias = [...dias.values()]
 		.map((d) => {
@@ -90,10 +129,29 @@ export const load: PageServerLoad = async ({ url }) => {
 		.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
 	// ── Agrupación semanal (lunes a domingo) ────────────────
-	const semanasMap = new Map<string, { lunes: string; ventasBrutas: number; gastos: number; compras: number; utilidadNeta: number; transferencias: number; diasContados: number }>();
+	const semanasMap = new Map<
+		string,
+		{
+			lunes: string;
+			ventasBrutas: number;
+			gastos: number;
+			compras: number;
+			utilidadNeta: number;
+			transferencias: number;
+			diasContados: number;
+		}
+	>();
 	for (const d of historialDias) {
 		const k = mondayOf(d.fecha);
-		const s = semanasMap.get(k) ?? { lunes: k, ventasBrutas: 0, gastos: 0, compras: 0, utilidadNeta: 0, transferencias: 0, diasContados: 0 };
+		const s = semanasMap.get(k) ?? {
+			lunes: k,
+			ventasBrutas: 0,
+			gastos: 0,
+			compras: 0,
+			utilidadNeta: 0,
+			transferencias: 0,
+			diasContados: 0
+		};
 		s.ventasBrutas += d.ventasBrutas;
 		s.gastos += d.gastos;
 		s.compras += d.compras;
@@ -126,7 +184,10 @@ export const load: PageServerLoad = async ({ url }) => {
 		granTotal,
 		promedioDiario: diasConVenta ? granTotal.ventasBrutas / diasConVenta : 0,
 		diasConVenta,
-		pagosDesglose: pagosDesglose.map((p) => ({ plataforma: p.plataforma, total: toNumber(p.total) })),
+		pagosDesglose: pagosDesglose.map((p) => ({
+			plataforma: p.plataforma,
+			total: toNumber(p.total)
+		})),
 		turnosDetallados: turnosRango.map((t) => ({
 			id: t.id,
 			fecha: t.fecha ? t.fecha.toISOString() : null,
@@ -139,7 +200,17 @@ export const load: PageServerLoad = async ({ url }) => {
 			porcionesMermadas: t.porcionesMermadas ?? 0,
 			porcionesVendidas: t.porcionesVendidasCalculado ?? 0
 		})),
-		listaGastos: gastosRango.map((g) => ({ id: g.id, fecha: g.fecha ? g.fecha.toISOString() : null, descripcion: g.descripcion, monto: toNumber(g.monto) })),
-		compras: compras.map((c) => ({ ...c, fecha: c.fecha ? c.fecha.toISOString() : null, costoTotal: toNumber(c.costoTotal), costoUnitario: toNumber(c.costoUnitario) }))
+		listaGastos: gastosRango.map((g) => ({
+			id: g.id,
+			fecha: g.fecha ? g.fecha.toISOString() : null,
+			descripcion: g.descripcion,
+			monto: toNumber(g.monto)
+		})),
+		compras: compras.map((c) => ({
+			...c,
+			fecha: c.fecha ? c.fecha.toISOString() : null,
+			costoTotal: toNumber(c.costoTotal),
+			costoUnitario: toNumber(c.costoUnitario)
+		}))
 	};
 };

@@ -16,6 +16,7 @@ import {
 	itemsLinea
 } from '$lib/server/schema';
 import { and, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
+import { delTenant } from '$lib/server/tenancy';
 import {
 	buildBuckets,
 	businessDayKey,
@@ -39,7 +40,7 @@ import {
 
 const MASA_NAMES = ['Masa', 'Masas'];
 
-async function fetchShifts(range: DateRange): Promise<ShiftRecord[]> {
+async function fetchShifts(tid: number, range: DateRange): Promise<ShiftRecord[]> {
 	const rows = await db
 		.select({
 			id: turnos.id,
@@ -51,7 +52,7 @@ async function fetchShifts(range: DateRange): Promise<ShiftRecord[]> {
 			mermas: turnos.porcionesMermadas
 		})
 		.from(turnos)
-		.where(and(gte(turnos.fecha, range.start), lt(turnos.fecha, range.end)))
+		.where(delTenant(turnos, tid, gte(turnos.fecha, range.start), lt(turnos.fecha, range.end)))
 		.orderBy(desc(turnos.fecha));
 
 	return rows.map((r) => ({
@@ -65,20 +66,25 @@ async function fetchShifts(range: DateRange): Promise<ShiftRecord[]> {
 	}));
 }
 
-async function fetchExpenses(range: DateRange): Promise<(ExpenseRecord & { turnoId: number | null })[]> {
+async function fetchExpenses(
+	tid: number,
+	range: DateRange
+): Promise<(ExpenseRecord & { turnoId: number | null })[]> {
 	const rows = await db
 		.select({ fecha: gastos.fecha, monto: gastos.monto, turnoId: gastos.turnoId })
 		.from(gastos)
-		.where(and(gte(gastos.fecha, range.start), lt(gastos.fecha, range.end)));
+		.where(delTenant(gastos, tid, gte(gastos.fecha, range.start), lt(gastos.fecha, range.end)));
 	return rows.map((r) => ({ fecha: r.fecha, monto: toNumber(r.monto), turnoId: r.turnoId }));
 }
 
-async function fetchPurchases(range: DateRange): Promise<PurchaseRecord[]> {
+async function fetchPurchases(tid: number, range: DateRange): Promise<PurchaseRecord[]> {
 	const rows = await db
 		.select({ fecha: movimientosInventario.fecha, costo: movimientosInventario.costoTotal })
 		.from(movimientosInventario)
 		.where(
-			and(
+			delTenant(
+				movimientosInventario,
+				tid,
 				eq(movimientosInventario.tipo, 'entrada'),
 				gte(movimientosInventario.fecha, range.start),
 				lt(movimientosInventario.fecha, range.end)
@@ -87,7 +93,7 @@ async function fetchPurchases(range: DateRange): Promise<PurchaseRecord[]> {
 	return rows.map((r) => ({ fecha: r.fecha, costo: toNumber(r.costo) }));
 }
 
-export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
+export async function getFinanceDashboard(tid: number, type: RangeType, dateKey?: string) {
 	const current = currentRange(type, dateKey);
 	const previous = previousRange(type, current);
 	const window = seriesWindow(type, current);
@@ -99,13 +105,13 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 	};
 
 	const [shifts, expenses, purchases, masa, lowStock, topSabores] = await Promise.all([
-		fetchShifts(span),
-		fetchExpenses(span),
-		fetchPurchases(span),
+		fetchShifts(tid, span),
+		fetchExpenses(tid, span),
+		fetchPurchases(tid, span),
 		db
 			.select({ stock: productos.stockActual })
 			.from(productos)
-			.where(inArray(productos.nombre, MASA_NAMES))
+			.where(delTenant(productos, tid, inArray(productos.nombre, MASA_NAMES)))
 			.limit(1),
 		db
 			.select({
@@ -116,7 +122,7 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 				unidadMedida: productos.unidadMedida
 			})
 			.from(productos)
-			.where(lte(productos.stockActual, productos.stockMinimo))
+			.where(delTenant(productos, tid, lte(productos.stockActual, productos.stockMinimo)))
 			.orderBy(productos.stockActual)
 			.limit(6),
 		db
@@ -126,8 +132,18 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 				vendidas: sql<number>`COALESCE(SUM(${pizzaVentas.cantidadVendida}), 0)`
 			})
 			.from(pizzaVentas)
-			.innerJoin(pizzaSabores, eq(pizzaVentas.saborId, pizzaSabores.id))
-			.where(and(gte(pizzaVentas.fecha, current.start), lt(pizzaVentas.fecha, current.end)))
+			.innerJoin(
+				pizzaSabores,
+				and(eq(pizzaVentas.saborId, pizzaSabores.id), eq(pizzaSabores.tenantId, tid))
+			)
+			.where(
+				delTenant(
+					pizzaVentas,
+					tid,
+					gte(pizzaVentas.fecha, current.start),
+					lt(pizzaVentas.fecha, current.end)
+				)
+			)
 			.groupBy(pizzaSabores.nombre, pizzaSabores.precioPorcion)
 			.orderBy(desc(sql`SUM(${pizzaVentas.cantidadVendida})`))
 	]);
@@ -141,8 +157,18 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 				unidades: sql<number>`COALESCE(SUM(${cierresLinea.consumidas}), 0)`
 			})
 			.from(cierresLinea)
-			.innerJoin(lineasGastronomicas, eq(cierresLinea.lineaId, lineasGastronomicas.id))
-			.where(and(gte(cierresLinea.fecha, current.start), lt(cierresLinea.fecha, current.end)))
+			.innerJoin(
+				lineasGastronomicas,
+				and(eq(cierresLinea.lineaId, lineasGastronomicas.id), eq(lineasGastronomicas.tenantId, tid))
+			)
+			.where(
+				delTenant(
+					cierresLinea,
+					tid,
+					gte(cierresLinea.fecha, current.start),
+					lt(cierresLinea.fecha, current.end)
+				)
+			)
 			.groupBy(lineasGastronomicas.nombre),
 		db
 			.select({
@@ -151,8 +177,18 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 				ingresos: sql<string>`COALESCE(SUM(${ventasItems.cantidad} * ${ventasItems.precioUnitario}), 0)`
 			})
 			.from(ventasItems)
-			.innerJoin(itemsLinea, eq(ventasItems.itemId, itemsLinea.id))
-			.where(and(gte(ventasItems.fecha, current.start), lt(ventasItems.fecha, current.end)))
+			.innerJoin(
+				itemsLinea,
+				and(eq(ventasItems.itemId, itemsLinea.id), eq(itemsLinea.tenantId, tid))
+			)
+			.where(
+				delTenant(
+					ventasItems,
+					tid,
+					gte(ventasItems.fecha, current.start),
+					lt(ventasItems.fecha, current.end)
+				)
+			)
 			.groupBy(itemsLinea.nombre)
 	]);
 
@@ -162,7 +198,11 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 	const curShifts = pick(shifts, current);
 	const curExpenses = pick(expenses, current);
 	const now = summarize(curShifts, curExpenses, pick(purchases, current));
-	const before = summarize(pick(shifts, previous), pick(expenses, previous), pick(purchases, previous));
+	const before = summarize(
+		pick(shifts, previous),
+		pick(expenses, previous),
+		pick(purchases, previous)
+	);
 
 	// Gastos por turno para la tabla de transacciones.
 	const gastosPorTurno = new Map<number, number>();
@@ -191,7 +231,13 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 			ticket: delta(now.ticketPorTurno ?? 0, before.ticketPorTurno ?? 0)
 		},
 		foodCostStatus: foodCostStatus(now.foodCost),
-		cashflow: buildCashflow(type, buildBuckets(type, window), pick(shifts, window), pick(expenses, window), businessDayKey(new Date())),
+		cashflow: buildCashflow(
+			type,
+			buildBuckets(type, window),
+			pick(shifts, window),
+			pick(expenses, window),
+			businessDayKey(new Date())
+		),
 		transactions: curShifts.map((s) => ({
 			...s,
 			fecha: s.fecha ? new Date(s.fecha).toISOString() : null,
@@ -206,7 +252,11 @@ export async function getFinanceDashboard(type: RangeType, dateKey?: string) {
 				const vendidas = toNumber(s.vendidas);
 				return { nombre: s.nombre, vendidas, ingresos: vendidas * toNumber(s.precio) };
 			}),
-			...platosRows.map((p) => ({ nombre: p.nombre, vendidas: toNumber(p.vendidas), ingresos: toNumber(p.ingresos) }))
+			...platosRows.map((p) => ({
+				nombre: p.nombre,
+				vendidas: toNumber(p.vendidas),
+				ingresos: toNumber(p.ingresos)
+			}))
 		]
 			.sort((a, b) => b.ingresos - a.ingresos || b.vendidas - a.vendidas)
 			.slice(0, 8),
@@ -220,15 +270,26 @@ function buildVentasPorLinea(
 	lineas: { nombre: string; venta: string; unidades: number | string }[]
 ) {
 	const pizza = sabores.reduce(
-		(a, s) => ({ venta: a.venta + toNumber(s.vendidas) * toNumber(s.precio), unidades: a.unidades + toNumber(s.vendidas) }),
+		(a, s) => ({
+			venta: a.venta + toNumber(s.vendidas) * toNumber(s.precio),
+			unidades: a.unidades + toNumber(s.vendidas)
+		}),
 		{ venta: 0, unidades: 0 }
 	);
 	const rows = [
-		...(pizza.unidades > 0 ? [{ nombre: 'Pizzas', venta: pizza.venta, unidades: pizza.unidades }] : []),
-		...lineas.map((l) => ({ nombre: l.nombre, venta: toNumber(l.venta), unidades: toNumber(l.unidades) }))
+		...(pizza.unidades > 0
+			? [{ nombre: 'Pizzas', venta: pizza.venta, unidades: pizza.unidades }]
+			: []),
+		...lineas.map((l) => ({
+			nombre: l.nombre,
+			venta: toNumber(l.venta),
+			unidades: toNumber(l.unidades)
+		}))
 	].filter((r) => r.venta > 0 || r.unidades > 0);
 	const total = rows.reduce((a, r) => a + r.venta, 0);
-	return rows.map((r) => ({ ...r, participacion: total > 0 ? r.venta / total : 0 })).sort((a, b) => b.venta - a.venta);
+	return rows
+		.map((r) => ({ ...r, participacion: total > 0 ? r.venta / total : 0 }))
+		.sort((a, b) => b.venta - a.venta);
 }
 
 export type FinanceDashboard = Awaited<ReturnType<typeof getFinanceDashboard>>;

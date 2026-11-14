@@ -1,21 +1,28 @@
 import { db } from '$lib/server/db';
 import { turnos, gastos, cortesSemanales } from '$lib/server/schema';
-import { and, gte, lt, desc } from 'drizzle-orm';
+import { gte, lt, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
+import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 /**
  * Efectivo esperado en el rango. `turnos.monto` es el efectivo contado en caja
  * DESPUÉS de pagar los gastos del turno, por eso no se restan otra vez.
  */
-async function esperado(desde: string, hasta: string) {
+async function esperado(tid: number, desde: string, hasta: string) {
 	const start = currentRange('diario', desde).start;
 	const end = currentRange('diario', hasta).end;
 	const [ts, gs] = await Promise.all([
-		db.select({ monto: turnos.monto, transferencias: turnos.transferencias }).from(turnos).where(and(gte(turnos.fecha, start), lt(turnos.fecha, end))),
-		db.select({ monto: gastos.monto }).from(gastos).where(and(gte(gastos.fecha, start), lt(gastos.fecha, end)))
+		db
+			.select({ monto: turnos.monto, transferencias: turnos.transferencias })
+			.from(turnos)
+			.where(delTenant(turnos, tid, gte(turnos.fecha, start), lt(turnos.fecha, end))),
+		db
+			.select({ monto: gastos.monto })
+			.from(gastos)
+			.where(delTenant(gastos, tid, gte(gastos.fecha, start), lt(gastos.fecha, end)))
 	]);
 	return {
 		start,
@@ -27,7 +34,8 @@ async function esperado(desde: string, hasta: string) {
 	};
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const tid = tenantDe(locals);
 	const semana = currentRange('semanal');
 	const dRaw = url.searchParams.get('desde');
 	const hRaw = url.searchParams.get('hasta');
@@ -36,14 +44,24 @@ export const load: PageServerLoad = async ({ url }) => {
 	if (desde > hasta) [desde, hasta] = [hasta, desde];
 
 	const [preview, cortes] = await Promise.all([
-		esperado(desde, hasta),
-		db.select().from(cortesSemanales).orderBy(desc(cortesSemanales.fechaCorte)).limit(30)
+		esperado(tid, desde, hasta),
+		db
+			.select()
+			.from(cortesSemanales)
+			.where(delTenant(cortesSemanales, tid))
+			.orderBy(desc(cortesSemanales.fechaCorte))
+			.limit(30)
 	]);
 
 	return {
 		desde,
 		hasta,
-		preview: { turnos: preview.turnos, efectivo: preview.efectivo, transferencias: preview.transferencias, gastos: preview.gastos },
+		preview: {
+			turnos: preview.turnos,
+			efectivo: preview.efectivo,
+			transferencias: preview.transferencias,
+			gastos: preview.gastos
+		},
 		cortes: cortes.map((c) => ({
 			id: c.id,
 			fechaCorte: c.fechaCorte ? c.fechaCorte.toISOString() : null,
@@ -57,20 +75,25 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request }) => {
+	default: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const desde = formData.get('rangoInicio')?.toString() ?? '';
 		const hasta = formData.get('rangoFin')?.toString() ?? '';
 		const totalReal = parseFloat(formData.get('totalReal')?.toString() ?? '');
 
-		if (!isValidDateKey(desde) || !isValidDateKey(hasta)) return fail(400, { error: 'Selecciona un rango de fechas válido.' });
-		if (desde > hasta) return fail(400, { error: 'La fecha inicial no puede ser posterior a la final.' });
-		if (!Number.isFinite(totalReal) || totalReal < 0) return fail(400, { error: 'Escribe el efectivo contado (puede ser 0).' });
+		if (!isValidDateKey(desde) || !isValidDateKey(hasta))
+			return fail(400, { error: 'Selecciona un rango de fechas válido.' });
+		if (desde > hasta)
+			return fail(400, { error: 'La fecha inicial no puede ser posterior a la final.' });
+		if (!Number.isFinite(totalReal) || totalReal < 0)
+			return fail(400, { error: 'Escribe el efectivo contado (puede ser 0).' });
 
 		try {
-			const r = await esperado(desde, hasta);
+			const r = await esperado(tid, desde, hasta);
 			const diferencia = totalReal - r.efectivo;
 			await db.insert(cortesSemanales).values({
+				tenantId: tid,
 				rangoInicio: r.start,
 				rangoFin: r.end,
 				totalCalculado: r.efectivo.toString(),

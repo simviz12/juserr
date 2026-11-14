@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { cerrarLinea, consumoLinea, precioPorUnidad } from '../src/lib/features/shifts/domain/line-close';
+import {
+	cerrarLinea,
+	consumoLinea,
+	precioPorUnidad
+} from '../src/lib/features/shifts/domain/line-close';
 
 const platos = [
 	{ id: 1, precio: 16000, costo: 5200, unidades: 1 }, // hamburguesa clásica: 1 pan
@@ -40,7 +44,13 @@ describe('cierre por inventario de líneas', () => {
 	});
 
 	it('respeta platos que consumen más de una unidad', () => {
-		const r = cerrarLinea(10, 0, 0, [{ id: 9, precio: 30000, costo: 0, unidades: 2 }], [{ itemId: 9, cantidad: 5 }]);
+		const r = cerrarLinea(
+			10,
+			0,
+			0,
+			[{ id: 9, precio: 30000, costo: 0, unidades: 2 }],
+			[{ itemId: 9, cantidad: 5 }]
+		);
 		expect(r.desgloseCompleto).toBe(true);
 		expect(r.ventaEsperada).toBe(150000);
 		expect(precioPorUnidad([{ id: 9, precio: 30000, costo: 0, unidades: 2 }])).toBe(15000);

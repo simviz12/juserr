@@ -1,61 +1,88 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { usuarios } from '$lib/server/schema';
-import { eq } from 'drizzle-orm';
-import { verify } from '@node-rs/argon2';
+import { tenants, usuarios } from '$lib/server/schema';
+import { and, eq, ne, sql } from 'drizzle-orm';
+import { hash, verify } from '@node-rs/argon2';
 import { createSession, generateSessionToken } from '$lib/server/auth';
 import { limpiarFallos, minutosBloqueo, registrarFallo } from '$lib/server/login-throttle';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async (event) => {
-    if (event.locals.user) {
-        throw redirect(302, '/');
-    }
-    return {};
+/** Cookie (no sensible) que recuerda el código del restaurante en este dispositivo. */
+const COOKIE_CODIGO = 'restaurante';
+const UN_ANIO = 60 * 60 * 24 * 365;
+const CREDENCIALES_INVALIDAS = 'Código de restaurante, usuario o contraseña incorrectos.';
+
+// Hash señuelo: si el restaurante o el usuario no existen se verifica igual una
+// contraseña, para que el tiempo de respuesta no revele qué datos eran válidos.
+let senuelo: Promise<string> | null = null;
+const hashSenuelo = () => (senuelo ??= hash('senuelo-que-nunca-coincide'));
+
+export const load: PageServerLoad = async ({ locals, cookies }) => {
+	if (locals.user) redirect(302, '/');
+	return { codigo: cookies.get(COOKIE_CODIGO) ?? '' };
 };
 
 export const actions: Actions = {
-    default: async (event) => {
-        const formData = await event.request.formData();
-        const username = formData.get('username');
-        const password = formData.get('password');
+	default: async (event) => {
+		const formData = await event.request.formData();
+		const codigo = formData.get('codigo')?.toString().trim().toLowerCase().slice(0, 40) ?? '';
+		const username = formData.get('username')?.toString().trim().slice(0, 60) ?? '';
+		const password = formData.get('password')?.toString() ?? '';
 
-        if (typeof username !== 'string' || typeof password !== 'string') {
-            return fail(400, { message: 'Datos invalidos' });
-        }
+		if (!codigo || !username || !password) {
+			return fail(400, {
+				message: 'Completa el código del restaurante, el usuario y la contraseña.',
+				codigo
+			});
+		}
 
-        const claves = [`ip:${event.getClientAddress()}`, `user:${username.trim().toLowerCase()}`];
-        const bloqueo = minutosBloqueo(claves);
-        if (bloqueo > 0) {
-            return fail(429, { message: `Demasiados intentos fallidos. Intenta de nuevo en ${bloqueo} min.` });
-        }
+		const claves = [`ip:${event.getClientAddress()}`, `user:${codigo}/${username.toLowerCase()}`];
+		const bloqueo = minutosBloqueo(claves);
+		if (bloqueo > 0) {
+			return fail(429, {
+				message: `Demasiados intentos fallidos. Intenta de nuevo en ${bloqueo} min.`,
+				codigo
+			});
+		}
 
-        const results = await db.select().from(usuarios).where(eq(usuarios.nombre, username));
-        if (results.length === 0) {
-            registrarFallo(claves);
-            return fail(400, { message: 'Usuario o contraseña incorrectos' });
-        }
+		const [user] = await db
+			.select({ id: usuarios.id, passwordHash: usuarios.passwordHash })
+			.from(usuarios)
+			.innerJoin(tenants, eq(usuarios.tenantId, tenants.id))
+			.where(
+				and(
+					eq(tenants.codigo, codigo),
+					ne(tenants.estado, 'cancelado'),
+					sql`lower(${usuarios.nombre}) = lower(${username})`
+				)
+			);
 
-        const user = results[0];
-        const validPassword = await verify(user.passwordHash, password);
+		const valida = await verify(user?.passwordHash ?? (await hashSenuelo()), password);
+		if (!user || !valida) {
+			registrarFallo(claves);
+			return fail(400, { message: CREDENCIALES_INVALIDAS, codigo });
+		}
+		limpiarFallos(claves);
 
-        if (!validPassword) {
-            registrarFallo(claves);
-            return fail(400, { message: 'Usuario o contraseña incorrectos' });
-        }
-        limpiarFallos(claves);
+		const token = generateSessionToken();
+		await createSession(token, user.id);
 
-        const token = generateSessionToken();
-        await createSession(token, user.id);
+		const segura = import.meta.env.PROD;
+		event.cookies.set('session', token, {
+			path: '/',
+			httpOnly: true,
+			secure: segura,
+			sameSite: 'lax',
+			maxAge: 60 * 60 * 24 * 30
+		});
+		event.cookies.set(COOKIE_CODIGO, codigo, {
+			path: '/login',
+			httpOnly: true,
+			secure: segura,
+			sameSite: 'lax',
+			maxAge: UN_ANIO
+		});
 
-        event.cookies.set('session', token, {
-            path: '/',
-            httpOnly: true,
-            secure: import.meta.env.PROD,
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 30 // 30 days
-        });
-
-        throw redirect(302, '/');
-    }
+		redirect(302, '/');
+	}
 };

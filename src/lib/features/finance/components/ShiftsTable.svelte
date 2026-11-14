@@ -24,13 +24,46 @@
 	const money = (v: string | number | null) => formatCOP(Number(v ?? 0));
 
 	const columns: Column<TransactionRow>[] = [
-		{ id: 'fecha', header: 'Fecha', accessor: (r) => r.fecha, format: (v) => formatDateTime(v as string | null) },
+		{
+			id: 'fecha',
+			header: 'Fecha',
+			accessor: (r) => r.fecha,
+			format: (v) => formatDateTime(v as string | null)
+		},
 		{ id: 'turno', header: 'Turno', accessor: (r) => r.id, format: (v) => `#${v}` },
-		{ id: 'nota', header: 'Nota', accessor: (r) => r.descripcion ?? '', format: (v) => (v ? String(v) : '—'), sortable: false, hideOnMobile: true },
-		{ id: 'efectivo', header: 'Efectivo', accessor: (r) => r.efectivo, format: money, align: 'right', hideOnMobile: true },
-		{ id: 'transf', header: 'Transf.', accessor: (r) => r.transferencias, format: money, align: 'right', hideOnMobile: true },
+		{
+			id: 'nota',
+			header: 'Nota',
+			accessor: (r) => r.descripcion ?? '',
+			format: (v) => (v ? String(v) : '—'),
+			sortable: false,
+			hideOnMobile: true
+		},
+		{
+			id: 'efectivo',
+			header: 'Efectivo',
+			accessor: (r) => r.efectivo,
+			format: money,
+			align: 'right',
+			hideOnMobile: true
+		},
+		{
+			id: 'transf',
+			header: 'Transf.',
+			accessor: (r) => r.transferencias,
+			format: money,
+			align: 'right',
+			hideOnMobile: true
+		},
 		{ id: 'gastos', header: 'Gastos', accessor: (r) => r.gastos, format: money, align: 'right' },
-		{ id: 'porciones', header: 'Porc.', accessor: (r) => r.porciones, format: (v) => formatNumber(Number(v)), align: 'right', hideOnMobile: true },
+		{
+			id: 'porciones',
+			header: 'Porc.',
+			accessor: (r) => r.porciones,
+			format: (v) => formatNumber(Number(v)),
+			align: 'right',
+			hideOnMobile: true
+		},
 		{ id: 'total', header: 'Total', accessor: (r) => r.total, format: money, align: 'right' }
 	];
 
@@ -66,9 +99,13 @@
 		{#if col.id === 'total'}
 			<span class="font-medium">{money(row.total)}</span>
 		{:else if col.id === 'gastos'}
-			<span class={row.gastos > 0 ? 'text-danger' : 'text-muted-foreground'}>{row.gastos > 0 ? `−${money(row.gastos)}` : '—'}</span>
+			<span class={row.gastos > 0 ? 'text-danger' : 'text-muted-foreground'}
+				>{row.gastos > 0 ? `−${money(row.gastos)}` : '—'}</span
+			>
 		{:else if col.id === 'nota'}
-			<span class="block max-w-56 truncate text-muted-foreground" title={row.descripcion ?? ''}>{row.descripcion || '—'}</span>
+			<span class="block max-w-56 truncate text-muted-foreground" title={row.descripcion ?? ''}
+				>{row.descripcion || '—'}</span
+			>
 		{:else}
 			{col.format ? col.format(col.accessor(row), row) : col.accessor(row)}
 		{/if}

@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { canAccess } from '$lib/auth/access';
+import { delTenant, tenantDe } from '$lib/server/tenancy';
 import { businessDayKey, isValidDateKey } from '$lib/features/finance/domain/period';
 import { centsToDecimalString, parseMoneyInput } from '$lib/features/finance/domain/money';
 import {
@@ -11,28 +12,32 @@ import {
 	TIPO_MOVIMIENTO_LABELS,
 	esCategoriaGasto,
 	esTipoMovimiento
-} from '$lib/features/finance/domain/income-statement';
-import { parseComparacion, resolveRange } from '$lib/features/finance/domain/statement-period';
+} from '$lib/modules/estado-resultados/domain/income-statement';
+import {
+	parseComparacion,
+	resolveRange
+} from '$lib/modules/estado-resultados/domain/statement-period';
 import {
 	ESTADO_ANULADO,
 	ESTADO_CONFIRMADO,
 	fechaDeMovimiento,
 	getIncomeStatement
-} from '$lib/features/finance/server/income-statement.service';
+} from '$lib/modules/estado-resultados/server/income-statement.service';
 import { getBusinessConfig } from '$lib/features/business/server/config';
 
 const RUTA = '/finanzas/estado-resultados';
 /** Tope por registro: $100.000 millones. Protege de ceros de más al digitar. */
 const MONTO_MAXIMO_CENTS = 100_000_000_000 * 100;
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const tid = tenantDe(locals);
 	const hoy = businessDayKey(new Date());
 	const rango = resolveRange(url.searchParams.get('inicio'), url.searchParams.get('fin'), hoy);
 	const modo = parseComparacion(url.searchParams.get('comparar'));
 
 	const [reporte, config] = await Promise.all([
-		getIncomeStatement(rango, modo),
-		getBusinessConfig()
+		getIncomeStatement(tid, rango, modo),
+		getBusinessConfig(tid)
 	]);
 
 	return {
@@ -99,6 +104,7 @@ export const actions: Actions = {
 
 		try {
 			await db.insert(movimientosContables).values({
+				tenantId: user.tenantId,
 				tipo,
 				categoria: tipo === 'gasto' ? categoria : null,
 				descripcion,
@@ -132,7 +138,11 @@ export const actions: Actions = {
 				.update(movimientosContables)
 				.set({ estado: ESTADO_ANULADO, anuladoPor: user.id, anuladoEn: new Date() })
 				.where(
-					and(eq(movimientosContables.id, id), eq(movimientosContables.estado, ESTADO_CONFIRMADO))
+					and(
+						eq(movimientosContables.tenantId, user.tenantId),
+						eq(movimientosContables.id, id),
+						eq(movimientosContables.estado, ESTADO_CONFIRMADO)
+					)
 				)
 				.returning({ id: movimientosContables.id });
 			if (anulados.length === 0)
@@ -161,7 +171,7 @@ export const actions: Actions = {
 			const actualizados = await db
 				.update(gastos)
 				.set({ categoria: categoria || null })
-				.where(eq(gastos.id, id))
+				.where(delTenant(gastos, user.tenantId, eq(gastos.id, id)))
 				.returning({ id: gastos.id });
 			if (actualizados.length === 0) return fail(404, { error: 'El gasto no existe.' });
 		} catch (err) {

@@ -1,10 +1,12 @@
 import { db } from '$lib/server/db';
 import { turnos } from '$lib/server/schema';
-import { and, gte, lt, asc } from 'drizzle-orm';
+import { gte, lt, asc } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
+import { delTenant, tenantDe } from '$lib/server/tenancy';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const tid = tenantDe(locals);
 	const mes = currentRange('mensual');
 	const iRaw = url.searchParams.get('inicio');
 	const fRaw = url.searchParams.get('fin');
@@ -21,10 +23,20 @@ export const load: PageServerLoad = async ({ url }) => {
 			mermas: turnos.porcionesMermadas
 		})
 		.from(turnos)
-		.where(and(gte(turnos.fecha, currentRange('diario', inicio).start), lt(turnos.fecha, currentRange('diario', fin).end)))
+		.where(
+			delTenant(
+				turnos,
+				tid,
+				gte(turnos.fecha, currentRange('diario', inicio).start),
+				lt(turnos.fecha, currentRange('diario', fin).end)
+			)
+		)
 		.orderBy(asc(turnos.fecha));
 
-	const dias = new Map<string, { fecha: string; masas: number; vendidas: number; mermas: number; turnos: number }>();
+	const dias = new Map<
+		string,
+		{ fecha: string; masas: number; vendidas: number; mermas: number; turnos: number }
+	>();
 	for (const r of rows) {
 		if (!r.fecha) continue;
 		const k = businessDayKey(r.fecha);
@@ -36,7 +48,14 @@ export const load: PageServerLoad = async ({ url }) => {
 		dias.set(k, d);
 	}
 	const produccion = [...dias.values()];
-	const tot = produccion.reduce((a, d) => ({ masas: a.masas + d.masas, vendidas: a.vendidas + d.vendidas, mermas: a.mermas + d.mermas }), { masas: 0, vendidas: 0, mermas: 0 });
+	const tot = produccion.reduce(
+		(a, d) => ({
+			masas: a.masas + d.masas,
+			vendidas: a.vendidas + d.vendidas,
+			mermas: a.mermas + d.mermas
+		}),
+		{ masas: 0, vendidas: 0, mermas: 0 }
+	);
 
 	return { inicio, fin, produccion, totales: tot };
 };

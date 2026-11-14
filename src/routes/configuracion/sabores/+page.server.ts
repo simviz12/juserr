@@ -3,8 +3,10 @@ import { db } from '$lib/server/db';
 import { pizzaSabores, pizzaVentas } from '$lib/server/schema';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
+import { delTenant, tenantDe } from '$lib/server/tenancy';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	const tid = tenantDe(locals);
 	const sabores = await db
 		.select({
 			id: pizzaSabores.id,
@@ -12,9 +14,10 @@ export const load: PageServerLoad = async () => {
 			precioPorcion: pizzaSabores.precioPorcion,
 			precioRueda: pizzaSabores.precioRueda,
 			activo: pizzaSabores.activo,
-			vendidas: sql<string>`COALESCE((SELECT SUM(${pizzaVentas.cantidadVendida}) FROM ${pizzaVentas} WHERE ${pizzaVentas.saborId} = ${pizzaSabores.id}), 0)`
+			vendidas: sql<string>`COALESCE((SELECT SUM(${pizzaVentas.cantidadVendida}) FROM ${pizzaVentas} WHERE ${pizzaVentas.saborId} = ${pizzaSabores.id} AND ${pizzaVentas.tenantId} = ${tid}), 0)`
 		})
 		.from(pizzaSabores)
+		.where(delTenant(pizzaSabores, tid))
 		.orderBy(asc(pizzaSabores.nombre));
 	return { sabores: sabores.map((s) => ({ ...s, vendidas: Number(s.vendidas) })) };
 };
@@ -24,43 +27,70 @@ function parse(fd: FormData) {
 	const precioPorcion = parseFloat(fd.get('precioPorcion')?.toString() ?? '');
 	const precioRuedaRaw = parseFloat(fd.get('precioRueda')?.toString() ?? '');
 	if (!nombre) return { error: 'El nombre es obligatorio.' } as const;
-	if (!Number.isFinite(precioPorcion) || precioPorcion <= 0) return { error: 'El precio por porción debe ser mayor a 0.' } as const;
-	const precioRueda = Number.isFinite(precioRuedaRaw) && precioRuedaRaw > 0 ? precioRuedaRaw : precioPorcion * 8;
-	return { nombre, precioPorcion: precioPorcion.toString(), precioRueda: precioRueda.toString() } as const;
+	if (!Number.isFinite(precioPorcion) || precioPorcion <= 0)
+		return { error: 'El precio por porción debe ser mayor a 0.' } as const;
+	const precioRueda =
+		Number.isFinite(precioRuedaRaw) && precioRuedaRaw > 0 ? precioRuedaRaw : precioPorcion * 8;
+	return {
+		nombre,
+		precioPorcion: precioPorcion.toString(),
+		precioRueda: precioRueda.toString()
+	} as const;
 }
 
 export const actions: Actions = {
-	create: async ({ request }) => {
+	create: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const p = parse(await request.formData());
 		if ('error' in p) return fail(400, { error: p.error });
-		await db.insert(pizzaSabores).values({ ...p, activo: true });
+		await db.insert(pizzaSabores).values({ ...p, tenantId: tid, activo: true });
 		return { success: true, message: `Sabor "${p.nombre}" agregado.` };
 	},
-	update: async ({ request }) => {
+	update: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const fd = await request.formData();
 		const id = Number(fd.get('id'));
 		const p = parse(fd);
 		if (!id) return fail(400, { error: 'Sabor inválido.' });
 		if ('error' in p) return fail(400, { error: p.error });
-		await db.update(pizzaSabores).set(p).where(eq(pizzaSabores.id, id));
+		const actualizados = await db
+			.update(pizzaSabores)
+			.set(p)
+			.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.id, id)))
+			.returning({ id: pizzaSabores.id });
+		if (actualizados.length === 0) return fail(404, { error: 'El sabor no existe.' });
 		return { success: true, message: `Sabor "${p.nombre}" actualizado.` };
 	},
-	toggle: async ({ request }) => {
+	toggle: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const id = Number((await request.formData()).get('id'));
 		if (!id) return fail(400, { error: 'Sabor inválido.' });
-		const [s] = await db.select().from(pizzaSabores).where(eq(pizzaSabores.id, id));
+		const [s] = await db
+			.select()
+			.from(pizzaSabores)
+			.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.id, id)));
 		if (!s) return fail(404, { error: 'El sabor no existe.' });
-		await db.update(pizzaSabores).set({ activo: !s.activo }).where(eq(pizzaSabores.id, id));
+		await db
+			.update(pizzaSabores)
+			.set({ activo: !s.activo })
+			.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.id, id)));
 		return { success: true, message: `"${s.nombre}" ${s.activo ? 'desactivado' : 'activado'}.` };
 	},
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
+		const tid = tenantDe(locals);
 		const id = Number((await request.formData()).get('id'));
 		if (!id) return fail(400, { error: 'Sabor inválido.' });
 		try {
-			await db.delete(pizzaSabores).where(eq(pizzaSabores.id, id));
+			const borrados = await db
+				.delete(pizzaSabores)
+				.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.id, id)))
+				.returning({ id: pizzaSabores.id });
+			if (borrados.length === 0) return fail(404, { error: 'El sabor no existe.' });
 			return { success: true, message: 'Sabor eliminado.' };
 		} catch {
-			return fail(409, { error: 'Este sabor tiene ventas registradas; desactívalo en lugar de eliminarlo.' });
+			return fail(409, {
+				error: 'Este sabor tiene ventas registradas; desactívalo en lugar de eliminarlo.'
+			});
 		}
 	}
 };

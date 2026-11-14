@@ -17,9 +17,15 @@
 
 <Card title="Ventas por línea" description="Estimadas por conteo de inventario en cada cierre">
 	{#if loading}
-		<div class="space-y-4">{#each { length: 3 }, i (i)}<Skeleton class="h-7 w-full" />{/each}</div>
+		<div class="space-y-4">
+			{#each { length: 3 }, i (i)}<Skeleton class="h-7 w-full" />{/each}
+		</div>
 	{:else if lineas.length === 0}
-		<EmptyState icon={Store} title="Sin cierres con inventario" description="Al cerrar turnos contando panes, chuzos o porciones verás cada línea aquí." />
+		<EmptyState
+			icon={Store}
+			title="Sin cierres con inventario"
+			description="Al cerrar turnos contando panes, chuzos o porciones verás cada línea aquí."
+		/>
 	{:else}
 		<ul class="space-y-3.5">
 			{#each lineas as l (l.nombre)}
@@ -27,11 +33,16 @@
 					<div class="mb-1.5 flex items-baseline justify-between gap-2 text-sm">
 						<span class="truncate font-medium">{l.nombre}</span>
 						<span class="shrink-0 text-xs text-muted-foreground tabular-nums">
-							{formatNumber(l.unidades)} und · <span class="text-foreground">{formatCOP(l.venta)}</span> · {formatPct(l.participacion, 0)}
+							{formatNumber(l.unidades)} und ·
+							<span class="text-foreground">{formatCOP(l.venta)}</span>
+							· {formatPct(l.participacion, 0)}
 						</span>
 					</div>
 					<div class="h-1.5 rounded-full bg-muted">
-						<div class="h-full rounded-full bg-series-3 transition-[width] duration-700" style="width:{(l.venta / max) * 100}%"></div>
+						<div
+							class="h-full rounded-full bg-series-3 transition-[width] duration-700"
+							style="width:{(l.venta / max) * 100}%"
+						></div>
 					</div>
 				</li>
 			{/each}

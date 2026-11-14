@@ -66,7 +66,10 @@
 
 	function navigate(params: { rango?: RangeType; fecha?: string }) {
 		gotoWithQuery(
-			{ ...(params.rango ? { rango: params.rango } : {}), ...(params.fecha !== undefined ? { fecha: params.fecha } : {}) },
+			{
+				...(params.rango ? { rango: params.rango } : {}),
+				...(params.fecha !== undefined ? { fecha: params.fecha } : {})
+			},
 			{ merge: true, replaceState: true }
 		);
 	}
@@ -82,8 +85,15 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Resumen financiero</h1>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
-			<SegmentedControl label="Período" options={RANGES} value={data.range.type} onchange={(v) => navigate({ rango: v })} />
-			<div class="flex h-9 items-center gap-2 rounded-md border border-input bg-card pr-1 pl-3 shadow-sm">
+			<SegmentedControl
+				label="Período"
+				options={RANGES}
+				value={data.range.type}
+				onchange={(v) => navigate({ rango: v })}
+			/>
+			<div
+				class="flex h-9 items-center gap-2 rounded-md border border-input bg-card pr-1 pl-3 shadow-sm"
+			>
 				<CalendarDays size={15} class="text-muted-foreground" />
 				<label class="sr-only" for="ref-date">Fecha de referencia</label>
 				<input
@@ -106,7 +116,10 @@
 	</div>
 
 	<!-- KPIs principales -->
-	<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores clave">
+	<section
+		class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+		aria-label="Indicadores clave"
+	>
 		<KpiCard
 			label="Ventas brutas"
 			icon={Wallet}
@@ -155,7 +168,11 @@
 		<Card
 			class="xl:col-span-2"
 			title="Flujo de caja"
-			description={data.range.type === 'diario' ? 'Últimos 7 días' : data.range.type === 'anual' ? 'Por mes' : 'Por día'}
+			description={data.range.type === 'diario'
+				? 'Últimos 7 días'
+				: data.range.type === 'anual'
+					? 'Por mes'
+					: 'Por día'}
 		>
 			{#snippet actions()}
 				<button
@@ -175,7 +192,12 @@
 		</Card>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
 			<PaymentMixCard summary={s} {loading} />
-			<FoodCostCard summary={s} status={data.foodCostStatus} delta={data.deltas.foodCost} {loading} />
+			<FoodCostCard
+				summary={s}
+				status={data.foodCostStatus}
+				delta={data.deltas.foodCost}
+				{loading}
+			/>
 		</div>
 	</section>
 
@@ -187,18 +209,23 @@
 			{:else}
 				<dl class="grid grid-cols-2 gap-4">
 					<div>
-						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Pizza size={13} /> Vendidas</dt>
+						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground">
+							<Pizza size={13} /> Vendidas
+						</dt>
 						<dd class="mt-1 text-xl font-semibold tabular-nums">{formatNumber(s.porciones)}</dd>
 					</div>
 					<div>
-						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground"><Flame size={13} /> Mermas</dt>
+						<dt class="flex items-center gap-1.5 text-xs text-muted-foreground">
+							<Flame size={13} /> Mermas
+						</dt>
 						<dd class="mt-1 text-xl font-semibold tabular-nums">{formatNumber(s.mermas)}</dd>
 					</div>
 					<div>
 						<dt class="text-xs text-muted-foreground">Tasa de merma</dt>
 						<dd class="mt-1 flex items-center gap-2 text-sm font-medium tabular-nums">
 							{formatPct(s.tasaMerma)}
-							{#if s.tasaMerma !== null && s.tasaMerma > 0.05}<Badge variant="warning">Alta</Badge>{/if}
+							{#if s.tasaMerma !== null && s.tasaMerma > 0.05}<Badge variant="warning">Alta</Badge
+								>{/if}
 						</dd>
 					</div>
 					<div>

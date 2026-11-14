@@ -32,9 +32,29 @@
 
 	const columns: Column<Sabor>[] = [
 		{ id: 'nombre', header: 'Sabor', accessor: (s) => s.nombre },
-		{ id: 'porcion', header: 'Porción', accessor: (s) => Number(s.precioPorcion ?? 0), format: (v) => formatCOP(Number(v)), align: 'right' },
-		{ id: 'rueda', header: 'Pizza entera', accessor: (s) => Number(s.precioRueda ?? 0), format: (v) => (Number(v) > 0 ? formatCOP(Number(v)) : '—'), align: 'right', hideOnMobile: true },
-		{ id: 'vendidas', header: 'Porciones vendidas', accessor: (s) => s.vendidas, format: (v) => formatNumber(Number(v)), align: 'right', hideOnMobile: true },
+		{
+			id: 'porcion',
+			header: 'Porción',
+			accessor: (s) => Number(s.precioPorcion ?? 0),
+			format: (v) => formatCOP(Number(v)),
+			align: 'right'
+		},
+		{
+			id: 'rueda',
+			header: 'Pizza entera',
+			accessor: (s) => Number(s.precioRueda ?? 0),
+			format: (v) => (Number(v) > 0 ? formatCOP(Number(v)) : '—'),
+			align: 'right',
+			hideOnMobile: true
+		},
+		{
+			id: 'vendidas',
+			header: 'Porciones vendidas',
+			accessor: (s) => s.vendidas,
+			format: (v) => formatNumber(Number(v)),
+			align: 'right',
+			hideOnMobile: true
+		},
 		{ id: 'estado', header: 'Estado', accessor: (s) => (s.activo ? 1 : 0) },
 		{ id: 'acciones', header: '', accessor: () => null, sortable: false, align: 'right' }
 	];
@@ -43,27 +63,62 @@
 <svelte:head><title>Sabores · MesaCapital</title></svelte:head>
 
 <div class="mx-auto flex max-w-5xl flex-col gap-6">
-	<PageHeader title="Sabores de pizza" description="El precio por porción se usa para calcular la venta esperada en el cierre de turno y el ranking de ventas.">
+	<PageHeader
+		title="Sabores de pizza"
+		description="El precio por porción se usa para calcular la venta esperada en el cierre de turno y el ranking de ventas."
+	>
 		{#snippet actions()}
-			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => openForm(null)}><Plus size={15} /> Nuevo sabor</button>
+			<button type="button" class={cn(btn.base, btn.primary)} onclick={() => openForm(null)}
+				><Plus size={15} /> Nuevo sabor</button
+			>
 		{/snippet}
 	</PageHeader>
 	<FormFeedback {form} />
 	<Card>
-		<DataTable rows={data.sabores} {columns} rowKey={(s) => s.id} initialSort={{ id: 'nombre', dir: 'asc' }} searchPlaceholder="Buscar sabor…" emptyTitle="Sin sabores">
+		<DataTable
+			rows={data.sabores}
+			{columns}
+			rowKey={(s) => s.id}
+			initialSort={{ id: 'nombre', dir: 'asc' }}
+			searchPlaceholder="Buscar sabor…"
+			emptyTitle="Sin sabores"
+		>
 			{#snippet cell(s, col)}
 				{#if col.id === 'estado'}
-					<Badge variant={s.activo ? 'success' : 'outline'}>{s.activo ? 'Activo' : 'Inactivo'}</Badge>
+					<Badge variant={s.activo ? 'success' : 'outline'}
+						>{s.activo ? 'Activo' : 'Inactivo'}</Badge
+					>
 				{:else if col.id === 'acciones'}
 					<div class="flex justify-end">
-						<button type="button" class={cn(btn.base, btn.icon)} aria-label={`Editar ${s.nombre}`} onclick={() => openForm(s)}><Pencil size={14} /></button>
+						<button
+							type="button"
+							class={cn(btn.base, btn.icon)}
+							aria-label={`Editar ${s.nombre}`}
+							onclick={() => openForm(s)}><Pencil size={14} /></button
+						>
 						<form method="POST" action="?/toggle" use:enhance>
 							<input type="hidden" name="id" value={s.id} />
-							<button class={cn(btn.base, btn.icon)} aria-label={s.activo ? `Desactivar ${s.nombre}` : `Activar ${s.nombre}`} title={s.activo ? 'Desactivar' : 'Activar'}><Power size={14} /></button>
+							<button
+								class={cn(btn.base, btn.icon)}
+								aria-label={s.activo ? `Desactivar ${s.nombre}` : `Activar ${s.nombre}`}
+								title={s.activo ? 'Desactivar' : 'Activar'}><Power size={14} /></button
+							>
 						</form>
-						<form method="POST" action="?/delete" use:enhance={({ cancel }) => { if (!confirm(`¿Eliminar "${s.nombre}"?`)) cancel(); }}>
+						<form
+							method="POST"
+							action="?/delete"
+							use:enhance={({ cancel }) => {
+								if (!confirm(`¿Eliminar "${s.nombre}"?`)) cancel();
+							}}
+						>
 							<input type="hidden" name="id" value={s.id} />
-							<button class={cn(btn.base, btn.icon, 'hover:text-danger')} aria-label={`Eliminar ${s.nombre}`} disabled={s.vendidas > 0} title={s.vendidas > 0 ? 'Tiene ventas: desactívalo' : 'Eliminar'}><Trash2 size={14} /></button>
+							<button
+								class={cn(btn.base, btn.icon, 'hover:text-danger')}
+								aria-label={`Eliminar ${s.nombre}`}
+								disabled={s.vendidas > 0}
+								title={s.vendidas > 0 ? 'Tiene ventas: desactívalo' : 'Eliminar'}
+								><Trash2 size={14} /></button
+							>
 						</form>
 					</div>
 				{:else if col.id === 'nombre'}
@@ -77,18 +132,64 @@
 </div>
 
 <Dialog bind:open title={editing ? 'Editar sabor' : 'Nuevo sabor'} size="sm">
-	<form id="sabor-form" method="POST" action={editing ? '?/update' : '?/create'} class="flex flex-col gap-4" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'success') open = false; }}>
+	<form
+		id="sabor-form"
+		method="POST"
+		action={editing ? '?/update' : '?/create'}
+		class="flex flex-col gap-4"
+		use:enhance={() =>
+			async ({ result, update }) => {
+				await update();
+				if (result.type === 'success') open = false;
+			}}
+	>
 		{#if editing}<input type="hidden" name="id" value={editing.id} />{/if}
-		<Field label="Nombre" for="s-nombre"><input id="s-nombre" name="nombre" bind:value={nombre} required maxlength="60" class={inputClass} /></Field>
+		<Field label="Nombre" for="s-nombre"
+			><input
+				id="s-nombre"
+				name="nombre"
+				bind:value={nombre}
+				required
+				maxlength="60"
+				class={inputClass}
+			/></Field
+		>
 		<div class="grid grid-cols-2 gap-3">
-			<Field label="Precio por porción" for="s-porcion"><input id="s-porcion" name="precioPorcion" type="number" min="1" step="100" bind:value={precioPorcion} required class={inputClass} /></Field>
-			<Field label="Pizza entera" for="s-rueda" hint={Number(precioPorcion) > 0 && !precioRueda ? `Por defecto ${formatCOP(Number(precioPorcion) * PORCIONES_POR_MASA)}` : 'Opcional'}>
-				<input id="s-rueda" name="precioRueda" type="number" min="0" step="100" bind:value={precioRueda} class={inputClass} />
+			<Field label="Precio por porción" for="s-porcion"
+				><input
+					id="s-porcion"
+					name="precioPorcion"
+					type="number"
+					min="1"
+					step="100"
+					bind:value={precioPorcion}
+					required
+					class={inputClass}
+				/></Field
+			>
+			<Field
+				label="Pizza entera"
+				for="s-rueda"
+				hint={Number(precioPorcion) > 0 && !precioRueda
+					? `Por defecto ${formatCOP(Number(precioPorcion) * PORCIONES_POR_MASA)}`
+					: 'Opcional'}
+			>
+				<input
+					id="s-rueda"
+					name="precioRueda"
+					type="number"
+					min="0"
+					step="100"
+					bind:value={precioRueda}
+					class={inputClass}
+				/>
 			</Field>
 		</div>
 	</form>
 	{#snippet footer()}
-		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (open = false)}>Cancelar</button>
+		<button type="button" class={cn(btn.base, btn.outline)} onclick={() => (open = false)}
+			>Cancelar</button
+		>
 		<button type="submit" form="sabor-form" class={cn(btn.base, btn.primary)}>Guardar</button>
 	{/snippet}
 </Dialog>

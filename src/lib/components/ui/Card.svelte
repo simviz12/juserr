@@ -23,7 +23,9 @@
 >
 	{#if title || actions}
 		<!-- En pantallas angostas las acciones bajan de línea en vez de aplastar el título -->
-		<header class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-4 pt-4 sm:px-5 sm:pt-5">
+		<header
+			class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-4 pt-4 sm:px-5 sm:pt-5"
+		>
 			<div class="min-w-0 flex-1 basis-52">
 				{#if title}<h2 class="text-sm font-semibold tracking-tight">{title}</h2>{/if}
 				{#if description}<p class="mt-0.5 text-[13px] text-muted-foreground">{description}</p>{/if}

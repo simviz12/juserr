@@ -25,8 +25,8 @@
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import StatTile from '$lib/components/ui/StatTile.svelte';
-	import IncomeStatementChart from '$lib/components/charts/IncomeStatementChart.svelte';
-	import StatementMovements from '$lib/features/finance/components/StatementMovements.svelte';
+	import IncomeStatementChart from '$lib/modules/estado-resultados/components/IncomeStatementChart.svelte';
+	import StatementMovements from '$lib/modules/estado-resultados/components/StatementMovements.svelte';
 	import { btn, inputClass, selectClass } from '$lib/components/ui/styles';
 	import { cn } from '$lib/utils/cn';
 	import { formatCOP, formatPct } from '$lib/utils/format';
@@ -41,7 +41,7 @@
 		type StatementLine,
 		type TipoMovimiento,
 		type Variacion
-	} from '$lib/features/finance/domain/income-statement';
+	} from '$lib/modules/estado-resultados/domain/income-statement';
 	import {
 		COMPARACIONES,
 		COMPARACION_LABELS,
@@ -53,7 +53,7 @@
 		type Comparacion,
 		type KeyRange,
 		type Preset
-	} from '$lib/features/finance/domain/statement-period';
+	} from '$lib/modules/estado-resultados/domain/statement-period';
 
 	let { data, form } = $props();
 

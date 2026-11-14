@@ -29,10 +29,14 @@ const POLICY: Record<Rol, RolePolicy> = {
 	empleado: { home: '/turnos/cierre', allow: ['/turnos/cierre'] }
 };
 
-/** Rutas accesibles para cualquier usuario autenticado. */
-const ALWAYS_ALLOWED = ['/', '/logout'];
+/**
+ * Rutas accesibles para cualquier usuario autenticado. /facturacion muestra a
+ * los roles operativos solo el aviso de bloqueo (sin montos): es a donde se
+ * redirige cuando el restaurante está en solo lectura o suspendido.
+ */
+const ALWAYS_ALLOWED = ['/', '/logout', '/facturacion'];
 /** Rutas accesibles sin sesión. */
-export const PUBLIC_PATHS = ['/login'];
+export const PUBLIC_PATHS = ['/login', '/health'];
 
 export function isRol(value: unknown): value is Rol {
 	return typeof value === 'string' && (ROLES as readonly string[]).includes(value);

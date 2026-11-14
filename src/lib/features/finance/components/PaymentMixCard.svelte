@@ -19,10 +19,17 @@
 		<Skeleton class="h-3 w-full" />
 		<div class="mt-5 space-y-3"><Skeleton class="h-5 w-full" /><Skeleton class="h-5 w-4/5" /></div>
 	{:else}
-		<div class="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-muted" role="img" aria-label="Distribución de canales de pago">
+		<div
+			class="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-muted"
+			role="img"
+			aria-label="Distribución de canales de pago"
+		>
 			{#each channels as c (c.label)}
 				{#if c.value > 0}
-					<div class="h-full transition-[width] duration-500" style="width:{share(c.value) * 100}%;background:{c.color}"></div>
+					<div
+						class="h-full transition-[width] duration-500"
+						style="width:{share(c.value) * 100}%;background:{c.color}"
+					></div>
 				{/if}
 			{/each}
 		</div>
@@ -34,13 +41,20 @@
 					</span>
 					<span class="flex items-baseline gap-2 tabular-nums">
 						<span class="font-medium">{formatCOP(c.value)}</span>
-						<span class="w-12 text-right text-xs text-muted-foreground">{total > 0 ? formatPct(share(c.value), 0) : '—'}</span>
+						<span class="w-12 text-right text-xs text-muted-foreground"
+							>{total > 0 ? formatPct(share(c.value), 0) : '—'}</span
+						>
 					</span>
 				</li>
 			{/each}
 			<li class="flex flex-wrap items-center justify-between gap-x-3 border-t border-border pt-3">
 				<span class="text-muted-foreground">Gastos de caja</span>
-				<span class="font-medium tabular-nums {summary.gastos > 0 ? 'text-danger' : 'text-muted-foreground'}">{summary.gastos > 0 ? '−' : ''}{formatCOP(summary.gastos)}</span>
+				<span
+					class="font-medium tabular-nums {summary.gastos > 0
+						? 'text-danger'
+						: 'text-muted-foreground'}"
+					>{summary.gastos > 0 ? '−' : ''}{formatCOP(summary.gastos)}</span
+				>
 			</li>
 		</ul>
 	{/if}

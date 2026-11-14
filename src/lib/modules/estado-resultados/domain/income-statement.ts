@@ -3,7 +3,7 @@
  * No conoce Drizzle, SvelteKit ni el DOM: recibe movimientos ya leídos y arma
  * la cascada. Todos los importes van en CENTAVOS enteros (ver ./money).
  */
-import { ratio, sumCents } from './money';
+import { ratio, sumCents } from '$lib/features/finance/domain/money';
 
 // ── Catálogo contable ────────────────────────────────────────────────
 

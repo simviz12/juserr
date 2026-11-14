@@ -22,8 +22,9 @@ import {
 	turnos
 } from '$lib/server/schema';
 import { and, eq, gt, gte, lt } from 'drizzle-orm';
-import { currentRange, type DateRange } from '../domain/period';
-import { toCents } from '../domain/money';
+import { delTenant } from '$lib/server/tenancy';
+import { currentRange, type DateRange } from '$lib/features/finance/domain/period';
+import { toCents } from '$lib/features/finance/domain/money';
 import {
 	buildStatement,
 	compararStatements,
@@ -52,7 +53,7 @@ export function fechaDeMovimiento(dayKey: string): Date {
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const pesos = (cents: number) => '$' + Math.round(cents / 100).toLocaleString('es-CO');
 
-async function fetchStatementInput(range: DateRange): Promise<StatementInput> {
+async function fetchStatementInput(tid: number, range: DateRange): Promise<StatementInput> {
 	const [turnosRows, gastosRows, comprasRows, manuales] = await Promise.all([
 		db
 			.select({
@@ -62,7 +63,7 @@ async function fetchStatementInput(range: DateRange): Promise<StatementInput> {
 				transferencias: turnos.transferencias
 			})
 			.from(turnos)
-			.where(and(gte(turnos.fecha, range.start), lt(turnos.fecha, range.end))),
+			.where(delTenant(turnos, tid, gte(turnos.fecha, range.start), lt(turnos.fecha, range.end))),
 		db
 			.select({
 				id: gastos.id,
@@ -73,7 +74,7 @@ async function fetchStatementInput(range: DateRange): Promise<StatementInput> {
 				categoria: gastos.categoria
 			})
 			.from(gastos)
-			.where(and(gte(gastos.fecha, range.start), lt(gastos.fecha, range.end))),
+			.where(delTenant(gastos, tid, gte(gastos.fecha, range.start), lt(gastos.fecha, range.end))),
 		db
 			.select({
 				id: movimientosInventario.id,
@@ -84,9 +85,14 @@ async function fetchStatementInput(range: DateRange): Promise<StatementInput> {
 				unidad: productos.unidadMedida
 			})
 			.from(movimientosInventario)
-			.innerJoin(productos, eq(movimientosInventario.productoId, productos.id))
+			.innerJoin(
+				productos,
+				and(eq(movimientosInventario.productoId, productos.id), eq(productos.tenantId, tid))
+			)
 			.where(
-				and(
+				delTenant(
+					movimientosInventario,
+					tid,
 					eq(movimientosInventario.tipo, 'entrada'),
 					gt(movimientosInventario.costoTotal, '0'),
 					gte(movimientosInventario.fecha, range.start),
@@ -104,7 +110,9 @@ async function fetchStatementInput(range: DateRange): Promise<StatementInput> {
 			})
 			.from(movimientosContables)
 			.where(
-				and(
+				delTenant(
+					movimientosContables,
+					tid,
 					eq(movimientosContables.estado, ESTADO_CONFIRMADO),
 					gte(movimientosContables.fecha, range.start),
 					lt(movimientosContables.fecha, range.end)
@@ -194,14 +202,15 @@ export interface IncomeStatementReport {
 }
 
 export async function getIncomeStatement(
+	tid: number,
 	rango: KeyRange,
 	modo: Comparacion
 ): Promise<IncomeStatementReport> {
 	const rangoComparado = comparisonRange(rango, modo);
 
 	const [actual, anterior] = await Promise.all([
-		fetchStatementInput(toInstantRange(rango)),
-		rangoComparado ? fetchStatementInput(toInstantRange(rangoComparado)) : null
+		fetchStatementInput(tid, toInstantRange(rango)),
+		rangoComparado ? fetchStatementInput(tid, toInstantRange(rangoComparado)) : null
 	]);
 
 	const statement = buildStatement(actual);

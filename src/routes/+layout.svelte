@@ -20,28 +20,59 @@
 		ArrowRight,
 		ChartColumn,
 		Pizza,
-		Tags
+		Tags,
+		Lock,
+		Puzzle
 	} from '@lucide/svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { BRAND } from '$lib/config/brand';
 	import { canAccess, normalizeRol, ROL_LABELS } from '$lib/auth/access';
+	import { rutaDisponible } from '$lib/modules/registry';
 	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
+	import PlanBanner from '$lib/components/billing/PlanBanner.svelte';
 
 	let { children, data } = $props();
 
-	const NAV = [
+	let plan = $derived(data.plan);
+	/** Add-on no contratado: se muestra con candado y lleva al catálogo de módulos. */
+	const bloqueado = (path: string) => (plan ? !rutaDisponible(path, plan) : false);
+
+	let NAV = $derived([
 		{
 			group: 'General',
 			items: [
-				{ name: 'Dashboard', path: '/dashboard', href: resolve('/dashboard'), icon: LayoutDashboard },
-				{ name: 'Finanzas', path: '/finanzas', href: resolve('/finanzas/resumen'), icon: Landmark },
-				{ name: 'Producción', path: '/reportes/produccion', href: resolve('/reportes/produccion'), icon: ChartColumn }
+				{
+					name: 'Dashboard',
+					path: '/dashboard',
+					href: resolve('/dashboard'),
+					icon: LayoutDashboard
+				},
+				{
+					name: 'Finanzas',
+					path: '/finanzas',
+					// Sin "Finanzas avanzadas" la entrada lleva a la Caja diaria (Core).
+					href: plan?.modulos.includes('finanzas-avanzadas')
+						? resolve('/finanzas/resumen')
+						: resolve('/finanzas/caja'),
+					icon: Landmark
+				},
+				{
+					name: 'Producción',
+					path: '/reportes/produccion',
+					href: resolve('/reportes/produccion'),
+					icon: ChartColumn
+				}
 			]
 		},
 		{
 			group: 'Operación',
 			items: [
-				{ name: 'Cierre de turno', path: '/turnos/cierre', href: resolve('/turnos/cierre'), icon: LockKeyhole },
+				{
+					name: 'Cierre de turno',
+					path: '/turnos/cierre',
+					href: resolve('/turnos/cierre'),
+					icon: LockKeyhole
+				},
 				{ name: 'Bodega e insumos', path: '/bodega', href: resolve('/bodega'), icon: Boxes },
 				{ name: 'Productos e insumos', path: '/productos', href: resolve('/productos'), icon: Beef }
 			]
@@ -49,20 +80,52 @@
 		{
 			group: 'Configuración',
 			items: [
-				{ name: 'Líneas y combos', path: '/configuracion/rubros', href: resolve('/configuracion/rubros'), icon: UtensilsCrossed },
-				{ name: 'Sabores', path: '/configuracion/sabores', href: resolve('/configuracion/sabores'), icon: Pizza },
-				{ name: 'Categorías', path: '/configuracion/categorias', href: resolve('/configuracion/categorias'), icon: Tags },
-				{ name: 'Personal', path: '/configuracion/personal', href: resolve('/configuracion/personal'), icon: Users },
-				{ name: 'Suscripción', path: '/saas/suscripcion', href: resolve('/saas/suscripcion'), icon: CreditCard }
+				{
+					name: 'Líneas y combos',
+					path: '/configuracion/rubros',
+					href: resolve('/configuracion/rubros'),
+					icon: UtensilsCrossed
+				},
+				{
+					name: 'Sabores',
+					path: '/configuracion/sabores',
+					href: resolve('/configuracion/sabores'),
+					icon: Pizza
+				},
+				{
+					name: 'Categorías',
+					path: '/configuracion/categorias',
+					href: resolve('/configuracion/categorias'),
+					icon: Tags
+				},
+				{
+					name: 'Personal',
+					path: '/configuracion/personal',
+					href: resolve('/configuracion/personal'),
+					icon: Users
+				}
+			]
+		},
+		{
+			group: 'Mi plan',
+			items: [
+				{
+					name: 'Facturación',
+					path: '/facturacion',
+					href: resolve('/facturacion'),
+					icon: CreditCard
+				},
+				{ name: 'Módulos', path: '/modulos', href: resolve('/modulos'), icon: Puzzle }
 			]
 		}
-	];
+	]);
 
 	// La navegación usa la MISMA política que el servidor: nunca muestra enlaces que redirigen.
 	let nav = $derived(
-		NAV.map((g) => ({ ...g, items: g.items.filter((i) => data.user && canAccess(data.user.rol, i.path)) })).filter(
-			(g) => g.items.length > 0
-		)
+		NAV.map((g) => ({
+			...g,
+			items: g.items.filter((i) => data.user && canAccess(data.user.rol, i.path))
+		})).filter((g) => g.items.length > 0)
 	);
 	let current = $derived(NAV.flatMap((g) => g.items).find((i) => isActive(i.path)));
 	let mobileOpen = $state(false);
@@ -92,14 +155,31 @@
 
 {#snippet brand()}
 	<a href={resolve('/')} class="flex items-center gap-2.5 px-2">
-		<span class="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-			<svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<span
+			class="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm"
+		>
+			<svg
+				viewBox="0 0 24 24"
+				class="h-[18px] w-[18px]"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
 				<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
 			</svg>
 		</span>
 		<span class="leading-tight">
 			<span class="block text-[15px] font-semibold tracking-tight">{BRAND.name}</span>
-			<span class="block max-w-40 truncate text-[11px] text-muted-foreground" title={data.negocio?.nombre ?? BRAND.tagline}>{data.negocio && data.negocio.nombre !== BRAND.name ? data.negocio.nombre : BRAND.tagline}</span>
+			<span
+				class="block max-w-40 truncate text-[11px] text-muted-foreground"
+				title={data.negocio?.nombre ?? BRAND.tagline}
+				>{data.negocio && data.negocio.nombre !== BRAND.name
+					? data.negocio.nombre
+					: BRAND.tagline}</span
+			>
 		</span>
 	</a>
 {/snippet}
@@ -108,21 +188,35 @@
 	<nav class="flex flex-col gap-5" aria-label="Principal">
 		{#each nav as g (g.group)}
 			<div>
-				<p class="mb-1 px-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{g.group}</p>
+				<p class="mb-1 px-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+					{g.group}
+				</p>
 				<ul class="flex flex-col gap-0.5">
 					{#each g.items as item (item.path)}
 						{@const Icon = item.icon}
 						{@const active = isActive(item.path)}
+						{@const locked = bloqueado(item.path)}
 						<li>
 							<a
-								href={item.href}
+								href={locked ? resolve('/modulos') : item.href}
 								aria-current={active ? 'page' : undefined}
+								title={locked ? 'Módulo adicional no contratado' : undefined}
 								class="group flex h-9 items-center gap-2.5 rounded-md px-3 text-sm transition-colors {active
 									? 'bg-accent font-medium text-foreground'
 									: 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'}"
 							>
-								<Icon size={16} class={active ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'} />
-								{item.name}
+								<Icon
+									size={16}
+									class={active
+										? 'text-foreground'
+										: 'text-muted-foreground group-hover:text-foreground'}
+								/>
+								<span class="flex-1">{item.name}</span>
+								{#if locked}<Lock
+										size={13}
+										class="text-muted-foreground/70"
+										aria-label="Bloqueado"
+									/>{/if}
 							</a>
 						</li>
 					{/each}
@@ -135,12 +229,16 @@
 {#snippet userCard()}
 	{#if data.user}
 		<div class="flex items-center gap-3 rounded-lg border border-border bg-card p-2.5">
-			<span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">
+			<span
+				class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold"
+			>
 				{data.user.nombre.charAt(0).toUpperCase()}
 			</span>
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-sm font-medium">{data.user.nombre}</p>
-				<p class="truncate text-xs text-muted-foreground">{ROL_LABELS[normalizeRol(data.user.rol)]}</p>
+				<p class="truncate text-xs text-muted-foreground">
+					{ROL_LABELS[normalizeRol(data.user.rol)]}
+				</p>
 			</div>
 			<form action="/logout" method="POST">
 				<button
@@ -156,17 +254,24 @@
 
 <!-- Barra de progreso de navegación -->
 {#if navigating.to}
-	<div class="fixed inset-x-0 top-0 z-[60] h-0.5 overflow-hidden" in:fade={{ delay: 150, duration: 100 }}>
+	<div
+		class="fixed inset-x-0 top-0 z-[60] h-0.5 overflow-hidden"
+		in:fade={{ delay: 150, duration: 100 }}
+	>
 		<div class="h-full w-1/3 animate-[slide_1s_ease-in-out_infinite] bg-brand"></div>
 	</div>
 {/if}
 
 {#if data.user}
-	<div class="flex h-dvh w-full overflow-hidden bg-background text-foreground print:block print:h-auto print:overflow-visible">
+	<div
+		class="flex h-dvh w-full overflow-hidden bg-background text-foreground print:block print:h-auto print:overflow-visible"
+	>
 		<!-- Sidebar escritorio -->
-		<aside class="hidden w-64 shrink-0 print:!hidden flex-col gap-6 border-r border-border bg-card/40 px-3 py-4 md:flex">
+		<aside
+			class="hidden w-64 shrink-0 flex-col gap-6 border-r border-border bg-card/40 px-3 py-4 md:flex print:!hidden"
+		>
 			{@render brand()}
-			<div class="flex-1 overflow-y-auto custom-scrollbar">{@render navList()}</div>
+			<div class="custom-scrollbar flex-1 overflow-y-auto">{@render navList()}</div>
 			{@render userCard()}
 		</aside>
 
@@ -186,7 +291,12 @@
 				>
 					<div class="flex items-center justify-between">
 						{@render brand()}
-						<button type="button" class="grid h-8 w-8 place-items-center rounded-md hover:bg-accent" onclick={() => (mobileOpen = false)} aria-label="Cerrar menú"><X size={18} /></button>
+						<button
+							type="button"
+							class="grid h-8 w-8 place-items-center rounded-md hover:bg-accent"
+							onclick={() => (mobileOpen = false)}
+							aria-label="Cerrar menú"><X size={18} /></button
+						>
 					</div>
 					<div class="flex-1 overflow-y-auto">{@render navList()}</div>
 					{@render userCard()}
@@ -195,8 +305,15 @@
 		{/if}
 
 		<div class="flex min-w-0 flex-1 flex-col">
-			<header class="sticky top-0 z-30 print:hidden flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md md:px-6">
-				<button type="button" class="grid h-9 w-9 place-items-center rounded-md hover:bg-accent md:hidden" onclick={() => (mobileOpen = true)} aria-label="Abrir menú">
+			<header
+				class="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md md:px-6 print:hidden"
+			>
+				<button
+					type="button"
+					class="grid h-9 w-9 place-items-center rounded-md hover:bg-accent md:hidden"
+					onclick={() => (mobileOpen = true)}
+					aria-label="Abrir menú"
+				>
 					<Menu size={18} />
 				</button>
 				<nav aria-label="Ruta" class="flex min-w-0 items-center gap-2 text-sm">
@@ -216,14 +333,21 @@
 					>
 						<Bell size={17} />
 						{#if alertas.length > 0}
-							<span class="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white tabular-nums">
+							<span
+								class="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white tabular-nums"
+							>
 								{alertas.length}
 							</span>
 						{/if}
 					</button>
 
 					{#if notifOpen}
-						<button type="button" class="fixed inset-0 z-40 cursor-default" aria-label="Cerrar notificaciones" onclick={() => (notifOpen = false)}></button>
+						<button
+							type="button"
+							class="fixed inset-0 z-40 cursor-default"
+							aria-label="Cerrar notificaciones"
+							onclick={() => (notifOpen = false)}
+						></button>
 						<div
 							class="absolute top-11 right-0 z-50 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-popover shadow-xl"
 							transition:fly={{ y: -6, duration: 160 }}
@@ -234,7 +358,7 @@
 								<p class="text-sm font-semibold">Notificaciones</p>
 								<span class="text-xs text-muted-foreground">{alertas.length} pendientes</span>
 							</div>
-							<div class="max-h-80 overflow-y-auto custom-scrollbar">
+							<div class="custom-scrollbar max-h-80 overflow-y-auto">
 								{#if alertas.length === 0}
 									<div class="flex flex-col items-center px-4 py-8 text-center">
 										<CircleCheck size={22} class="mb-2 text-success" />
@@ -245,7 +369,12 @@
 									<ul class="divide-y divide-border">
 										{#each alertas as a (a.id)}
 											<li class="flex gap-3 px-4 py-3">
-												<span class="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md {a.nivel === 'urgente' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'}">
+												<span
+													class="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md {a.nivel ===
+													'urgente'
+														? 'bg-danger-soft text-danger'
+														: 'bg-warning-soft text-warning'}"
+												>
 													<TriangleAlert size={14} />
 												</span>
 												<div class="min-w-0">
@@ -258,7 +387,10 @@
 								{/if}
 							</div>
 							{#if data.user && canAccess(data.user.rol, '/bodega')}
-								<a href={resolve('/bodega')} class="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground">
+								<a
+									href={resolve('/bodega')}
+									class="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+								>
 									Reponer stock en bodega <ArrowRight size={13} />
 								</a>
 							{/if}
@@ -267,7 +399,13 @@
 				</div>
 			</header>
 
-			<main class="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8 custom-scrollbar print:overflow-visible print:p-0">
+			<main
+				class="custom-scrollbar flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8 print:overflow-visible print:p-0"
+			>
+				{#if plan && data.user}<PlanBanner
+						{plan}
+						esJefe={normalizeRol(data.user.rol) === 'jefe'}
+					/>{/if}
 				{@render children()}
 			</main>
 		</div>
@@ -278,7 +416,11 @@
 
 <style>
 	@keyframes -global-slide {
-		0% { transform: translateX(-100%); }
-		100% { transform: translateX(300%); }
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(300%);
+		}
 	}
 </style>

@@ -19,11 +19,42 @@ export function isRubro(v: unknown): v is Rubro {
 
 /** Interruptor de configuración ↔ código de línea en `lineas_gastronomicas`. */
 export const LINE_TOGGLES = [
-	{ codigo: 'pizza', field: 'habilitarPizzas', form: 'habilitar_pizzas', label: 'Pizzas', description: 'Masas, porciones en vitrina y sabores. Activa la conciliación de pizzas en el cierre de turno.' },
-	{ codigo: 'chuzo', field: 'habilitarChuzos', form: 'habilitar_chuzos', label: 'Chuzos y parrilla', description: 'Pinchos, tocineta y pechugas a la parrilla.' },
-	{ codigo: 'burger', field: 'habilitarHamburguesas', form: 'habilitar_hamburguesas', label: 'Hamburguesas y combos', description: 'Pan, carnes, papas y combos.' },
-	{ codigo: 'lasana', field: 'habilitarLasanas', form: 'habilitar_lasanas', label: 'Lasañas', description: 'Bandejas familiares y porciones individuales.' },
-	{ codigo: 'carne', field: 'habilitarCarnes', form: 'habilitar_carnes', label: 'Carnes y asados', description: 'Cortes por peso, costillas y asados.' }
+	{
+		codigo: 'pizza',
+		field: 'habilitarPizzas',
+		form: 'habilitar_pizzas',
+		label: 'Pizzas',
+		description:
+			'Masas, porciones en vitrina y sabores. Activa la conciliación de pizzas en el cierre de turno.'
+	},
+	{
+		codigo: 'chuzo',
+		field: 'habilitarChuzos',
+		form: 'habilitar_chuzos',
+		label: 'Chuzos y parrilla',
+		description: 'Pinchos, tocineta y pechugas a la parrilla.'
+	},
+	{
+		codigo: 'burger',
+		field: 'habilitarHamburguesas',
+		form: 'habilitar_hamburguesas',
+		label: 'Hamburguesas y combos',
+		description: 'Pan, carnes, papas y combos.'
+	},
+	{
+		codigo: 'lasana',
+		field: 'habilitarLasanas',
+		form: 'habilitar_lasanas',
+		label: 'Lasañas',
+		description: 'Bandejas familiares y porciones individuales.'
+	},
+	{
+		codigo: 'carne',
+		field: 'habilitarCarnes',
+		form: 'habilitar_carnes',
+		label: 'Carnes y asados',
+		description: 'Cortes por peso, costillas y asados.'
+	}
 ] as const;
 
 export type LineToggleField = (typeof LINE_TOGGLES)[number]['field'];

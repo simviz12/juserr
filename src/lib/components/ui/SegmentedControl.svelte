@@ -9,7 +9,11 @@
 </script>
 
 <!-- max-w-full + scroll horizontal: con muchas opciones en móvil se desliza en vez de desbordar la página -->
-<div role="radiogroup" aria-label={label} class="no-scrollbar inline-flex h-9 max-w-full items-center overflow-x-auto rounded-md bg-muted p-1 text-muted-foreground">
+<div
+	role="radiogroup"
+	aria-label={label}
+	class="no-scrollbar inline-flex h-9 max-w-full items-center overflow-x-auto rounded-md bg-muted p-1 text-muted-foreground"
+>
 	{#each options as opt (opt.value)}
 		<button
 			type="button"

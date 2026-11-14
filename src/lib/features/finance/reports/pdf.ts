@@ -61,8 +61,18 @@ function sanitize(r: PdfReport): PdfReport {
 		negocio: pdfText(r.negocio),
 		title: pdfText(r.title),
 		period: pdfText(r.period),
-		kpis: r.kpis.map((k) => ({ label: pdfText(k.label), value: pdfText(k.value), hint: k.hint ? pdfText(k.hint) : undefined })),
-		tables: r.tables.map((tb) => ({ ...tb, title: pdfText(tb.title), head: tb.head.map(pdfText), body: tb.body.map((row) => row.map(t)), foot: tb.foot?.map(t) })),
+		kpis: r.kpis.map((k) => ({
+			label: pdfText(k.label),
+			value: pdfText(k.value),
+			hint: k.hint ? pdfText(k.hint) : undefined
+		})),
+		tables: r.tables.map((tb) => ({
+			...tb,
+			title: pdfText(tb.title),
+			head: tb.head.map(pdfText),
+			body: tb.body.map((row) => row.map(t)),
+			foot: tb.foot?.map(t)
+		})),
 		notes: r.notes?.map(pdfText)
 	};
 }
@@ -70,7 +80,10 @@ function sanitize(r: PdfReport): PdfReport {
 /** Construye el documento (separado de la descarga para poder probarlo). */
 export async function buildPdfReport(input: PdfReport) {
 	const r = sanitize(input);
-	const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+	const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+		import('jspdf'),
+		import('jspdf-autotable')
+	]);
 	const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 	const W = doc.internal.pageSize.getWidth();
 	const M = 14;
@@ -87,7 +100,11 @@ export async function buildPdfReport(input: PdfReport) {
 	doc.setFontSize(10);
 	doc.setTextColor(...MUTED);
 	doc.text(`${r.title} · ${r.period}`, M + 6, y + 7);
-	const generado = new Date().toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota' });
+	const generado = new Date().toLocaleString('es-CO', {
+		dateStyle: 'medium',
+		timeStyle: 'short',
+		timeZone: 'America/Bogota'
+	});
 	doc.text(`Generado ${generado}`, W - M, y + 7, { align: 'right' });
 	y += 15;
 	doc.setDrawColor(...LINE);
@@ -162,12 +179,25 @@ export async function buildPdfReport(input: PdfReport) {
 			theme: 'plain',
 			showHead: 'everyPage',
 			showFoot: 'lastPage',
-			styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, textColor: INK, lineColor: LINE, lineWidth: { bottom: 0.1 } },
+			styles: {
+				font: 'helvetica',
+				fontSize: 8,
+				cellPadding: 2,
+				textColor: INK,
+				lineColor: LINE,
+				lineWidth: { bottom: 0.1 }
+			},
 			headStyles: { fillColor: SOFT, textColor: MUTED, fontStyle: 'bold' },
-			footStyles: { fontStyle: 'bold', fillColor: [255, 255, 255], textColor: INK, lineWidth: { top: 0.3 } },
+			footStyles: {
+				fontStyle: 'bold',
+				fillColor: [255, 255, 255],
+				textColor: INK,
+				lineWidth: { top: 0.3 }
+			},
 			columnStyles: Object.fromEntries([...numeric].map((i) => [i, { halign: 'right' as const }])),
 			didParseCell: (d) => {
-				if (numeric.has(d.column.index) && (d.section === 'head' || d.section === 'foot')) d.cell.styles.halign = 'right';
+				if (numeric.has(d.column.index) && (d.section === 'head' || d.section === 'foot'))
+					d.cell.styles.halign = 'right';
 				if (d.section === 'body' && bold.has(d.row.index)) {
 					d.cell.styles.fontStyle = 'bold';
 					d.cell.styles.fillColor = SOFT;
