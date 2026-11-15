@@ -87,6 +87,18 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 
 ---
 
+## Entrega 3 — Funciones exclusivas por restaurante
+
+**El modelo:** esqueleto igual para todos + funciones hechas a pedido que son **solo** del restaurante que las pidió.
+
+- `registry.ts`: lista `EXCLUSIVOS` con `exclusivoDe`. Para cualquier otro restaurante, su ruta `/m/<codigo>` responde **404** (vista y POST), no aparece en el menú ni en el catálogo.
+- Menú dinámico **"Hecho para ti"**, visible solo para el dueño (con 🔒 si la función venció → Facturación).
+- `migrations/0002_modulos_exclusivos.sql`: columna `modulos_catalogo.exclusivo_tenant_id`, un CHECK (un exclusivo no puede ser público ni Core) y un **trigger** que impide suscribir a otro restaurante, incluso por SQL.
+- La consola solo ofrece cada exclusivo en la ficha de su dueño (★) y `activarModulo()` lo rechaza para otro restaurante. El catálogo muestra de quién es cada uno.
+- **Generador `pnpm modulo:nuevo`**: crea la ficha, el servidor, la página, la migración y la entrada del registro, formateados y listos para programar.
+- `0001` ahora solo activa el Core y los módulos públicos al restaurante fundador.
+- La prueba de migraciones aplica **todas** las migraciones en orden. Pruebas nuevas de exclusividad en `billing.test.ts` y `migration.test.ts` (**138 pruebas** en total).
+
 ## Pendiente de salida a producción
 
 - [ ] Tomar el branch de respaldo en Neon.

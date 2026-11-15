@@ -7,16 +7,21 @@
  *   3. es idempotente (correrla dos veces no rompe nada).
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { generateDrizzleJson, generateMigration } from 'drizzle-kit/api';
 import * as schema from '../src/lib/server/schema';
 
 const legacy = readFileSync(new URL('./fixtures/legacy-schema.sql', import.meta.url), 'utf8');
-const migracion = readFileSync(
-	new URL('../migrations/0001_multitenant.sql', import.meta.url),
-	'utf8'
-);
+/** Todas las migraciones, en orden (igual que scripts/migrate.mjs). */
+const DIR_MIGRACIONES = new URL('../migrations/', import.meta.url);
+const migraciones = readdirSync(DIR_MIGRACIONES)
+	.filter((f) => /^\d{4}_.+\.sql$/.test(f))
+	.sort()
+	.map((f) => ({ nombre: f, sql: readFileSync(new URL(f, DIR_MIGRACIONES), 'utf8') }));
+const aplicarTodas = async (db: PGlite) => {
+	for (const m of migraciones) await db.exec(m.sql);
+};
 
 const TABLAS_NEGOCIO = [
 	'usuarios',
@@ -103,10 +108,10 @@ beforeAll(async () => {
 		INSERT INTO saas_suscripciones (plan_codigo) VALUES ('pro');
 	`);
 	antes = await conteos(pg);
-	await pg.exec(migracion);
+	await aplicarTodas(pg);
 });
 
-describe('migración 0001 multi-restaurante', () => {
+describe('migraciones sobre el esquema de producción', () => {
 	it('crea el restaurante #1 con un código válido derivado del nombre', async () => {
 		const r = await pg.query<{ id: number; codigo: string; nombre: string }>(
 			'SELECT id, codigo, nombre FROM tenants'
@@ -161,8 +166,31 @@ describe('migración 0001 multi-restaurante', () => {
 		await expect(pg.exec(`INSERT INTO turnos (monto) VALUES (1)`)).rejects.toThrow(/tenant_id/);
 	});
 
+	it('un módulo exclusivo no se puede activar a otro restaurante (trigger de la base)', async () => {
+		await pg.exec(`
+			INSERT INTO tenants (codigo, nombre) VALUES ('dueno-exclusivo', 'Dueño');
+			INSERT INTO modulos_catalogo (codigo, nombre, precio_mensual_cents, publico, exclusivo_tenant_id)
+				SELECT 'solo-para-dueno', 'Hecho a medida', 5000000, false, id FROM tenants WHERE codigo = 'dueno-exclusivo';
+			INSERT INTO suscripciones_modulo (tenant_id, modulo, vigente_hasta, precio_mensual_cents)
+				SELECT id, 'solo-para-dueno', current_date + 30, 5000000 FROM tenants WHERE codigo = 'dueno-exclusivo';
+		`);
+		await expect(
+			pg.exec(
+				`INSERT INTO suscripciones_modulo (tenant_id, modulo, vigente_hasta, precio_mensual_cents) VALUES (1, 'solo-para-dueno', current_date, 0)`
+			)
+		).rejects.toThrow(/exclusivo de otro restaurante/);
+		// Tampoco se puede "pasar" la suscripción del dueño a otro restaurante.
+		await expect(
+			pg.exec(`UPDATE suscripciones_modulo SET tenant_id = 1 WHERE modulo = 'solo-para-dueno'`)
+		).rejects.toThrow(/exclusivo de otro restaurante/);
+		// Ni declararlo público o Core.
+		await expect(
+			pg.exec(`UPDATE modulos_catalogo SET publico = true WHERE codigo = 'solo-para-dueno'`)
+		).rejects.toThrow();
+	});
+
 	it('es idempotente', async () => {
-		await expect(pg.exec(migracion)).resolves.toBeDefined();
+		await expect(aplicarTodas(pg)).resolves.toBeUndefined();
 		expect((await pg.query('SELECT 1 FROM tenants WHERE id = 1')).rows).toHaveLength(1);
 	});
 

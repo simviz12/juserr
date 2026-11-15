@@ -3,7 +3,7 @@ import { PLATFORM_COOKIE, validarSesionPlataforma } from '$lib/server/platform-a
 import { derechosDe } from '$lib/server/tenancy';
 import { canAccess, homeFor, isPublicPath } from '$lib/auth/access';
 import { evaluarAcceso } from '$lib/modules/registry';
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 
 const LECTURA = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -75,8 +75,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.entitlements = derechos.ent;
 
 	const gate = evaluarAcceso(path, derechos.ent, !LECTURA.has(event.request.method));
-	if (gate.tipo === 'modulo-no-contratado')
+	// Exclusivo de otro restaurante: para este no existe (no se revela nada).
+	if (gate.tipo === 'no-encontrado') error(404, 'Not found');
+	if (gate.tipo === 'modulo-no-contratado') {
+		// Un exclusivo vencido no está en el catálogo: su dueño va a Facturación a renovarlo.
+		if (gate.modulo.exclusivoDe)
+			redirect(303, `/facturacion?motivo=modulo&modulo=${encodeURIComponent(gate.modulo.codigo)}`);
 		redirect(303, `/modulos?bloqueado=${encodeURIComponent(gate.modulo.codigo)}`);
+	}
 	if (gate.tipo === 'solo-lectura') redirect(303, '/facturacion?motivo=solo-lectura');
 	if (gate.tipo === 'suspendido') redirect(303, '/facturacion?motivo=suspendido');
 

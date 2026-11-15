@@ -2,8 +2,22 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { actualizarCatalogo, catalogo, ErrorNegocio } from '$lib/billing/server';
 import { parseMoneyInput } from '$lib/features/finance/domain/money';
+import { db } from '$lib/server/db';
+import { tenants } from '$lib/server/schema';
 
-export const load: PageServerLoad = async () => ({ modulos: await catalogo() });
+export const load: PageServerLoad = async () => {
+	const [mods, ts] = await Promise.all([
+		catalogo(),
+		db.select({ id: tenants.id, nombre: tenants.nombre }).from(tenants)
+	]);
+	const nombre = new Map(ts.map((t) => [t.id, t.nombre]));
+	return {
+		modulos: mods.map((m) => ({
+			...m,
+			exclusivoDe: m.exclusivoTenantId ? (nombre.get(m.exclusivoTenantId) ?? '—') : null
+		}))
+	};
+};
 
 export const actions: Actions = {
 	guardar: async ({ request, locals }) => {

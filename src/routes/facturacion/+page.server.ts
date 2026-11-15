@@ -14,7 +14,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const tid = tenantDe(locals);
 	const motivo = url.searchParams.get('motivo');
 	const esJefe = normalizeRol(locals.user?.rol) === 'jefe';
-	const base = { esJefe, motivo, tenant: locals.tenant, plan: locals.entitlements };
+	const moduloVencido = motivo === 'modulo' ? url.searchParams.get('modulo') : null;
+	const base = { esJefe, motivo, moduloVencido, tenant: locals.tenant, plan: locals.entitlements };
 	if (!esJefe) return { ...base, cuenta: null };
 
 	const [subs, historial] = await Promise.all([suscripcionesDe(tid), pagosDe(tid)]);

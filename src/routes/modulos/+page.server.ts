@@ -15,8 +15,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		bloqueado: url.searchParams.get('bloqueado'),
 		modulos: cat
-			.filter((m) => !m.esCore && m.publico)
+			// Catálogo general + las funciones hechas a pedido de ESTE restaurante.
+			.filter((m) => !m.esCore && (m.publico || m.exclusivoTenantId === tid))
 			.map((m) => ({
+				exclusivo: m.exclusivoTenantId === tid,
 				codigo: m.codigo,
 				nombre: m.nombre,
 				descripcion: m.descripcion,

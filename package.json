@@ -21,7 +21,8 @@
 		"db:migrate:estado": "node scripts/migrate.mjs --estado",
 		"db:seed": "tsx src/lib/server/seed.ts",
 		"db:reset-counts": "tsx src/lib/server/reset-counts.ts",
-		"plataforma:admin": "node scripts/create-platform-admin.mjs"
+		"plataforma:admin": "node scripts/create-platform-admin.mjs",
+		"modulo:nuevo": "node scripts/nuevo-modulo.mjs"
 	},
 	"devDependencies": {
 		"@electric-sql/pglite": "0.3.14",

@@ -56,11 +56,18 @@ export const load: PageServerLoad = async ({ params, url }) => {
 		modulos: subs.map((s) => ({ ...s, situacion: estadoModulo(s, hoy, t.diasGracia) })),
 		totalMensualCents: totalMensualCents(subs),
 		disponibles: cat
-			.filter((m) => !m.esCore && !contratados.has(m.codigo))
+			// Generales + los exclusivos de ESTE restaurante (nunca los de otro).
+			.filter(
+				(m) =>
+					!m.esCore &&
+					!contratados.has(m.codigo) &&
+					(m.exclusivoTenantId === null || m.exclusivoTenantId === id)
+			)
 			.map((m) => ({
 				codigo: m.codigo,
 				nombre: m.nombre,
-				precioMensualCents: m.precioMensualCents
+				precioMensualCents: m.precioMensualCents,
+				exclusivo: m.exclusivoTenantId !== null
 			})),
 		pagos: historial,
 		solicitudes: solicitudes.map((s) => s.modulo),

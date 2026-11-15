@@ -61,9 +61,20 @@ export const modulosCatalogo = pgTable(
 		esCore: boolean('es_core').notNull().default(false),
 		/** false = no se ofrece a clientes nuevos (módulos a medida o retirados). */
 		publico: boolean('publico').notNull().default(true),
-		orden: integer('orden').notNull().default(100)
+		orden: integer('orden').notNull().default(100),
+		/**
+		 * Restaurante dueño de un módulo EXCLUSIVO (hecho a su pedido). Nadie más puede
+		 * tenerlo: lo garantiza el trigger suscripciones_modulo_exclusivo (migración 0002).
+		 */
+		exclusivoTenantId: integer('exclusivo_tenant_id').references(() => tenants.id)
 	},
-	(t) => [check('modulos_catalogo_precio_check', sql`${t.precioMensualCents} >= 0`)]
+	(t) => [
+		check('modulos_catalogo_precio_check', sql`${t.precioMensualCents} >= 0`),
+		check(
+			'modulos_catalogo_exclusivo_check',
+			sql`${t.exclusivoTenantId} IS NULL OR (${t.publico} = false AND ${t.esCore} = false)`
+		)
+	]
 );
 
 /** Módulos contratados por cada restaurante y hasta cuándo están pagados. */

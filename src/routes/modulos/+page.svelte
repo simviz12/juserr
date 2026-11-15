@@ -41,7 +41,14 @@
 				)}
 			>
 				<div class="flex items-start justify-between gap-2">
-					<h2 class="font-semibold tracking-tight">{m.nombre}</h2>
+					<div>
+						<h2 class="font-semibold tracking-tight">{m.nombre}</h2>
+						{#if m.exclusivo}<p
+								class="mt-0.5 flex items-center gap-1 text-xs font-medium text-brand"
+							>
+								<Sparkles size={11} /> Hecho para tu restaurante
+							</p>{/if}
+					</div>
 					{#if m.activo}<Badge variant="success"><CircleCheck size={11} /> Activo</Badge>
 					{:else if m.solicitado}<Badge variant="warning"><Clock size={11} /> Solicitado</Badge>
 					{:else}<Badge variant="outline"><Lock size={11} /> No incluido</Badge>{/if}
@@ -54,7 +61,11 @@
 						/mes</span
 					>
 				</p>
-				{#if !m.activo}
+				{#if m.exclusivo && !m.activo}
+					<p class="mt-4 text-xs text-muted-foreground">
+						Esta función es exclusiva de tu restaurante. Renuévala desde Facturación.
+					</p>
+				{:else if !m.activo}
 					<form
 						method="POST"
 						action="?/solicitar"

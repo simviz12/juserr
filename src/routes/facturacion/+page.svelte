@@ -45,7 +45,11 @@
 		description="Tu plan, los módulos contratados y el historial de pagos."
 	/>
 
-	{#if data.motivo === 'solo-lectura'}
+	{#if data.motivo === 'modulo' && data.moduloVencido}
+		<Alert variant="warning" title={`"${nombreModulo(data.moduloVencido)}" está vencido`}>
+			Esta función hecha para tu restaurante se reactiva apenas registremos el pago.
+		</Alert>
+	{:else if data.motivo === 'solo-lectura'}
 		<Alert variant="danger" title="El plan está vencido">
 			Puedes consultar y exportar tu información, pero no registrar turnos, compras ni cambios hasta
 			renovar.

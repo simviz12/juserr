@@ -171,7 +171,10 @@ export async function crearRestaurante(adminId: number, d: NuevoRestaurante): Pr
 	if (existe) throw new ErrorNegocio(`El código "${d.codigo}" ya está en uso.`);
 
 	const cat = await catalogo();
-	const elegidos = cat.filter((m) => m.esCore || d.modulos.includes(m.codigo));
+	// Al crear un restaurante solo se ofrecen Core y módulos generales (nunca exclusivos de otro).
+	const elegidos = cat.filter(
+		(m) => m.esCore || (m.exclusivoTenantId === null && d.modulos.includes(m.codigo))
+	);
 	const vigenteHasta = sumarDias(hoy(), d.diasPrueba - 1);
 
 	const reservado = await db.execute<{ id: number }>(
@@ -292,6 +295,10 @@ export async function activarModulo(
 ) {
 	const [m] = await db.select().from(modulosCatalogo).where(eq(modulosCatalogo.codigo, modulo));
 	if (!m || m.esCore) throw new ErrorNegocio('Módulo inválido.');
+	// Un módulo exclusivo solo se activa a su dueño (la base de datos también lo impide).
+	if (m.exclusivoTenantId !== null && m.exclusivoTenantId !== tenantId) {
+		throw new ErrorNegocio(`"${m.nombre}" es exclusivo de otro restaurante.`);
+	}
 	const subs = await suscripcionesDe(tenantId);
 	const core = subs.find((s) => s.modulo === CORE);
 	const fecha = hoy();
@@ -453,7 +460,8 @@ export async function actualizarCatalogo(
 		.update(modulosCatalogo)
 		.set({
 			precioMensualCents: d.precioMensualCents,
-			publico: d.publico,
+			// Un exclusivo nunca se vuelve público (también lo impide un CHECK de la base).
+			publico: sql`CASE WHEN ${modulosCatalogo.exclusivoTenantId} IS NULL THEN ${d.publico} ELSE false END`,
 			descripcion: d.descripcion
 		})
 		.where(eq(modulosCatalogo.codigo, codigo))

@@ -5,12 +5,14 @@ import { catalogo, crearRestaurante, ErrorNegocio } from '$lib/billing/server';
 export const load: PageServerLoad = async () => {
 	const cat = await catalogo();
 	return {
-		modulos: cat.map((m) => ({
-			codigo: m.codigo,
-			nombre: m.nombre,
-			esCore: m.esCore,
-			precioMensualCents: m.precioMensualCents
-		}))
+		modulos: cat
+			.filter((m) => m.exclusivoTenantId === null)
+			.map((m) => ({
+				codigo: m.codigo,
+				nombre: m.nombre,
+				esCore: m.esCore,
+				precioMensualCents: m.precioMensualCents
+			}))
 	};
 };
 

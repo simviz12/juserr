@@ -49,7 +49,7 @@ export function estadoModulo(s: SuscripcionModulo, hoy: string, diasGracia: numb
 
 /** Qué puede usar hoy un restaurante. */
 export function calcularEntitlements(
-	tenant: { estado: EstadoTenant; diasGracia: number },
+	tenant: { estado: EstadoTenant; diasGracia: number; codigo?: string },
 	subs: readonly SuscripcionModulo[],
 	hoy: string
 ): Entitlements {
@@ -72,6 +72,7 @@ export function calcularEntitlements(
 
 	const diasParaVencer = core ? diasEntre(hoy, core.vigenteHasta) : null;
 	return {
+		tenant: tenant.codigo ?? null,
 		estadoCore,
 		modulos,
 		coreVigenteHasta: core?.vigenteHasta ?? null,

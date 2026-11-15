@@ -161,11 +161,9 @@
 					<Field label="Módulo" for="act-modulo">
 						<select id="act-modulo" name="modulo" class={selectClass} required>
 							{#each data.disponibles as d (d.codigo)}<option value={d.codigo}
-									>{d.nombre} · {money(d.precioMensualCents)}/mes{data.solicitudes.includes(
-										d.codigo
-									)
-										? ' (solicitado)'
-										: ''}</option
+									>{d.exclusivo ? '★ ' : ''}{d.nombre} · {money(
+										d.precioMensualCents
+									)}/mes{data.solicitudes.includes(d.codigo) ? ' (solicitado)' : ''}</option
 								>{/each}
 						</select>
 					</Field>

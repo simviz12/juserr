@@ -14,6 +14,12 @@ produccion $15.000        tenant 1 · produccion hasta 14-dic                   
                                                                 (todo lo demás = Core)
 ```
 
+## Tres tipos de módulo
+
+- **Core**: el esqueleto, para todos.
+- **ADDONS** (add-ons generales): cualquier restaurante los puede contratar.
+- **EXCLUSIVOS**: hechos a pedido de un restaurante; solo existen para él. Ver [página 7](07-como-agregar-un-modulo.md).
+
 ## Registro de módulos (`src/lib/modules/registry.ts`)
 
 ```ts

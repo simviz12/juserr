@@ -13,8 +13,11 @@ import {
 } from '../src/lib/billing/domain';
 import {
 	evaluarAcceso,
+	menuModulos,
 	moduloDeRuta,
 	rutaDisponible,
+	validarRegistro,
+	type ModuleDef,
 	type Entitlements
 } from '../src/lib/modules/registry';
 
@@ -169,6 +172,7 @@ describe('códigos de restaurante', () => {
 
 describe('bloqueo de rutas por módulo', () => {
 	const ent = (p: Partial<Entitlements>): Entitlements => ({
+		tenant: 'resto-b',
 		estadoCore: 'al-dia',
 		modulos: [],
 		coreVigenteHasta: '2026-12-01',
@@ -219,5 +223,89 @@ describe('bloqueo de rutas por módulo', () => {
 		expect(rutaDisponible('/reportes/produccion', ent({}))).toBe(false);
 		expect(rutaDisponible('/reportes/produccion', ent({ modulos: ['produccion'] }))).toBe(true);
 		expect(rutaDisponible('/bodega', ent({}))).toBe(true);
+	});
+});
+
+describe('funciones exclusivas (hechas a pedido de un restaurante)', () => {
+	// Simula lo que hace `pnpm modulo:nuevo`: un módulo exclusivo de "resto-a".
+	const exclusivo: ModuleDef = {
+		codigo: 'domicilios-resto-a',
+		nombre: 'Domicilios',
+		rutas: ['/m/domicilios-resto-a'],
+		exclusivoDe: 'resto-a',
+		menu: { nombre: 'Domicilios', ruta: '/m/domicilios-resto-a', icono: 'truck' }
+	};
+	const base: Entitlements = {
+		tenant: 'resto-a',
+		estadoCore: 'al-dia',
+		modulos: [],
+		coreVigenteHasta: '2026-12-01',
+		diasParaVencer: 17,
+		diasGraciaRestantes: null
+	};
+
+	it('el registro actual es válido', () => {
+		expect(validarRegistro()).toEqual([]);
+	});
+
+	it('detecta errores de configuración del registro', () => {
+		const malo: ModuleDef = { ...exclusivo, rutas: ['/finanzas/caja-especial'] };
+		expect(validarRegistro([malo]).join(' ')).toMatch(/debe vivir bajo \/m\//);
+		expect(validarRegistro([exclusivo, exclusivo]).join(' ')).toMatch(/Código repetido/);
+		expect(
+			validarRegistro([{ ...exclusivo, menu: { nombre: 'x', ruta: '/otra' } }]).join(' ')
+		).toMatch(/menú apunta fuera/);
+	});
+
+	it('para el dueño funciona como un módulo pagado', () => {
+		// evaluarAcceso usa el registro real; aquí se prueba la regla con la entrada simulada.
+		expect(
+			evaluarAcceso('/m/domicilios-resto-a', { ...base, modulos: ['domicilios-resto-a'] }, true, [
+				exclusivo
+			]).tipo
+		).toBe('ok');
+		// Vencido: no se borra, pero se bloquea (el dueño va a Facturación)
+		expect(evaluarAcceso('/m/domicilios-resto-a', base, false, [exclusivo]).tipo).toBe(
+			'modulo-no-contratado'
+		);
+	});
+
+	it('para cualquier otro restaurante NO EXISTE (404), aunque esté suspendido o lo "tenga"', () => {
+		const otro = { ...base, tenant: 'resto-b' };
+		expect(evaluarAcceso('/m/domicilios-resto-a', otro, false, [exclusivo]).tipo).toBe(
+			'no-encontrado'
+		);
+		expect(evaluarAcceso('/m/domicilios-resto-a/editar', otro, true, [exclusivo]).tipo).toBe(
+			'no-encontrado'
+		);
+		expect(
+			evaluarAcceso('/m/domicilios-resto-a', { ...otro, estadoCore: 'suspendido' }, false, [
+				exclusivo
+			]).tipo
+		).toBe('no-encontrado');
+		expect(
+			evaluarAcceso('/m/domicilios-resto-a', { ...otro, modulos: ['domicilios-resto-a'] }, false, [
+				exclusivo
+			]).tipo
+		).toBe('no-encontrado');
+	});
+
+	it('solo aparece en el menú de su dueño', () => {
+		expect(menuModulos({ ...base, modulos: ['domicilios-resto-a'] }, [exclusivo])).toEqual([
+			{
+				codigo: 'domicilios-resto-a',
+				nombre: 'Domicilios',
+				ruta: '/m/domicilios-resto-a',
+				icono: 'truck',
+				exclusivo: true,
+				bloqueado: false
+			}
+		]);
+		expect(menuModulos(base, [exclusivo])[0].bloqueado).toBe(true); // vencido: con candado
+		expect(menuModulos({ ...base, tenant: 'resto-b' }, [exclusivo])).toEqual([]);
+	});
+
+	it('el registro real no expone menús propios a quien no corresponde', () => {
+		expect(menuModulos({ ...base, tenant: 'cualquiera' }).every((m) => !m.exclusivo)).toBe(true);
 	});
 });

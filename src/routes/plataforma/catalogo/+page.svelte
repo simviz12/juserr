@@ -35,6 +35,7 @@
 					<h2 class="font-semibold">{m.nombre}</h2>
 					<code class="text-xs text-muted-foreground">{m.codigo}</code>
 					{#if m.esCore}<Badge variant="outline">Base</Badge>{/if}
+					{#if m.exclusivoDe}<Badge variant="warning">★ Exclusivo de {m.exclusivoDe}</Badge>{/if}
 				</div>
 				<Field label="Descripción (la ve el cliente)" for="d-{m.codigo}"
 					><textarea id="d-{m.codigo}" name="descripcion" class={textareaClass}
@@ -52,7 +53,7 @@
 							class={inputClass}
 						/></Field
 					>
-					{#if !m.esCore}<label class="flex items-center gap-2 text-sm"
+					{#if !m.esCore && !m.exclusivoDe}<label class="flex items-center gap-2 text-sm"
 							><input type="checkbox" name="publico" checked={m.publico} class="h-4 w-4" /> Visible para
 							clientes</label
 						>{:else}<input type="hidden" name="publico" value="on" />{/if}

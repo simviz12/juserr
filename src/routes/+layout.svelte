@@ -22,12 +22,20 @@
 		Pizza,
 		Tags,
 		Lock,
-		Puzzle
+		Puzzle,
+		Truck,
+		CalendarDays,
+		ClipboardList,
+		Star,
+		Receipt,
+		Package,
+		Sparkles
 	} from '@lucide/svelte';
+	import type { Component } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { BRAND } from '$lib/config/brand';
 	import { canAccess, normalizeRol, ROL_LABELS } from '$lib/auth/access';
-	import { rutaDisponible } from '$lib/modules/registry';
+	import { menuModulos, rutaDisponible, type IconoMenu } from '$lib/modules/registry';
 	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 	import PlanBanner from '$lib/components/billing/PlanBanner.svelte';
 
@@ -36,6 +44,26 @@
 	let plan = $derived(data.plan);
 	/** Add-on no contratado: se muestra con candado y lleva al catálogo de módulos. */
 	const bloqueado = (path: string) => (plan ? !rutaDisponible(path, plan) : false);
+
+	const ICONOS: Record<IconoMenu, Component<{ size?: number; class?: string }>> = {
+		puzzle: Puzzle,
+		truck: Truck,
+		calendar: CalendarDays,
+		clipboard: ClipboardList,
+		chart: ChartColumn,
+		users: Users,
+		star: Star,
+		receipt: Receipt,
+		package: Package,
+		utensils: UtensilsCrossed
+	};
+	/**
+	 * Funciones con entrada propia en el menú. Las exclusivas ("Hecho para ti")
+	 * solo aparecen para el restaurante dueño; las vencidas se muestran con candado.
+	 */
+	let propios = $derived(
+		plan && data.user ? menuModulos(plan).filter((m) => canAccess(data.user!.rol, m.ruta)) : []
+	);
 
 	let NAV = $derived([
 		{
@@ -127,7 +155,10 @@
 			items: g.items.filter((i) => data.user && canAccess(data.user.rol, i.path))
 		})).filter((g) => g.items.length > 0)
 	);
-	let current = $derived(NAV.flatMap((g) => g.items).find((i) => isActive(i.path)));
+	let current = $derived(
+		NAV.flatMap((g) => g.items).find((i) => isActive(i.path)) ??
+			propios.map((m) => ({ name: m.nombre, path: m.ruta })).find((i) => isActive(i.path))
+	);
 	let mobileOpen = $state(false);
 	let notifOpen = $state(false);
 	let alertas = $derived(data.alertas ?? []);
@@ -223,6 +254,47 @@
 				</ul>
 			</div>
 		{/each}
+		{#if propios.length}
+			<div>
+				<p
+					class="mb-1 flex items-center gap-1 px-3 text-[11px] font-medium tracking-wide text-brand uppercase"
+				>
+					<Sparkles size={11} /> Hecho para ti
+				</p>
+				<ul class="flex flex-col gap-0.5">
+					{#each propios as m (m.codigo)}
+						{@const Icon = ICONOS[m.icono]}
+						{@const active = isActive(m.ruta)}
+						<li>
+							<!-- Rutas de módulos exclusivos (/m/<codigo>): se generan por cliente, no son rutas fijas del Core. -->
+							<!-- eslint-disable svelte/no-navigation-without-resolve -->
+							<a
+								href={m.bloqueado ? resolve('/facturacion') : m.ruta}
+								aria-current={active ? 'page' : undefined}
+								title={m.bloqueado ? 'Función vencida: renuévala en Facturación' : undefined}
+								class="group flex h-9 items-center gap-2.5 rounded-md px-3 text-sm transition-colors {active
+									? 'bg-accent font-medium text-foreground'
+									: 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'}"
+							>
+								<Icon
+									size={16}
+									class={active
+										? 'text-foreground'
+										: 'text-muted-foreground group-hover:text-foreground'}
+								/>
+								<span class="flex-1">{m.nombre}</span>
+								{#if m.bloqueado}<Lock
+										size={13}
+										class="text-muted-foreground/70"
+										aria-label="Vencido"
+									/>{/if}
+							</a>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
 	</nav>
 {/snippet}
 

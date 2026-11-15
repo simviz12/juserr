@@ -160,4 +160,5 @@ CREATE INDEX IF NOT EXISTS movimientos_contables_tenant_fecha_idx ON movimientos
 INSERT INTO suscripciones_modulo (tenant_id, modulo, vigente_hasta, precio_mensual_cents)
 SELECT 1, codigo, (now() AT TIME ZONE 'America/Bogota')::date + 30, precio_mensual_cents
 FROM modulos_catalogo
+WHERE es_core OR publico          -- nunca módulos a medida/exclusivos de otros restaurantes
 ON CONFLICT (tenant_id, modulo) DO NOTHING;

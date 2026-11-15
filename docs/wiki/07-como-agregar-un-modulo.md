@@ -1,159 +1,138 @@
-# 7. Cómo agregar un módulo (tutorial)
+# 7. Funciones exclusivas: el corazón del modelo
 
-Ejemplo real: un cliente te pide un **"Control de domicilios"** (registrar pedidos a domicilio, repartidor y valor del envío) y te lo va a pagar mes a mes. Lo construimos como **add-on**, sin tocar el Core.
+## El modelo
 
-## Reglas de oro
+> **El esqueleto (Core) es igual para todos. Cuando un restaurante pide una función, se la construyes y esa función es SOLO de él.**
 
-1. **Todo el código del módulo vive en su carpeta**: `src/lib/modules/domicilios/` y sus pantallas en `src/routes/domicilios/`.
-2. **El módulo solo importa del Core** (`$lib/server/...`, `$lib/features/...`, `$lib/components/...`). **Nunca** de otro módulo, y el Core **nunca** importa del módulo.
-3. **Toda tabla nueva lleva `tenant_id`** y toda consulta usa `delTenant`.
-4. **Se activa por restaurante** desde la consola. Si nadie lo paga, nadie lo ve.
+|                                    | Core    | Add-on general            | **Función exclusiva**                                                   |
+| ---------------------------------- | ------- | ------------------------- | ----------------------------------------------------------------------- |
+| Quién la tiene                     | Todos   | Quien la contrate         | **Solo el restaurante que la pidió**                                    |
+| Aparece en el catálogo `/modulos`  | —       | Sí, para todos            | Solo para su dueño ("Hecho para tu restaurante")                        |
+| Aparece en el menú                 | Sí      | Sí (con 🔒 si no la paga) | Solo para su dueño, en **"Hecho para ti"**                              |
+| Si otro restaurante escribe la URL | —       | Lo manda a contratarla    | **404: para él no existe**                                              |
+| ¿Se le puede activar a otro?       | —       | Sí                        | **No.** Lo impide la consola y también un _trigger_ de la base de datos |
+| Ruta                               | Fija    | Fija                      | `/m/<codigo>`                                                           |
+| Se cobra                           | Mensual | Mensual                   | Mensual, con **precio pactado con ese cliente**                         |
 
-## Paso 1 — Tabla (si necesita guardar datos)
+## Flujo completo: un cliente pide algo
+
+```
+1. El restaurante te pide la función        → acuerdas alcance y precio mensual
+2. pnpm modulo:nuevo ...                     → se genera toda la estructura
+3. Programas la función                      → solo dentro de su carpeta
+4. pnpm lint && pnpm check && pnpm vitest run
+5. Subes a GitHub → despliegas → pnpm db:migrate
+6. Consola → ficha del restaurante → Activar un módulo → "★ Nombre"
+7. El cliente la ve en su menú, en "Hecho para ti". Nadie más la ve.
+```
+
+## Paso 2 — Generar la función (un solo comando)
+
+```bash
+pnpm modulo:nuevo domicilios-donjuan --para pizzeria-don-juan --nombre "Domicilios" --precio 39000 --icono truck
+```
+
+| Parámetro            | Qué es                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `domicilios-donjuan` | Código del módulo (minúsculas, números y guiones). Conviene incluir el cliente en el nombre             |
+| `--para`             | **Código del restaurante dueño** (el mismo que usa para iniciar sesión)                                 |
+| `--nombre`           | Nombre que verá en el menú                                                                              |
+| `--precio`           | Precio mensual en pesos (queda como su precio pactado)                                                  |
+| `--icono`            | `puzzle`, `truck`, `calendar`, `clipboard`, `chart`, `users`, `star`, `receipt`, `package` o `utensils` |
+
+El comando crea:
+
+| Archivo                                                  | Para qué                                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `src/lib/modules/<codigo>/README.md`                     | Ficha del desarrollo: qué pidió el cliente, alcance y datos. **Llénala**: es tu memoria de lo acordado |
+| `src/lib/modules/<codigo>/server/datos.ts`               | Lógica del servidor, ya con el filtro por restaurante (`delTenant`)                                    |
+| `src/routes/m/<codigo>/+page.server.ts` y `+page.svelte` | La página, ya funcionando (con un ejemplo de datos del restaurante)                                    |
+| `migrations/NNNN_modulo_<codigo>.sql`                    | Lo agrega al catálogo como **exclusivo** del restaurante                                               |
+| `src/lib/modules/registry.ts`                            | Lo registra en `EXCLUSIVOS` con su entrada de menú                                                     |
+
+Además verifica que el código no exista, valida los parámetros y deja el código formateado.
+
+## Paso 3 — Programar la función
+
+Trabaja **solo** dentro de `src/lib/modules/<codigo>/` y `src/routes/m/<codigo>/`. Reglas:
+
+1. **El restaurante sale de la sesión**: `const tid = tenantDe(locals);`
+2. **Toda consulta filtra por restaurante**: `.where(delTenant(tabla, tid, ...))`
+3. **Todo insert lleva** `tenantId: tid`
+4. **Solo importa del Core** (`$lib/server/...`, `$lib/features/...`, `$lib/components/...`). Nunca de otro módulo.
+5. **Dinero en centavos**: `toCents()`, `parseMoneyInput()` y `centsToDecimalString()`.
+
+### Si la función necesita guardar datos (tabla nueva)
 
 En `src/lib/server/schema.ts`:
 
 ```ts
-export const domicilios = pgTable(
-	'domicilios',
+export const domiciliosDonjuan = pgTable(
+	'domicilios_donjuan',
 	{
 		id: serial('id').primaryKey(),
 		tenantId: tenantId(), // ← obligatorio
-		turnoId: integer('turno_id').references(() => turnos.id),
 		cliente: text('cliente').notNull(),
-		repartidor: text('repartidor'),
-		valorPedido: numeric('valor_pedido', { precision: 12, scale: 2 }).notNull(),
-		valorEnvio: numeric('valor_envio', { precision: 12, scale: 2 }).notNull().default('0'),
+		valor: numeric('valor', { precision: 12, scale: 2 }).notNull(),
 		fecha: timestamp('fecha').notNull().defaultNow()
 	},
-	(t) => [index('domicilios_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [index('domicilios_donjuan_tenant_fecha_idx').on(t.tenantId, t.fecha)]
 );
 ```
 
-Y la migración `migrations/0002_modulo_domicilios.sql`:
+Y en la migración generada (`migrations/NNNN_modulo_<codigo>.sql`) agrega el `CREATE TABLE IF NOT EXISTS ...` con las mismas columnas. `tests/migration.test.ts` comprueba que la tabla de la migración y la de `schema.ts` sean idénticas.
 
-```sql
-CREATE TABLE IF NOT EXISTS domicilios (
-  id serial PRIMARY KEY,
-  tenant_id integer NOT NULL REFERENCES tenants(id),
-  turno_id integer REFERENCES turnos(id),
-  cliente text NOT NULL,
-  repartidor text,
-  valor_pedido numeric(12, 2) NOT NULL,
-  valor_envio numeric(12, 2) NOT NULL DEFAULT 0,
-  fecha timestamp NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS domicilios_tenant_fecha_idx ON domicilios (tenant_id, fecha);
-
--- El módulo en el catálogo. publico = false si es a medida para un solo cliente.
-INSERT INTO modulos_catalogo (codigo, nombre, descripcion, precio_mensual_cents, es_core, publico, orden)
-VALUES ('domicilios', 'Control de domicilios', 'Pedidos a domicilio, repartidores y costo de envío.', 1900000, false, true, 40)
-ON CONFLICT (codigo) DO NOTHING;
-```
-
-## Paso 2 — Lógica pura (con pruebas)
-
-`src/lib/modules/domicilios/domain/domicilios.ts`:
+### Acción de ejemplo (guardar un registro)
 
 ```ts
-import { toCents } from '$lib/features/finance/domain/money';
-
-export function resumenDomicilios(
-	rows: { valorPedido: string; valorEnvio: string; repartidor: string | null }[]
-) {
-	const porRepartidor = new Map<string, number>();
-	let ventasCents = 0,
-		enviosCents = 0;
-	for (const r of rows) {
-		ventasCents += toCents(r.valorPedido);
-		enviosCents += toCents(r.valorEnvio);
-		const k = r.repartidor ?? 'Sin asignar';
-		porRepartidor.set(k, (porRepartidor.get(k) ?? 0) + 1);
-	}
-	return { pedidos: rows.length, ventasCents, enviosCents, porRepartidor: [...porRepartidor] };
-}
-```
-
-Y su prueba en `tests/domicilios.test.ts`.
-
-## Paso 3 — Servidor de la página
-
-`src/routes/domicilios/+page.server.ts`:
-
-```ts
-import { fail } from '@sveltejs/kit';
-import { desc } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { domicilios } from '$lib/server/schema';
-import { delTenant, tenantDe } from '$lib/server/tenancy';
-import { parseMoneyInput, centsToDecimalString } from '$lib/features/finance/domain/money';
-import { resumenDomicilios } from '$lib/modules/domicilios/domain/domicilios';
-
-export const load = async ({ locals }) => {
-	const tid = tenantDe(locals); // ← restaurante de la sesión
-	const rows = await db
-		.select()
-		.from(domicilios)
-		.where(delTenant(domicilios, tid)) // ← filtro obligatorio
-		.orderBy(desc(domicilios.fecha))
-		.limit(200);
-	return { rows, resumen: resumenDomicilios(rows) };
-};
-
+// src/routes/m/domicilios-donjuan/+page.server.ts
 export const actions = {
 	registrar: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const fd = await request.formData();
 		const valor = parseMoneyInput(fd.get('valor')?.toString() ?? '');
 		if (valor === null || valor <= 0) return fail(400, { error: 'Valor inválido.' });
-		await db.insert(domicilios).values({
-			tenantId: tid, // ← obligatorio
+		await db.insert(domiciliosDonjuan).values({
+			tenantId: tid,
 			cliente: fd.get('cliente')?.toString().trim().slice(0, 120) || 'Cliente',
-			repartidor: fd.get('repartidor')?.toString().trim() || null,
-			valorPedido: centsToDecimalString(valor)
+			valor: centsToDecimalString(valor)
 		});
 		return { success: true, message: 'Domicilio registrado.' };
 	}
 };
 ```
 
-## Paso 4 — Registrarlo
+No tienes que agregar permisos ni candados: `hooks.server.ts` usa el registro y bloquea vista y acciones solo con ver la ruta `/m/<codigo>`.
 
-En `src/lib/modules/registry.ts`, agrega una entrada a `ADDONS`:
+## Pasos 5 y 6 — Publicar y activar
 
-```ts
-{ codigo: 'domicilios', nombre: 'Control de domicilios', rutas: ['/domicilios'] }
-```
+1. Haz commit y push; espera el CI en verde y despliega.
+2. Toma un branch de respaldo en Neon y ejecuta `pnpm db:migrate` (crea la tabla y lo agrega al catálogo).
+3. Consola → **ficha del restaurante dueño** → _Activar un módulo_ → aparece como **"★ Domicilios"** (solo en la ficha de ese restaurante).
+   - Si quieres cobrar desde ya, marca "Registrar el cobro del prorrateo".
+4. Desde ahí se cobra como cualquier módulo: aparece en su `/facturacion` y vence y se renueva igual. Si deja de pagar, **solo esa función** se bloquea; el Core sigue funcionando.
 
-**Con esto queda bloqueado automáticamente** (vista y acciones) para quien no lo pague: no hay que tocar `hooks.server.ts`.
+## Cuatro capas que garantizan la exclusividad
 
-## Paso 5 — Menú
+| Capa               | Dónde                             | Qué impide                                                                                                                                        |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Registro        | `registry.ts` → `exclusivoDe`     | La ruta responde **404** a cualquier otro restaurante (vista y POST) y no aparece en su menú                                                      |
+| 2. Catálogo        | `/modulos` y fichas de la consola | No se le lista ni ofrece a nadie más                                                                                                              |
+| 3. Lógica de cobro | `activarModulo()`                 | Rechaza activarlo a otro restaurante aunque se manipule el formulario                                                                             |
+| 4. Base de datos   | Migración `0002`: CHECK + trigger | **Aunque alguien lo intente por SQL o un script**, Postgres rechaza suscribir a otro restaurante, mover la suscripción o volver público el módulo |
 
-En `src/routes/+layout.svelte`, agrega el ítem al grupo que corresponda:
+Probado en `tests/billing.test.ts` (reglas de acceso y menú) y en `tests/migration.test.ts` (_trigger_ de la base).
 
-```ts
-{ name: 'Domicilios', path: '/domicilios', href: resolve('/domicilios'), icon: Bike }
-```
+## ¿Y si después otro cliente quiere lo mismo?
 
-El candado 🔒 aparece solo si el restaurante no lo tiene. Si solo el Jefe debe verlo, no hay que hacer nada (el Jefe tiene `'*'`). Si los cajeros también deben usarlo, agrega `'/domicilios'` a su política en `src/lib/auth/access.ts`.
+Tienes dos caminos:
 
-## Paso 6 — Probar el aislamiento
+- **Venderle uno igual** como exclusivo suyo: generas otro módulo y copias la lógica (cada cliente evoluciona por su lado).
+- **Volverlo un add-on general**: mueve su entrada de `EXCLUSIVOS` a `ADDONS`, cambia la ruta a una fija y, con una migración, quita `exclusivo_tenant_id` y márcalo `publico = true`. El primer cliente lo conserva con su precio pactado.
 
-Agrega la ruta al mapa `RUTAS` de `tests/tenant-isolation.test.ts` (y un intento de acción con ids del otro restaurante si tiene editar/borrar). Corre:
+## ¿Y si el cliente quiere cambiar algo del esqueleto (Core)?
 
-```bash
-pnpm lint && pnpm check && pnpm vitest run && pnpm build
-```
+Primero pregúntate: **¿le sirve a todos?**
 
-## Paso 7 — Publicar y vender
-
-1. Respaldo → `pnpm db:migrate` (crea la tabla y lo agrega al catálogo) → despliegue.
-2. En la consola → ficha del restaurante → **Activar un módulo** → "Control de domicilios" (con prorrateo si es a mitad de ciclo).
-3. Si es **a medida**, márcalo `publico = false`: no aparece en `/modulos` para otros clientes, pero tú puedes activarlo a quien lo pague.
-
-## ¿Y si el cliente quiere cambiar algo del Core?
-
-Pregúntate primero: **¿le sirve a todos?**
-
-- **Sí** → mejóralo en el Core para todos (todos los clientes ganan, tú mantienes una sola versión).
-- **No** → hazlo módulo. Si necesita "engancharse" a un flujo del Core (p. ej. al cerrar un turno), el patrón es que el módulo **lea** los datos del Core (turnos, gastos) por su cuenta, no que el Core llame al módulo.
+- **Sí** → mejóralo en el Core, para todos. Mantienes una sola versión y todos ganan.
+- **No** → hazlo función exclusiva. Si necesita datos del Core (turnos, gastos, inventario), la función **los lee** por su cuenta. El Core **nunca** depende de una función exclusiva, por eso actualizar el esqueleto no rompe lo que hiciste a medida.

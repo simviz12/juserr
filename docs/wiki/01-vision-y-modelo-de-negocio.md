@@ -19,7 +19,15 @@ MesaCapital convierte cada cierre de turno en una **auditoría**: a partir del i
 | Restaurante con varios empleados | No sabe si gana plata                              | Core + Finanzas avanzadas + Estado de Resultados |
 | Dueño con varios locales         | Necesita consolidar                                | Core por local (multi-sede está en el roadmap)   |
 
-## Cómo se cobra: SaaS mensual Core + add-ons
+## El modelo en una frase
+
+> **Un esqueleto (Core) igual para todos + funciones que cada restaurante pide y que son SOLO suyas.**
+
+1. Todos los restaurantes usan el mismo **Core** y pagan su mensualidad.
+2. Cuando un restaurante necesita algo propio, **se lo construyes como función exclusiva**: solo él la ve y la usa, y se la cobras cada mes con un precio pactado con él ([página 7](07-como-agregar-un-modulo.md)).
+3. Si algo le sirve a muchos, lo vendes como **add-on general**.
+
+## Cómo se cobra: SaaS mensual Core + add-ons + funciones exclusivas
 
 ```
 Mensualidad del restaurante = Plan Core + Σ módulos adicionales contratados
@@ -45,7 +53,7 @@ Mensualidad del restaurante = Plan Core + Σ módulos adicionales contratados
 
 - **Ingreso recurrente predecible (MRR)**: la consola lo calcula en tiempo real.
 - **Ticket que crece con el cliente**: empieza con Core y sube a medida que el restaurante madura.
-- **Desarrollos a medida rentables**: un flujo especial para un cliente se construye como módulo, se cobra mensual y no rompe a los demás (ver [página 7](07-como-agregar-un-modulo.md)).
+- **Desarrollos a medida rentables y exclusivos**: lo que pide un cliente se construye como **función exclusiva** (`pnpm modulo:nuevo`). Solo él la ve, se cobra mensual y no afecta a los demás (ver [página 7](07-como-agregar-un-modulo.md)).
 - **Bajo costo marginal**: todos los clientes comparten la misma aplicación y la misma base de datos.
 
 ## Lo que el producto NO es (para venderlo bien)
