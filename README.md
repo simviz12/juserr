@@ -4,6 +4,8 @@ Plataforma SaaS multi-restaurante para el control de caja por turno, inventario 
 
 **Modelo de negocio:** suscripción mensual por restaurante = **Plan Core** + **módulos adicionales** que cada cliente contrata por separado.
 
+> 📚 **Documentación completa:** [`docs/wiki/`](docs/wiki/README.md) — arquitectura, base de datos, seguridad, facturación, fórmulas del producto, cómo agregar módulos, operación diaria y la **guía de despliegue en AWS**.
+
 ---
 
 ## 💼 Modelo SaaS: Core + módulos
