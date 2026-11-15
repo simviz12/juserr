@@ -16,7 +16,8 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			adapter: isVercel ? vercelAdapter() : nodeAdapter()
+			// Runtime fijo: Vercel no debe elegir una versión de Node que el adaptador no soporte.
+			adapter: isVercel ? vercelAdapter({ runtime: 'nodejs22.x' }) : nodeAdapter()
 		})
 	]
 });
