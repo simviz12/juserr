@@ -25,12 +25,17 @@ juserr/
 │   ├── lib/
 │   │   ├── auth/access.ts           ← Política de roles (isomórfica: servidor + menú)
 │   │   ├── server/                  ← SOLO servidor (nunca llega al navegador)
-│   │   │   ├── db.ts                ← Conexión a Postgres
+│   │   │   ├── db.ts                ← Conexión a Postgres (con timeout por consulta)
 │   │   │   ├── schema.ts            ← Todas las tablas
 │   │   │   ├── tenancy.ts           ← tenantDe() / delTenant() / derechosDe()
+│   │   │   ├── guards.ts            ← exigirAdminPlataforma() / exigirModulo() (defensa en profundidad)
+│   │   │   ├── actions.ts           ← protegerAcciones(): errores de form actions → fail() con código
+│   │   │   ├── log.ts               ← Logger JSON estructurado
+│   │   │   ├── pg-errors.ts         ← Detecta violaciones de únicos y códigos de Postgres
 │   │   │   ├── auth.ts              ← Sesiones de restaurante
 │   │   │   ├── platform-auth.ts     ← Sesiones de la consola del dueño
-│   │   │   ├── login-throttle.ts    ← Freno de fuerza bruta
+│   │   │   ├── totp.ts              ← Segundo factor de la consola
+│   │   │   ├── login-throttle.ts    ← Freno de fuerza bruta (en Postgres)
 │   │   │   ├── seed*.ts, reset-counts.ts, scripts/tenant-cli.ts  ← Scripts por restaurante
 │   │   ├── modules/
 │   │   │   ├── registry.ts          ← Qué rutas pertenecen a qué módulo + regla de acceso
@@ -40,7 +45,7 @@ juserr/
 │   │   │   └── server.ts            ← Pagos, activaciones, alta de restaurantes
 │   │   ├── features/                ← CORE por dominio
 │   │   │   ├── finance/             ← dinero (money.ts), periodos, métricas, dashboard, PDF
-│   │   │   ├── shifts/              ← cierre de turno (dominio puro + acción del servidor)
+│   │   │   ├── shifts/              ← cierre de turno (dominio puro, acción del servidor, ShiftHistory, insumos especiales)
 │   │   │   └── business/            ← configuración del negocio y líneas gastronómicas
 │   │   ├── components/              ← UI reutilizable (Card, Badge, DataTable, gráficos…)
 │   │   └── utils/                   ← formato, fracciones, exportación, navegación
@@ -51,11 +56,11 @@ juserr/
 │       ├── facturacion/ modulos/    ← El restaurante ve su plan y pide módulos
 │       ├── plataforma/              ← Consola del dueño (login propio)
 │       └── health/                  ← Sonda de salud para AWS
-├── migrations/                      ← SQL versionado (0001_multitenant.sql…)
-├── scripts/                         ← migrate.mjs, create-platform-admin.mjs, demo-data.mjs
+├── migrations/                      ← SQL versionado (0000_base … 0003_integridad_y_seguridad)
+├── scripts/                         ← migrate.mjs, create-platform-admin.mjs, plataforma-totp.mjs, demo-data.mjs, nuevo-modulo.mjs
 ├── tests/                           ← Vitest (unitarias, aislamiento, migración)
 ├── docs/wiki/                       ← Esta wiki
-├── Dockerfile · .github/workflows/ci.yml
+├── Dockerfile · .github/workflows/ci.yml · .github/dependabot.yml
 ```
 
 ## Principios de diseño (y por qué)
@@ -120,10 +125,10 @@ Están separados a propósito: comprometer una cuenta de restaurante nunca da ac
 
 ## Cachés en memoria (importante para escalar)
 
-| Caché           | Dónde               | Duración | Efecto                                                                                                                           |
-| --------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Sesiones        | `auth.ts`           | 60 s     | Un usuario borrado o con rol cambiado se invalida al instante en la instancia que hizo el cambio; en otras instancias hasta 60 s |
-| Derechos (plan) | `tenancy.ts`        | 30 s     | Un pago se refleja al instante en la instancia de la consola y en ≤30 s en las demás                                             |
-| Freno de login  | `login-throttle.ts` | 15 min   | Cada instancia cuenta sus propios intentos                                                                                       |
+| Caché           | Dónde                  | Duración                  | Efecto                                                                                                                                                                                     |
+| --------------- | ---------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sesiones        | `auth.ts`              | 5 s (máx. 5.000 entradas) | Un usuario borrado, con rol cambiado o que cerró sesión se invalida al instante en la instancia que hizo el cambio; en otras instancias en ≤ 5 s. Además, toda sesión caduca a los 90 días |
+| Derechos (plan) | `tenancy.ts`           | 10 s (máx. 5.000)         | Un pago o una suspensión se refleja al instante en la instancia de la consola y en ≤ 10 s en las demás                                                                                     |
+| Freno de login  | tabla `intentos_login` | ventana de 15 min         | **Compartido** por todas las instancias (Postgres)                                                                                                                                         |
 
-Con **1–2 instancias** esto es perfecto. Si creces a muchas instancias, mueve estas cachés a Redis (ElastiCache). Está en el roadmap ([página 11](11-checklist-salida-y-venta.md)).
+Las dos cachés en memoria son cortas y acotadas, así que funcionan bien también en Vercel con muchas instancias. Si algún día necesitas invalidación instantánea global, muévelas a Redis (ElastiCache/Upstash). Está en el roadmap ([página 11](11-checklist-salida-y-venta.md)).

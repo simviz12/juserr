@@ -60,7 +60,7 @@ Rama `auditoria/endurecimiento`. Auditoría completa de seguridad, datos, rendim
    rm package-lock.json                                             # el proyecto usa pnpm
    ```
    `@sveltejs/kit` solo corrige sus advisories en **3.x** (cambio mayor): planificarlo aparte con pruebas. Los dos más relevantes (redirección en `use:enhance` y XSS en páginas prerenderizadas) tienen exposición baja aquí: no hay páginas prerenderizadas ni remote functions.
-2. **Aplicar `0003` en producción:** respaldo → `pnpm db:migrate:estado` → `pnpm db:migrate`. Revisar si aparece algún `WARNING` de duplicados.
+2. **Aplicar `0003` en producción y desplegar en la misma ventana.** Ya hay respaldo (`respaldos/respaldo-produccion-antes-0003-20261116-1916.json`) y se verificó que producción **no tiene duplicados** de insumos ni de cierres de caja, así que todos los índices únicos se crearán. Pasos: branch en Neon → `pnpm db:migrate` → merge a `main` (Vercel despliega).
 3. **Proxy inverso (adapter-node):** definir `ADDRESS_HEADER=X-Forwarded-For` y `XFF_DEPTH=1` para que el freno de login vea la IP real.
-4. **Activar TOTP** para cada admin y luego `PLATFORM_REQUIRE_TOTP=1`.
+4. **Consola de plataforma:** producción **no tiene ningún operador** (nadie puede entrar a `/plataforma`). Tras el despliegue: `pnpm plataforma:admin <correo> "<Nombre>" --totp` → registrar el secreto en la app → `pnpm plataforma:totp --probar <correo> <código>` → `PLATFORM_REQUIRE_TOTP=1` en Vercel (Settings → Environment Variables) y redeploy.
 5. **Refactors grandes, a decidir:** pizza como una línea genérica más (migra datos reales), RLS de Postgres como segunda barrera, retirar `saas_suscripciones`, reorganizar carpetas `features/` y `modules/`.

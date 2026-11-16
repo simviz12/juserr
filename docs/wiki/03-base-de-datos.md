@@ -14,8 +14,9 @@ tenants ◄───────────────────────
   ├── solicitudes_modulo ──► modulos_catalogo    ├─ turnos ◄── transacciones_turno, gastos, cierres_linea, ventas_items
   └── auditoria_plataforma ──► platform_admins   ├─ lineas_gastronomicas ◄── items_linea
 platform_admins ◄── platform_sesiones            ├─ cierres_dia, cortes_semanales
-                                                 ├─ movimientos_contables (Estado de Resultados)
-_migraciones (historial del runner)              └─ bebidas ◄── movimientos_bebidas
+intentos_login (freno de login compartido)       ├─ movimientos_contables (Estado de Resultados)
+_migraciones (historial del runner)              ├─ referencias_pago (comprobantes Nequi usados)
+                                                 └─ bebidas ◄── movimientos_bebidas
 ```
 
 ## Tablas de plataforma
@@ -27,7 +28,8 @@ _migraciones (historial del runner)              └─ bebidas ◄── movimi
 | `suscripciones_modulo`                  | Qué tiene cada restaurante             | PK (`tenant_id`, `modulo`), `estado` (`activa`/`cancelada`), `vigente_hasta` (último día pagado), `precio_mensual_cents` (precio pactado)     |
 | `pagos`                                 | Pagos recibidos (**solo se insertan**) | `monto_cents`, `detalle` (JSON: módulo, desde, hasta, centavos), `metodo`, `referencia`, `registrado_por`                                     |
 | `solicitudes_modulo`                    | Pedidos desde `/modulos`               | `estado` (`pendiente`/`atendida`/`descartada`)                                                                                                |
-| `platform_admins` / `platform_sesiones` | Operadores de la consola               | `email` único, hash Argon2                                                                                                                    |
+| `platform_admins` / `platform_sesiones` | Operadores de la consola               | `email` único, hash Argon2, `totp_secret` (segundo factor; null = sin TOTP)                                                                   |
+| `intentos_login`                        | Freno de fuerza bruta compartido       | `clave` (PK: `ip:…`, `cuenta:…`, `ipcuenta:…`), `fallos`, `desde` (inicio de la ventana de 15 min)                                            |
 | `auditoria_plataforma`                  | Bitácora de la consola                 | `accion`, `detalle` JSON, quién y cuándo                                                                                                      |
 | `_migraciones`                          | Historial del runner                   | `nombre`, `checksum`, `aplicada_en`                                                                                                           |
 
@@ -40,36 +42,37 @@ Restricciones `CHECK` en la base (no solo en el código): el código de restaura
 | Tabla           | Notas                                                                                                                                                                         |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `usuarios`      | `rol`: `jefe`, `bodeguero`, `cajero`, `empleado`. **Único por restaurante**: índice único `(tenant_id, lower(nombre))`, así dos restaurantes pueden tener cada uno su "admin" |
-| `sesiones`      | Id = SHA-256 del token de la cookie (el token nunca se guarda en claro). Se liga al usuario, que ya tiene tenant                                                              |
+| `sesiones`      | Id = SHA-256 del token de la cookie (el token nunca se guarda en claro). Se liga al usuario, que ya tiene tenant. `created_at` = base de la caducidad absoluta (90 días)      |
 | `rubros_config` | Una fila por restaurante (índice único `tenant_id`): nombre comercial, tipo de negocio, líneas activas                                                                        |
 
 ### Inventario
 
-| Tabla                            | Notas                                                                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `categorias`                     | Agrupan productos                                                                                                              |
-| `productos`                      | Insumos. `stock_actual` (real, admite fracciones: ½ masa), `stock_minimo` (alertas), `precio_costo` (costo promedio ponderado) |
-| `movimientos_inventario`         | Cada compra (`entrada`) o conteo (`ajuste`): cantidad, costo unitario y total                                                  |
-| `bebidas`, `movimientos_bebidas` | Heredadas de una versión anterior; hoy las bebidas se manejan como productos                                                   |
+| Tabla                            | Notas                                                                                                                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `categorias`                     | Agrupan productos                                                                                                                                                                             |
+| `productos`                      | Insumos. `stock_actual` (`numeric(12,3)`, admite fracciones: ½ masa), `stock_minimo` (alertas), `precio_costo` (costo promedio ponderado). **Nombre único por restaurante** (`lower(nombre)`) |
+| `movimientos_inventario`         | Cada compra (`entrada`) o conteo (`ajuste`): cantidad, costo unitario y total                                                                                                                 |
+| `bebidas`, `movimientos_bebidas` | Heredadas de una versión anterior; hoy las bebidas se manejan como productos                                                                                                                  |
 
 ### Operación del turno
 
-| Tabla                                                              | Notas                                                                                                                             |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `turnos`                                                           | Un cierre de turno: `monto` (efectivo contado), `transferencias`, conteos de masas y porciones, `porciones_vendidas_calculado`    |
-| `transacciones_turno`                                              | Desglose por plataforma (Nequi) + `referencias` de comprobantes (antifraude)                                                      |
-| `gastos`                                                           | Gastos pagados con la caja del turno. `categoria` (null = clasificación automática)                                               |
-| `pizza_sabores` / `pizza_ruedas` / `pizza_sobras` / `pizza_ventas` | Control de pizzas por sabor                                                                                                       |
-| `lineas_gastronomicas`                                             | Líneas (pizza, chuzo, burger, lasaña, carne). Único `(tenant_id, codigo)`. `producto_control_id` = insumo que se cuenta al cierre |
-| `items_linea`                                                      | Platos de cada línea: precio de venta, costo, `unidades_control` (p. ej. 1 pan por hamburguesa)                                   |
-| `cierres_linea`                                                    | Conciliación por línea en cada turno (inicial, sobrantes, mermas, consumidas, venta esperada)                                     |
-| `ventas_items`                                                     | Desglose opcional de platos vendidos por turno                                                                                    |
+| Tabla                                                              | Notas                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `turnos`                                                           | Un cierre de turno: `monto` (efectivo contado), `transferencias`, conteos de masas y porciones, `porciones_vendidas_calculado`. `clave_idempotencia` (única por restaurante): un doble envío del formulario no crea dos turnos |
+| `transacciones_turno`                                              | Desglose por plataforma (Nequi) + `referencias` de comprobantes (texto, tal como lo escribió el cajero)                                                                                                                        |
+| `referencias_pago`                                                 | Un comprobante por fila, PK `(tenant_id, referencia)`: la base rechaza usar dos veces el mismo comprobante                                                                                                                     |
+| `gastos`                                                           | Gastos pagados con la caja del turno. `categoria` (null = clasificación automática)                                                                                                                                            |
+| `pizza_sabores` / `pizza_ruedas` / `pizza_sobras` / `pizza_ventas` | Control de pizzas por sabor                                                                                                                                                                                                    |
+| `lineas_gastronomicas`                                             | Líneas (pizza, chuzo, burger, lasaña, carne). Único `(tenant_id, codigo)`. `producto_control_id` = insumo que se cuenta al cierre                                                                                              |
+| `items_linea`                                                      | Platos de cada línea: precio de venta, costo, `unidades_control` (p. ej. 1 pan por hamburguesa)                                                                                                                                |
+| `cierres_linea`                                                    | Conciliación por línea en cada turno (inicial, sobrantes, mermas, consumidas, venta esperada)                                                                                                                                  |
+| `ventas_items`                                                     | Desglose opcional de platos vendidos por turno                                                                                                                                                                                 |
 
 ### Finanzas
 
 | Tabla                   | Notas                                                                                                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `cierres_dia`           | Cierre de caja diario (consolida turnos de una jornada)                                                                                                                        |
+| `cierres_dia`           | Cierre de caja diario (consolida turnos de una jornada). **Uno por día** (índice único `(tenant_id, fecha::date)`)                                                             |
 | `cortes_semanales`      | Efectivo esperado vs. contado en un rango, con la diferencia                                                                                                                   |
 | `movimientos_contables` | Movimientos manuales del Estado de Resultados (arriendo, nómina, impuestos, devoluciones, otros ingresos). **Se anulan, no se borran** (`estado`, `anulado_por`, `anulado_en`) |
 
@@ -79,11 +82,30 @@ Restricciones `CHECK` en la base (no solo en el código): el código de restaura
 
 ## Índices
 
-Casi toda consulta es "de este restaurante, en este rango de fechas", por eso los índices principales son **`(tenant_id, fecha)`** en `turnos`, `gastos`, `movimientos_inventario`, `transacciones_turno`, `pizza_ventas`, `cierres_dia`, `cortes_semanales`, `cierres_linea`, `ventas_items` y `movimientos_contables`. Los catálogos tienen índice por `tenant_id`.
+Casi toda consulta es "de este restaurante, en este rango de fechas", por eso los índices principales son **`(tenant_id, fecha)`** en `turnos`, `gastos`, `movimientos_inventario`, `transacciones_turno`, `pizza_ventas`, `cierres_dia`, `cortes_semanales`, `cierres_linea`, `ventas_items`, `movimientos_contables` y `movimientos_bebidas`. Los catálogos tienen índice por `tenant_id`.
+
+Desde `0003` también hay índices por **turno** (`gastos`, `transacciones_turno`, `pizza_ruedas`, `pizza_sobras`, `pizza_ventas`), `(tenant_id, id)` en `turnos` (último turno), `sesiones.user_id`, `movimientos_inventario.producto_id` y `auditoria_plataforma (tenant_id, created_at)`.
+
+### Restricciones únicas que evitan duplicados
+
+| Índice                            | Evita                                       |
+| --------------------------------- | ------------------------------------------- |
+| `turnos_tenant_clave_uq`          | Dos turnos por un doble clic                |
+| `referencias_pago` (PK)           | Un comprobante Nequi en dos turnos          |
+| `cierres_dia_tenant_dia_uq`       | Dos cierres de caja del mismo día           |
+| `solicitudes_modulo_pendiente_uq` | Dos solicitudes pendientes del mismo módulo |
+| `productos_tenant_nombre_uq`      | Dos "Masa" creadas en paralelo              |
+
+### Concurrencia
+
+- **Bodega:** una compra o conteo es **una sola sentencia** que bloquea la fila (`FOR UPDATE`), calcula sobre el stock vigente y registra el movimiento.
+- **Cierre de turno:** el stock se **descuenta** (`stock - usado`) en lugar de fijar un valor, y se actualiza **por id** (antes un `ILIKE 'Pizza%'` tocaba todos los productos "Pizza…").
+- **Pagos:** bloqueo optimista; si otro pago cambió la vigencia entretanto, el lote entero se revierte y se pide recargar.
 
 ## Dinero y fechas: reglas de oro
 
-- **Dinero en la base:** `numeric(10,2)` / `numeric(14,2)` (exacto). En la plataforma de cobro: `bigint` en **centavos**.
+- **Dinero en la base:** `numeric(14,2)` (exacto; antes `numeric(10,2)`, con tope de ~100 millones). En la plataforma de cobro: `bigint` en **centavos**.
+- **Cantidades:** `numeric(12,3)` (antes `real`, que perdía precisión). Drizzle las entrega como `number` (`mode: 'number'`). Ojo: un `SUM()` en SQL crudo devuelve **texto**; conviértelo con `toNumber()`.
 - **Dinero en el código:** se convierte a centavos enteros con `toCents()` (`features/finance/domain/money.ts`) antes de sumar. `parseMoneyInput()` entiende `1.250.000`, `35000,50` y `$ 12 000`.
 - **Fechas:** columnas `timestamp` guardadas en UTC. El **día de negocio** va de 04:00 a 04:00 hora Colombia (UTC-5): un turno cerrado a la 1 a.m. pertenece al día anterior (`businessDayKey()` en `period.ts`).
 - **Vigencias de módulos:** columnas `date` ("pagado hasta", inclusive), comparadas con el día de negocio de hoy.
@@ -92,12 +114,21 @@ Casi toda consulta es "de este restaurante, en este rango de fechas", por eso lo
 
 - Archivos SQL en `migrations/NNNN_nombre.sql`, aplicados con `pnpm db:migrate` (`scripts/migrate.mjs`).
 - Cada archivo corre en **una transacción** y se registra con su **checksum**. Si alguien edita una migración ya aplicada, el runner se detiene: **nunca edites una migración aplicada, crea una nueva**.
-- `0001_multitenant.sql` es la que convirtió la base de un solo restaurante en multi-restaurante (detalle en [la página 12](12-historial-de-cambios.md)).
-- `tests/migration.test.ts` ensaya cada migración sobre `tests/fixtures/legacy-schema.sql` (copia del esquema de producción anterior) y verifica que el resultado sea **idéntico** a `schema.ts`.
+- El runner toma un **candado** (`pg_advisory_lock`): dos despliegues simultáneos no migran a la vez. El checksum es igual en Windows y Linux (ignora CRLF/LF).
+
+| Archivo                           | Qué hace                                                                                                                                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0000_base.sql`                   | Esquema base mono-restaurante. **Solo actúa en una base vacía**: permite crear una base nueva con `pnpm db:migrate` y no toca producción                                                                           |
+| `0001_multitenant.sql`            | Convirtió la base de un solo restaurante en multi-restaurante (detalle en [la página 12](12-historial-de-cambios.md))                                                                                              |
+| `0002_modulos_exclusivos.sql`     | Módulos exclusivos por restaurante (trigger)                                                                                                                                                                       |
+| `0003_integridad_y_seguridad.sql` | Tipos exactos, índices, únicos anti-duplicados, `referencias_pago`, `intentos_login`, TOTP, caducidad de sesiones. Si encuentra insumos o cierres duplicados **no borra nada**: avisa (WARNING) y omite ese índice |
+
+- `tests/migration.test.ts` ensaya todas las migraciones sobre `tests/fixtures/legacy-schema.sql` (copia del esquema de producción anterior) **y sobre una base vacía**, y verifica que ambas queden **idénticas** a `schema.ts`.
+- Ya no existen `drizzle/`, `migrate_tables.mjs` ni `scripts/migrate-*.mjs`. `drizzle-kit` solo se usa para inspeccionar; lo que genere va a `.drizzle/` (ignorado) para no crear un segundo historial.
 
 ### Cómo cambiar el esquema de ahora en adelante
 
 1. Edita `schema.ts`.
-2. Escribe `migrations/0002_lo-que-sea.sql` a mano (aditivo e idempotente: `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`).
-3. Corre `pnpm vitest run tests/migration.test.ts`. Si el esquema y la migración no coinciden, la prueba lo dice. Para incluir `0002`, la prueba debe aplicar las migraciones en orden (amplíala cuando agregues la primera nueva).
-4. En producción: respaldo → `pnpm db:migrate` → despliegue.
+2. Escribe `migrations/0004_lo-que-sea.sql` a mano (aditivo e idempotente: `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`). Truco: para ver el SQL exacto que espera la prueba, compara con `generateMigration()` de `drizzle-kit/api` entre el esquema anterior y el nuevo.
+3. Corre `pnpm vitest run tests/migration.test.ts` (aplica todas las migraciones en orden). Si el esquema y la migración no coinciden, la prueba lo dice.
+4. En producción: respaldo → `pnpm db:migrate` → despliegue **en la misma ventana** si la migración cambia tipos o tablas que el código viejo usa.

@@ -70,17 +70,20 @@ Pasar a **RDS/Aurora** es posible más adelante; requiere cambiar `src/lib/serve
 
 ## 3. Variables de entorno de producción
 
-| Variable             | Valor                                                                       | Por qué                                                                                                                                            |
-| -------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`       | cadena de Neon                                                              | Conexión a la base (**secreto**)                                                                                                                   |
-| `ORIGIN`             | `https://app.mesacapital.co`                                                | SvelteKit valida el origen de los formularios (protección CSRF). **Sin esto, los formularios fallan detrás del balanceador**                       |
-| `ADDRESS_HEADER`     | `X-Forwarded-For`                                                           | IP real del cliente. **Sin esto, el freno de fuerza bruta vería a todos como la IP del balanceador y 5 errores de cualquiera bloquearían a todos** |
-| `XFF_DEPTH`          | `1`                                                                         | El balanceador agrega 1 IP. Si pones CloudFront delante, usa `2`                                                                                   |
-| `KEEP_ALIVE_TIMEOUT` | `65` (segundos)                                                             | Debe ser **mayor** que el tiempo de inactividad del balanceador (60 s). Si no, aparecen **errores 502 intermitentes**                              |
-| `HEADERS_TIMEOUT`    | `66` (segundos)                                                             | Debe ser mayor que `KEEP_ALIVE_TIMEOUT`                                                                                                            |
-| `PAGO_INSTRUCCIONES` | `Nequi 300 … \| Bancolombia ahorros … \| Envía el comprobante por WhatsApp` | Lo que ve el cliente en `/facturacion`                                                                                                             |
-| `SOPORTE_WHATSAPP`   | `573001234567`                                                              | Botón "Enviar comprobante por WhatsApp"                                                                                                            |
-| `NODE_ENV`           | `production`                                                                | Ya viene en la imagen                                                                                                                              |
+| Variable                | Valor                                                                       | Por qué                                                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | cadena de Neon                                                              | Conexión a la base (**secreto**)                                                                                                                   |
+| `ORIGIN`                | `https://app.mesacapital.co`                                                | SvelteKit valida el origen de los formularios (protección CSRF). **Sin esto, los formularios fallan detrás del balanceador**                       |
+| `ADDRESS_HEADER`        | `X-Forwarded-For`                                                           | IP real del cliente. **Sin esto, el freno de fuerza bruta vería a todos como la IP del balanceador y 5 errores de cualquiera bloquearían a todos** |
+| `XFF_DEPTH`             | `1`                                                                         | El balanceador agrega 1 IP. Si pones CloudFront delante, usa `2`                                                                                   |
+| `KEEP_ALIVE_TIMEOUT`    | `65` (segundos)                                                             | Debe ser **mayor** que el tiempo de inactividad del balanceador (60 s). Si no, aparecen **errores 502 intermitentes**                              |
+| `HEADERS_TIMEOUT`       | `66` (segundos)                                                             | Debe ser mayor que `KEEP_ALIVE_TIMEOUT`                                                                                                            |
+| `PAGO_INSTRUCCIONES`    | `Nequi 300 … \| Bancolombia ahorros … \| Envía el comprobante por WhatsApp` | Lo que ve el cliente en `/facturacion`                                                                                                             |
+| `SOPORTE_WHATSAPP`      | `573001234567`                                                              | Botón "Enviar comprobante por WhatsApp"                                                                                                            |
+| `NODE_ENV`              | `production`                                                                | Ya viene en la imagen                                                                                                                              |
+| `PLATFORM_REQUIRE_TOTP` | `1`                                                                         | La consola exige segundo factor a **todos** los operadores. Ponlo **después** de activar y probar el TOTP de cada uno (`pnpm plataforma:totp`)     |
+| `DB_TIMEOUT_MS`         | `10000` (opcional)                                                          | Tiempo máximo por consulta a Neon. Evita peticiones colgadas                                                                                       |
+| `LOG_LEVEL`             | `info` (opcional)                                                           | Nivel mínimo de los logs JSON (`debug`, `info`, `warn`, `error`)                                                                                   |
 
 ## 4. Construir y probar la imagen en tu computador (ambas rutas)
 
@@ -144,8 +147,11 @@ Desde tu computador (con el `.env` apuntando a producción **solo en este paso**
 ```bash
 pnpm db:migrate:estado
 pnpm db:migrate
-pnpm plataforma:admin tu@correo.com "Tu Nombre"
+pnpm plataforma:admin tu@correo.com "Tu Nombre" --totp
+pnpm plataforma:totp --probar tu@correo.com <código de la app>
 ```
+
+> El runner toma un candado en la base: si dos despliegues migran a la vez, el segundo espera. Si una migración cambia tipos o tablas que el código viejo usa (como `0003`), **migra y despliega en la misma ventana**: primero la migración, inmediatamente después el código nuevo.
 
 ### 5.6 Limitaciones de la Ruta A (para saber cuándo pasar a la B)
 
@@ -291,7 +297,7 @@ aws ecs run-task --cluster mesacapital --launch-type FARGATE \
 
 Revisa el resultado en el log group (`✓ 0001_multitenant.sql aplicada`). Si falla, la migración se revierte completa.
 
-Para crear tu usuario de la consola, hazlo desde tu computador (`pnpm plataforma:admin`), porque pide la contraseña por la terminal.
+Para crear tu usuario de la consola, hazlo desde tu computador (`pnpm plataforma:admin … --totp`), porque pide la contraseña por la terminal. Después registra el secreto en tu app autenticadora, pruébalo con `pnpm plataforma:totp --probar` y agrega `PLATFORM_REQUIRE_TOTP=1` a la tarea.
 
 ### 6.12 Firewall (AWS WAF) — asociado al ALB
 

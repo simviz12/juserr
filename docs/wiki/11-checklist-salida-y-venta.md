@@ -8,7 +8,9 @@ Marca cada punto antes de cobrarle al primer cliente. Las secciones legales y tr
 - [ ] Infraestructura de AWS montada ([página 10](10-despliegue-aws.md)), con HTTPS y un dominio propio.
 - [ ] Variables configuradas: `DATABASE_URL`, **`ORIGIN`**, **`ADDRESS_HEADER=X-Forwarded-For`**, `XFF_DEPTH`, `KEEP_ALIVE_TIMEOUT=65`, `HEADERS_TIMEOUT=66`, `PAGO_INSTRUCCIONES` y `SOPORTE_WHATSAPP`.
 - [ ] Migración aplicada (`pnpm db:migrate:estado` sin pendientes) **después** de tomar el branch de respaldo.
-- [ ] Operador de la consola creado con una contraseña fuerte (12+ caracteres) guardada en un gestor de contraseñas.
+- [ ] Operador de la consola creado con una contraseña fuerte (12+ caracteres) guardada en un gestor de contraseñas, **con segundo factor** (`--totp`) probado y `PLATFORM_REQUIRE_TOTP=1` configurado.
+- [ ] Migraciones `0000`–`0003` aplicadas; si `0003` mostró algún WARNING de duplicados, revisado y resuelto.
+- [ ] `pnpm audit --prod` sin vulnerabilidades críticas (el CI lo exige) y las altas revisadas.
 - [ ] `/health` en verde y monitoreado (Route 53 Health Check o un servicio de disponibilidad).
 - [ ] Alarmas de 5xx, de instancia no saludable y de CPU con aviso a tu correo.
 - [ ] Respaldo semanal a S3 funcionando y **una restauración probada**.
@@ -33,13 +35,16 @@ Marca cada punto antes de cobrarle al primer cliente. Las secciones legales y tr
 
 - [ ] No ve ningún dato de otros restaurantes.
 - [ ] Los add-ons aparecen con 🔒 y la URL directa lo manda a `/modulos`.
-- [ ] Solicita un módulo → aparece en la consola → actívalo con prorrateo → se abre en ≤30 s.
+- [ ] Solicita un módulo → aparece en la consola → actívalo con prorrateo → se abre en ≤10 s.
 - [ ] Registra un pago → "pagado hasta" avanza un mes.
 - [ ] Suspéndelo → solo ve Facturación. Cancélalo al terminar.
 
 **Seguridad**
 
-- [ ] 5 contraseñas malas → bloqueo de 15 minutos **solo para esa IP/usuario**. Desde otra red, otro usuario sigue entrando: eso confirma que `ADDRESS_HEADER` está bien configurado.
+- [ ] 6 contraseñas malas → bloqueo de 15 minutos **solo para esa IP + usuario**. Desde otra red, otro usuario sigue entrando: eso confirma que `ADDRESS_HEADER` está bien configurado.
+- [ ] `/pl%61taforma` con la sesión de un restaurante redirige al login de la consola (no muestra datos).
+- [ ] La respuesta de cualquier página trae `Content-Security-Policy` y `Strict-Transport-Security` (pestaña Red del navegador).
+- [ ] Doble clic en "Cerrar turno" crea **un** solo turno.
 - [ ] `http://` redirige a `https://`.
 
 ## C. Comercial
@@ -65,12 +70,12 @@ Marca cada punto antes de cobrarle al primer cliente. Las secciones legales y tr
 
 ## E. Roadmap recomendado (en orden de impacto)
 
-| #   | Mejora                                                       | Por qué                                                                                                                      |
-| --- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Pasarela de pago automática (Wompi/Mercado Pago) con webhook | Cobrar sin intervención manual ([página 5](05-planes-modulos-y-facturacion.md#conectar-una-pasarela-de-pago-siguiente-paso)) |
-| 2   | "Olvidé mi contraseña" (correo o WhatsApp) para el Jefe      | Hoy la recuperación la haces tú                                                                                              |
-| 3   | Errores con contexto (Sentry)                                | Enterarte antes que el cliente                                                                                               |
-| 4   | Registro de clientes autoservicio (prueba gratis sin ti)     | Escalar las ventas                                                                                                           |
-| 5   | Multi-sede (un dueño, varios locales consolidados)           | Ya está en la oferta del plan "Franquicia" de la versión anterior                                                            |
-| 6   | Redis para las cachés (sesiones, plan, freno de login)       | Cuando pases de ~6 instancias                                                                                                |
-| 7   | Exportación completa de los datos del cliente (ZIP)          | Requisito contractual al terminar el servicio                                                                                |
+| #   | Mejora                                                                          | Por qué                                                                                                                      |
+| --- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Pasarela de pago automática (Wompi/Mercado Pago) con webhook                    | Cobrar sin intervención manual ([página 5](05-planes-modulos-y-facturacion.md#conectar-una-pasarela-de-pago-siguiente-paso)) |
+| 2   | "Olvidé mi contraseña" (correo o WhatsApp) para el Jefe                         | Hoy la recuperación la haces tú                                                                                              |
+| 3   | Errores con contexto (Sentry) sobre los logs JSON y el `errorId` que ya existen | Enterarte antes que el cliente                                                                                               |
+| 4   | Registro de clientes autoservicio (prueba gratis sin ti)                        | Escalar las ventas                                                                                                           |
+| 5   | Multi-sede (un dueño, varios locales consolidados)                              | Ya está en la oferta del plan "Franquicia" de la versión anterior                                                            |
+| 6   | Redis para las cachés (sesiones, plan, freno de login)                          | Cuando pases de ~6 instancias                                                                                                |
+| 7   | Exportación completa de los datos del cliente (ZIP)                             | Requisito contractual al terminar el servicio                                                                                |

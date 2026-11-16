@@ -2,17 +2,21 @@
 
 ## Comandos
 
-| Comando                                                 | Para qué                                                                                                   |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                              | Servidor local en `http://localhost:5173`                                                                  |
-| `pnpm db:migrate:estado`                                | Ver qué migraciones están aplicadas y cuáles pendientes                                                    |
-| `pnpm db:migrate`                                       | Aplicar las pendientes (cada una en una transacción)                                                       |
-| `pnpm plataforma:admin <correo> "<Nombre>"`             | Crear un operador de la consola, o cambiarle la contraseña (la pide por la terminal y cierra sus sesiones) |
-| `pnpm db:seed -- --tenant <código> --confirmar`         | **Borra** un restaurante y lo deja con el catálogo inicial (solo para pruebas/capacitación)                |
-| `pnpm db:reset-counts -- --tenant <código> --confirmar` | Deja historial y stock en cero conservando catálogo y usuarios (p. ej. tras capacitar con datos de prueba) |
-| `node scripts/demo-data.mjs --tenant <código>`          | ~70 días de operación de demostración (para mostrar a prospectos); `--remove` la quita                     |
+| Comando                                                 | Para qué                                                                                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                              | Servidor local en `http://localhost:5173`                                                                                                         |
+| `pnpm db:migrate:estado`                                | Ver qué migraciones están aplicadas y cuáles pendientes                                                                                           |
+| `pnpm db:migrate`                                       | Aplicar las pendientes (cada una en una transacción)                                                                                              |
+| `pnpm plataforma:admin <correo> "<Nombre>" [--totp]`    | Crear un operador de la consola, o cambiarle la contraseña (la pide por la terminal y cierra sus sesiones). Con `--totp` activa el segundo factor |
+| `pnpm plataforma:totp --listar`                         | Ver qué operadores tienen segundo factor                                                                                                          |
+| `pnpm plataforma:totp --activar [correo]`               | Activar el segundo factor sin tocar la contraseña (sin correo: a todos los que no lo tengan)                                                      |
+| `pnpm plataforma:totp --probar <correo> <código>`       | Comprobar que la app autenticadora genera el código correcto antes de exigirlo                                                                    |
+| `pnpm plataforma:totp --quitar <correo>`                | Retirar el segundo factor (operador que perdió el teléfono)                                                                                       |
+| `pnpm db:seed -- --tenant <código> --confirmar`         | **Borra** un restaurante y lo deja con el catálogo inicial (solo para pruebas/capacitación)                                                       |
+| `pnpm db:reset-counts -- --tenant <código> --confirmar` | Deja historial y stock en cero conservando catálogo y usuarios (p. ej. tras capacitar con datos de prueba)                                        |
+| `node scripts/demo-data.mjs --tenant <código>`          | ~70 días de operación de demostración (para mostrar a prospectos); `--remove` la quita                                                            |
 
-> Los scripts que borran **exigen** `--tenant` y `--confirmar`. Nunca operan sobre todos los restaurantes.
+> Los scripts que borran **exigen** `--tenant` y `--confirmar`. Nunca operan sobre todos los restaurantes. Con `NODE_ENV=production` también exigen `--permitir-produccion`. Los usuarios que crean reciben una **contraseña aleatoria** que se imprime al final.
 
 ## Rutina del dueño de la plataforma
 
@@ -48,7 +52,7 @@
 
 1. El cliente paga por el medio que configuraste en `PAGO_INSTRUCCIONES` y te envía el comprobante (botón de WhatsApp en su `/facturacion`).
 2. Consola → su ficha → **Registrar pago**: módulos (por defecto todos), meses, método y referencia del comprobante. Si recibiste un monto distinto (descuento), escríbelo en "Monto recibido".
-3. "Pagado hasta" avanza; si estaba en solo lectura, vuelve a funcionar en ≤30 segundos.
+3. "Pagado hasta" avanza; si estaba en solo lectura, vuelve a funcionar en ≤10 segundos. Si dos pagos del mismo restaurante se registran a la vez, el segundo se rechaza con "recarga la página": revisa antes de volver a registrarlo.
 4. Emite tu **factura electrónica** al cliente por la suscripción (ver [página 11](11-checklist-salida-y-venta.md)).
 
 ## Respaldos
@@ -63,11 +67,17 @@
 
 ## Incidentes: qué hacer si…
 
-| Síntoma                              | Primer paso                                                                                                               |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| "No puedo entrar" (un cliente)       | ¿Escribe bien el código? ¿El restaurante está **cancelado**? ¿Está bloqueado por 5 intentos fallidos? (espera 15 minutos) |
-| "No me deja guardar el cierre"       | ¿Está en **solo lectura**? (consola → ficha → estado). Si es así, registra el pago                                        |
-| "No veo el Estado de Resultados"     | ¿Tiene el módulo activo y vigente?                                                                                        |
-| Toda la app responde 502/503         | Revisa `/health`. Si dice `db: error` → estado de Neon. Si no responde → logs de CloudWatch y estado de las tareas de ECS |
-| Pago registrado pero sigue bloqueado | Espera 30 segundos (caché por instancia) o pide al cliente que recargue                                                   |
-| Se aplicó una migración mal          | Restaura el branch de respaldo en Neon y despliega la versión anterior de la imagen                                       |
+| Síntoma                                           | Primer paso                                                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "No puedo entrar" (un cliente)                    | ¿Escribe bien el código? ¿El restaurante está **cancelado**? ¿Está bloqueado por intentos fallidos? (espera 15 minutos o borra sus filas de `intentos_login`) |
+| Un cliente reporta "Código de soporte: …"         | Busca ese código (`errorId`) en los logs: la línea JSON trae ruta, restaurante, usuario y el error completo                                                   |
+| "Este turno ya estaba registrado"                 | Fue un doble envío: el turno se guardó una sola vez. No hay que hacer nada                                                                                    |
+| "El comprobante … ya fue registrado"              | El comprobante Nequi ya se usó en otro turno. Revisa el pantallazo del cliente                                                                                |
+| "No hay conexión con la base de datos" al guardar | Neon no respondió (timeout de 10 s). No se guardó nada; reintentar. Si se repite, revisa `/health` y el estado de Neon                                        |
+| Perdí el teléfono del segundo factor              | Desde tu computador: `pnpm plataforma:totp --quitar <correo>` y luego `--activar <correo>` con el teléfono nuevo                                              |
+| "No me deja guardar el cierre"                    | ¿Está en **solo lectura**? (consola → ficha → estado). Si es así, registra el pago                                                                            |
+| "No veo el Estado de Resultados"                  | ¿Tiene el módulo activo y vigente?                                                                                                                            |
+| Toda la app responde 502/503                      | Revisa `/health`. Si dice `db: error` → estado de Neon. Si no responde → logs de CloudWatch y estado de las tareas de ECS                                     |
+| Pago registrado pero sigue bloqueado              | Espera 10 segundos (caché por instancia) o pide al cliente que recargue                                                                                       |
+| Se aplicó una migración mal                       | Restaura el branch de respaldo en Neon y despliega la versión anterior de la imagen                                                                           |
+| `db:migrate` dice "cambió después de aplicarse"   | Alguien editó una migración ya aplicada. Restaura el archivo original desde git y crea una migración nueva                                                    |

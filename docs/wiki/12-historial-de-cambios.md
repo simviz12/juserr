@@ -99,8 +99,50 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 - `0001` ahora solo activa el Core y los módulos públicos al restaurante fundador.
 - La prueba de migraciones aplica **todas** las migraciones en orden. Pruebas nuevas de exclusividad en `billing.test.ts` y `migration.test.ts` (**138 pruebas** en total).
 
+## Entrega 4 — Auditoría integral: seguridad, integridad y resiliencia
+
+**Rama `auditoria/endurecimiento`** · commits `6d4a8ba`, `346496a`, `7131e15`, `0fae79a`, `143a064` · detalle completo en [página 14](14-auditoria-2026-11.md)
+
+### Seguridad
+
+- **Crítico corregido:** una URL con `%` codificados (`/pl%61taforma`) saltaba la consola de plataforma y dejaba a cualquier Jefe ver todos los restaurantes; `/finanzas/re%73umen` saltaba el cobro de módulos. El hook ahora decide sobre la ruta decodificada y `route.id`, y cada ruta vuelve a exigir admin o módulo (`guards.ts`).
+- El hash de la contraseña ya no viaja al navegador.
+- Freno de login en Postgres (atómico, por ip+cuenta, cuenta e ip), segundo factor TOTP para la consola, caducidad absoluta de sesiones (90 días) y caché de 5 s.
+- CSP con nonce, HSTS, Permissions-Policy, COOP y `X-Frame-Options: DENY`.
+
+### Integridad de datos (`0003_integridad_y_seguridad.sql`)
+
+- Cierre de turno idempotente, stock por delta y por id, compras de bodega atómicas, comprobantes Nequi únicos en todo el historial, un cierre de caja por día, una solicitud pendiente por módulo, insumos sin nombres repetidos, pagos con bloqueo optimista.
+- Cantidades `real` → `numeric(12,3)`; dinero `numeric(10,2)` → `numeric(14,2)`; índices por turno, usuario y producto.
+
+### Resiliencia y observabilidad
+
+- `handleError` con código de soporte, logger JSON, `protegerAcciones()` en las form actions, timeout por consulta y `/health` acotado.
+
+### Migraciones, CI y limpieza
+
+- `0000_base.sql` (base nueva desde cero), runner con candado y checksum independiente de CRLF/LF.
+- Eliminados `drizzle/`, `migrate_tables.mjs`, `stress_test.mjs` y `scripts/migrate-*.mjs`.
+- Scripts de datos con contraseña aleatoria y bloqueo en producción. Nuevo `pnpm plataforma:totp`.
+- CI con `pnpm audit`, cobertura y escaneo de credenciales; Dependabot.
+
+### Rendimiento
+
+- Reportes acotados a 366 días, cargas del cierre en paralelo, historial de turnos en su propio componente, consultas de derechos en paralelo.
+
+|                                            | Antes                    | Después               |
+| ------------------------------------------ | ------------------------ | --------------------- |
+| Pruebas                                    | 138                      | **170**               |
+| Hallazgos críticos abiertos                | 1                        | **0**                 |
+| Migraciones necesarias para una base nueva | 4 scripts sueltos + 0001 | **`pnpm db:migrate`** |
+
 ## Pendiente de salida a producción
 
-- [ ] Tomar el branch de respaldo en Neon.
-- [ ] Aplicar `0001` en producción y desplegar el código nuevo **en la misma ventana** ([página 10, sección 8](10-despliegue-aws.md#8-primera-salida-a-producción-desde-la-versión-actual-en-vercel)).
-- [ ] Unir `feat/multitenant` a `main`.
+Estado verificado el 16-11-2026 (`pnpm db:migrate:estado` contra producción):
+
+- [x] `0001` y `0002` aplicadas.
+- [x] Respaldo completo antes de `0003`: `respaldos/respaldo-produccion-antes-0003-20261116-1916.json` (fuera del repo).
+- [ ] Branch de respaldo en Neon.
+- [ ] Aplicar `0000` (no hace nada en producción) y `0003`, y **en la misma ventana** unir `auditoria/endurecimiento` a `main` para que Vercel despliegue el código nuevo. El código viejo no es compatible con los tipos de `0003`, y el nuevo necesita sus tablas.
+- [ ] **Crear el primer operador de la consola** (hoy no hay ninguno): `pnpm plataforma:admin <correo> "<Nombre>" --totp`, probarlo con `pnpm plataforma:totp --probar` y luego `PLATFORM_REQUIRE_TOTP=1` en Vercel.
+- [ ] Actualizar dependencias (`xlsx` desde el CDN de SheetJS, quitar `adapter-auto`) y planificar Kit 3 ([página 14](14-auditoria-2026-11.md#pendiente-requiere-decisión-o-acción-manual)).

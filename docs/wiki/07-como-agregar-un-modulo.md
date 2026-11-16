@@ -56,11 +56,15 @@ Además verifica que el código no exista, valida los parámetros y deja el cód
 
 Trabaja **solo** dentro de `src/lib/modules/<codigo>/` y `src/routes/m/<codigo>/`. Reglas:
 
+0. **Exige el módulo** al inicio de cada `load` y de cada acción: `exigirModulo(locals, '<codigo>');` (la plantilla ya lo trae en el `load`). El hook ya controla el acceso; esto es la segunda barrera.
 1. **El restaurante sale de la sesión**: `const tid = tenantDe(locals);`
 2. **Toda consulta filtra por restaurante**: `.where(delTenant(tabla, tid, ...))`
 3. **Todo insert lleva** `tenantId: tid`
 4. **Solo importa del Core** (`$lib/server/...`, `$lib/features/...`, `$lib/components/...`). Nunca de otro módulo.
 5. **Dinero en centavos**: `toCents()`, `parseMoneyInput()` y `centsToDecimalString()`.
+6. **Envuelve las acciones** con `protegerAcciones('<codigo>', { ... })` (`$lib/server/actions`) para que un error de base de datos no tumbe la página.
+7. **Nada de `console.log`**: usa `log.info/warn/error` de `$lib/server/log` con `tenantId` en el contexto.
+8. **Cantidades** con `numeric` (nunca `real`); si algo no debe duplicarse, ponle un **índice único** y atrapa la violación con `esViolacionUnica()`.
 
 ### Si la función necesita guardar datos (tabla nueva)
 
@@ -86,8 +90,9 @@ Y en la migración generada (`migrations/NNNN_modulo_<codigo>.sql`) agrega el `C
 
 ```ts
 // src/routes/m/domicilios-donjuan/+page.server.ts
-export const actions = {
+export const actions = protegerAcciones('domicilios-donjuan', {
 	registrar: async ({ request, locals }) => {
+		exigirModulo(locals, 'domicilios-donjuan');
 		const tid = tenantDe(locals);
 		const fd = await request.formData();
 		const valor = parseMoneyInput(fd.get('valor')?.toString() ?? '');
@@ -99,7 +104,7 @@ export const actions = {
 		});
 		return { success: true, message: 'Domicilio registrado.' };
 	}
-};
+});
 ```
 
 No tienes que agregar permisos ni candados: `hooks.server.ts` usa el registro y bloquea vista y acciones solo con ver la ruta `/m/<codigo>`.
