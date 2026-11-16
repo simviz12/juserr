@@ -23,7 +23,8 @@
 		"db:reset-counts": "tsx src/lib/server/reset-counts.ts",
 		"plataforma:admin": "node scripts/create-platform-admin.mjs",
 		"modulo:nuevo": "node scripts/nuevo-modulo.mjs",
-		"plataforma:totp": "node scripts/plataforma-totp.mjs"
+		"plataforma:totp": "node scripts/plataforma-totp.mjs",
+		"prueba:restaurante": "node scripts/restaurante-prueba.mjs"
 	},
 	"devDependencies": {
 		"@electric-sql/pglite": "0.3.14",

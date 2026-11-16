@@ -2,19 +2,20 @@
 
 ## Comandos
 
-| Comando                                                 | Para qué                                                                                                                                          |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                              | Servidor local en `http://localhost:5173`                                                                                                         |
-| `pnpm db:migrate:estado`                                | Ver qué migraciones están aplicadas y cuáles pendientes                                                                                           |
-| `pnpm db:migrate`                                       | Aplicar las pendientes (cada una en una transacción)                                                                                              |
-| `pnpm plataforma:admin <correo> "<Nombre>" [--totp]`    | Crear un operador de la consola, o cambiarle la contraseña (la pide por la terminal y cierra sus sesiones). Con `--totp` activa el segundo factor |
-| `pnpm plataforma:totp --listar`                         | Ver qué operadores tienen segundo factor                                                                                                          |
-| `pnpm plataforma:totp --activar [correo]`               | Activar el segundo factor sin tocar la contraseña (sin correo: a todos los que no lo tengan)                                                      |
-| `pnpm plataforma:totp --probar <correo> <código>`       | Comprobar que la app autenticadora genera el código correcto antes de exigirlo                                                                    |
-| `pnpm plataforma:totp --quitar <correo>`                | Retirar el segundo factor (operador que perdió el teléfono)                                                                                       |
-| `pnpm db:seed -- --tenant <código> --confirmar`         | **Borra** un restaurante y lo deja con el catálogo inicial (solo para pruebas/capacitación)                                                       |
-| `pnpm db:reset-counts -- --tenant <código> --confirmar` | Deja historial y stock en cero conservando catálogo y usuarios (p. ej. tras capacitar con datos de prueba)                                        |
-| `node scripts/demo-data.mjs --tenant <código>`          | ~70 días de operación de demostración (para mostrar a prospectos); `--remove` la quita                                                            |
+| Comando                                                 | Para qué                                                                                                                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                              | Servidor local en `http://localhost:5173`                                                                                                                     |
+| `pnpm db:migrate:estado`                                | Ver qué migraciones están aplicadas y cuáles pendientes                                                                                                       |
+| `pnpm db:migrate`                                       | Aplicar las pendientes (cada una en una transacción)                                                                                                          |
+| `pnpm plataforma:admin <correo> "<Nombre>" [--totp]`    | Crear un operador de la consola, o cambiarle la contraseña (la pide por la terminal y cierra sus sesiones). Con `--totp` activa el segundo factor             |
+| `pnpm plataforma:totp --listar`                         | Ver qué operadores tienen segundo factor                                                                                                                      |
+| `pnpm plataforma:totp --activar [correo]`               | Activar el segundo factor sin tocar la contraseña (sin correo: a todos los que no lo tengan)                                                                  |
+| `pnpm plataforma:totp --probar <correo> <código>`       | Comprobar que la app autenticadora genera el código correcto antes de exigirlo                                                                                |
+| `pnpm plataforma:totp --quitar <correo>`                | Retirar el segundo factor (operador que perdió el teléfono)                                                                                                   |
+| `pnpm db:seed -- --tenant <código> --confirmar`         | **Borra** un restaurante y lo deja con el catálogo inicial (solo para pruebas/capacitación)                                                                   |
+| `pnpm db:reset-counts -- --tenant <código> --confirmar` | Deja historial y stock en cero conservando catálogo y usuarios (p. ej. tras capacitar con datos de prueba)                                                    |
+| `pnpm prueba:restaurante`                               | Crea (o reinicia) el restaurante `prueba-interna` con un usuario Jefe, Bodeguero y Cajero y contraseñas aleatorias impresas una vez; `-- --borrar` lo cancela |
+| `node scripts/demo-data.mjs --tenant <código>`          | ~70 días de operación de demostración (para mostrar a prospectos); `--remove` la quita                                                                        |
 
 > Los scripts que borran **exigen** `--tenant` y `--confirmar`. Nunca operan sobre todos los restaurantes. Con `NODE_ENV=production` también exigen `--permitir-produccion`. Los usuarios que crean reciben una **contraseña aleatoria** que se imprime al final.
 
