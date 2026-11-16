@@ -3,7 +3,12 @@ import { turnos } from '$lib/server/schema';
 import { gte, lt, asc } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { exigirModulo } from '$lib/server/guards';
-import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
+import {
+	acotarRango,
+	businessDayKey,
+	currentRange,
+	isValidDateKey
+} from '$lib/features/finance/domain/period';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
@@ -14,7 +19,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const fRaw = url.searchParams.get('fin');
 	let inicio = isValidDateKey(iRaw) ? iRaw : businessDayKey(mes.start);
 	let fin = isValidDateKey(fRaw) ? fRaw : businessDayKey(new Date());
-	if (inicio > fin) [inicio, fin] = [fin, inicio];
+	// Máximo 366 días por consulta: un rango enorme por URL ya no trae años de datos.
+	({ inicio, fin } = acotarRango(inicio, fin));
 
 	const rows = await db
 		.select({

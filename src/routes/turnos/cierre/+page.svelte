@@ -24,13 +24,16 @@
 	import Field from '$lib/components/ui/Field.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import FormFeedback from '$lib/components/ui/FormFeedback.svelte';
-	import DataTable from '$lib/components/data-table/DataTable.svelte';
-	import type { Column } from '$lib/components/data-table/types';
+	import ShiftHistory from '$lib/features/shifts/components/ShiftHistory.svelte';
 	import { inputClass, textareaClass, btn } from '$lib/components/ui/styles';
 	import { cn } from '$lib/utils/cn';
 	import { parseFraction } from '$lib/utils/fractions';
-	import { formatCOP, formatDateTime, formatNumber } from '$lib/utils/format';
-	import { extractRefs, PORCIONES_POR_MASA } from '$lib/features/shifts/domain/close-shift';
+	import { formatCOP, formatNumber } from '$lib/utils/format';
+	import {
+		extractRefs,
+		porcionesVendidas as calcularPorcionesVendidas,
+		PORCIONES_POR_MASA
+	} from '$lib/features/shifts/domain/close-shift';
 	import { cerrarLinea } from '$lib/features/shifts/domain/line-close';
 
 	let { data, form } = $props();
@@ -73,11 +76,16 @@
 	);
 	let masasUsadas = $derived(Math.max(0, masasIniciales - masasSobrantes));
 	let porcionesNuevas = $derived(masasUsadas * PORCIONES_POR_MASA);
+	// Misma función que usa el servidor al guardar: la pantalla nunca muestra
+	// una cifra distinta de la que queda registrada.
 	let porcionesVendidas = $derived(
-		Math.max(
-			0,
-			Math.round(porcionesNuevas + porcionesAyer - porcionesSobrantes - porcionesMermadas)
-		)
+		calcularPorcionesVendidas({
+			masasIniciales,
+			masasSobrantes,
+			porcionesAyer,
+			porcionesSobrantes,
+			porcionesMermadas
+		})
 	);
 	let ventaPizza = $derived(pizzasActivas ? porcionesVendidas * precioPorcion : 0);
 
@@ -196,56 +204,6 @@
 		itemQty = {};
 		gastos = [];
 	}
-
-	// ── Historial ──────────────────────────────────────────────
-	type Turno = (typeof data.historialTurnos)[number];
-	const columns: Column<Turno>[] = [
-		{
-			id: 'fecha',
-			header: 'Fecha',
-			accessor: (t) => t.fecha,
-			format: (v) => formatDateTime(v as string | null)
-		},
-		{ id: 'id', header: 'Turno', accessor: (t) => t.id, format: (v) => `#${v}` },
-		{
-			id: 'porciones',
-			header: 'Vendidas',
-			accessor: (t) => t.porcionesVendidas ?? 0,
-			align: 'right',
-			hideOnMobile: true
-		},
-		{
-			id: 'mermas',
-			header: 'Mermas',
-			accessor: (t) => t.porcionesMermadas ?? 0,
-			align: 'right',
-			hideOnMobile: true
-		},
-		{
-			id: 'efectivo',
-			header: 'Efectivo',
-			accessor: (t) => Number(t.monto),
-			format: (v) => formatCOP(Number(v)),
-			align: 'right',
-			hideOnMobile: true
-		},
-		{
-			id: 'nequi',
-			header: 'Nequi',
-			accessor: (t) => Number(t.transferencias ?? 0),
-			format: (v) => formatCOP(Number(v)),
-			align: 'right',
-			hideOnMobile: true
-		},
-		{ id: 'gastos', header: 'Gastos', accessor: (t) => t.totalGastos, align: 'right' },
-		{
-			id: 'total',
-			header: 'Total',
-			accessor: (t) => Number(t.monto) + Number(t.transferencias ?? 0) + t.totalGastos,
-			format: (v) => formatCOP(Number(v)),
-			align: 'right'
-		}
-	];
 
 	const BILLETES = [2000, 5000, 10000, 20000, 50000, 100000];
 </script>
@@ -838,35 +796,7 @@
 		</aside>
 	</form>
 
-	<Card title="Últimos turnos" description="Los 20 cierres más recientes.">
-		<DataTable
-			rows={data.historialTurnos}
-			{columns}
-			rowKey={(t) => t.id}
-			searchPlaceholder="Buscar turno o nota…"
-			initialSort={{ id: 'fecha', dir: 'desc' }}
-			emptyTitle="Aún no hay turnos"
-			emptyDescription="El primer cierre aparecerá aquí."
-		>
-			{#snippet cell(t, c)}
-				{#if c.id === 'gastos'}
-					<span class={t.totalGastos > 0 ? 'text-danger' : 'text-muted-foreground'}
-						>{t.totalGastos > 0 ? `−${formatCOP(t.totalGastos)}` : '—'}</span
-					>
-				{:else if c.id === 'total'}
-					<span class="font-medium">{c.format?.(c.accessor(t), t)}</span>
-				{:else if c.id === 'fecha'}
-					<span>{formatDateTime(t.fecha)}</span>
-					{#if t.descripcion}<span
-							class="block max-w-52 truncate text-xs text-muted-foreground"
-							title={t.descripcion}>{t.descripcion}</span
-						>{/if}
-				{:else}
-					{c.format ? c.format(c.accessor(t), t) : c.accessor(t)}
-				{/if}
-			{/snippet}
-		</DataTable>
-	</Card>
+	<ShiftHistory turnos={data.historialTurnos} />
 </div>
 
 <!-- Tirilla térmica (58/80 mm): solo visible al imprimir -->

@@ -38,7 +38,7 @@ import {
 	type ShiftRecord
 } from '../domain/metrics';
 
-const MASA_NAMES = ['Masa', 'Masas'];
+import { MASA_NAMES } from '$lib/features/shifts/domain/products';
 
 async function fetchShifts(tid: number, range: DateRange): Promise<ShiftRecord[]> {
 	const rows = await db
@@ -129,7 +129,7 @@ export async function getFinanceDashboard(tid: number, type: RangeType, dateKey?
 			.select({
 				nombre: pizzaSabores.nombre,
 				precio: pizzaSabores.precioPorcion,
-				vendidas: sql<number>`COALESCE(SUM(${pizzaVentas.cantidadVendida}), 0)`
+				vendidas: sql<string>`COALESCE(SUM(${pizzaVentas.cantidadVendida}), 0)`
 			})
 			.from(pizzaVentas)
 			.innerJoin(
@@ -154,7 +154,7 @@ export async function getFinanceDashboard(tid: number, type: RangeType, dateKey?
 			.select({
 				nombre: lineasGastronomicas.nombre,
 				venta: sql<string>`COALESCE(SUM(${cierresLinea.ventaEsperada}), 0)`,
-				unidades: sql<number>`COALESCE(SUM(${cierresLinea.consumidas}), 0)`
+				unidades: sql<string>`COALESCE(SUM(${cierresLinea.consumidas}), 0)`
 			})
 			.from(cierresLinea)
 			.innerJoin(
@@ -173,7 +173,7 @@ export async function getFinanceDashboard(tid: number, type: RangeType, dateKey?
 		db
 			.select({
 				nombre: itemsLinea.nombre,
-				vendidas: sql<number>`COALESCE(SUM(${ventasItems.cantidad}), 0)`,
+				vendidas: sql<string>`COALESCE(SUM(${ventasItems.cantidad}), 0)`,
 				ingresos: sql<string>`COALESCE(SUM(${ventasItems.cantidad} * ${ventasItems.precioUnitario}), 0)`
 			})
 			.from(ventasItems)

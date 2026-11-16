@@ -42,12 +42,12 @@ export interface TenantInfo {
 	diasGracia: number;
 }
 
-const TTL_MS = 30_000;
+const TTL_MS = 10_000;
 const cache = new Map<number, { info: TenantInfo; ent: Entitlements; at: number }>();
 
 /**
- * Plan y módulos utilizables hoy por un restaurante. Se cachea 30 s por
- * instancia: un pago registrado en la consola se refleja en ≤30 s (y al
+ * Plan y módulos utilizables hoy por un restaurante. Se cachea 10 s por
+ * instancia: un pago registrado en la consola se refleja en ≤10 s (y al
  * instante en la instancia que lo registró, ver `invalidarDerechos`).
  */
 export async function derechosDe(
@@ -57,33 +57,39 @@ export async function derechosDe(
 	const hit = cache.get(tenantId);
 	if (hit && ahora.getTime() - hit.at < TTL_MS) return hit;
 
-	const [info] = await db
-		.select({
-			id: tenants.id,
-			codigo: tenants.codigo,
-			nombre: tenants.nombre,
-			estado: tenants.estado,
-			diasGracia: tenants.diasGracia
-		})
-		.from(tenants)
-		.where(eq(tenants.id, tenantId));
+	// Restaurante y suscripciones en paralelo (antes: dos consultas en serie).
+	const [[info], subs] = await Promise.all([
+		db
+			.select({
+				id: tenants.id,
+				codigo: tenants.codigo,
+				nombre: tenants.nombre,
+				estado: tenants.estado,
+				diasGracia: tenants.diasGracia
+			})
+			.from(tenants)
+			.where(eq(tenants.id, tenantId)),
+		db
+			.select({
+				modulo: suscripcionesModulo.modulo,
+				estado: suscripcionesModulo.estado,
+				vigenteHasta: suscripcionesModulo.vigenteHasta,
+				precioMensualCents: suscripcionesModulo.precioMensualCents
+			})
+			.from(suscripcionesModulo)
+			.where(eq(suscripcionesModulo.tenantId, tenantId))
+	]);
 	if (!info) return null;
-
-	const subs = await db
-		.select({
-			modulo: suscripcionesModulo.modulo,
-			estado: suscripcionesModulo.estado,
-			vigenteHasta: suscripcionesModulo.vigenteHasta,
-			precioMensualCents: suscripcionesModulo.precioMensualCents
-		})
-		.from(suscripcionesModulo)
-		.where(eq(suscripcionesModulo.tenantId, tenantId));
 
 	const value = {
 		info,
 		ent: calcularEntitlements(info, subs, businessDayKey(ahora)),
 		at: ahora.getTime()
 	};
+	if (cache.size >= 5_000) {
+		const primera = cache.keys().next().value;
+		if (primera !== undefined) cache.delete(primera);
+	}
 	cache.set(tenantId, value);
 	return value;
 }

@@ -106,3 +106,22 @@ export function buildBuckets(type: RangeType, window: DateRange): SeriesBucket[]
 	}
 	return buckets;
 }
+
+/** Rango máximo de los reportes por fechas (evita traer años de datos en una sola carga). */
+export const MAX_DIAS_RANGO = 366;
+
+/**
+ * Ordena y acota un rango de días (YYYY-MM-DD). Si supera `maxDias`, conserva
+ * el final y recorta el inicio. Devuelve también si hubo recorte, para avisarlo.
+ */
+export function acotarRango(
+	inicio: string,
+	fin: string,
+	maxDias = MAX_DIAS_RANGO
+): { inicio: string; fin: string; recortado: boolean } {
+	if (inicio > fin) [inicio, fin] = [fin, inicio];
+	const minimo = addDays(fin, -(maxDias - 1));
+	return inicio < minimo
+		? { inicio: minimo, fin, recortado: true }
+		: { inicio, fin, recortado: false };
+}

@@ -9,7 +9,12 @@ import {
 import { sql, and, gte, lt, desc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { exigirModulo } from '$lib/server/guards';
-import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
+import {
+	acotarRango,
+	businessDayKey,
+	currentRange,
+	isValidDateKey
+} from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
 import { getBusinessConfig } from '$lib/features/business/server/config';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
@@ -31,7 +36,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const finRaw = url.searchParams.get('fin');
 	let inicio = isValidDateKey(inicioRaw) ? inicioRaw : businessDayKey(mes.start);
 	let fin = isValidDateKey(finRaw) ? finRaw : businessDayKey(new Date(mes.end.getTime() - 1));
-	if (inicio > fin) [inicio, fin] = [fin, inicio];
+	// Máximo 366 días por consulta: un rango enorme por URL ya no trae años de datos.
+	({ inicio, fin } = acotarRango(inicio, fin));
 
 	// Jornadas completas: 04:00 del día inicial → 04:00 del día siguiente al final
 	const start = currentRange('diario', inicio).start;

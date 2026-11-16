@@ -149,3 +149,21 @@ describe('política de acceso', () => {
 		expect(homeFor('bodeguero')).toBe('/bodega');
 	});
 });
+
+describe('acotarRango', async () => {
+	const { acotarRango } = await import('../src/lib/features/finance/domain/period');
+	it('ordena y deja pasar rangos normales', () => {
+		expect(acotarRango('2026-03-31', '2026-03-01')).toEqual({
+			inicio: '2026-03-01',
+			fin: '2026-03-31',
+			recortado: false
+		});
+	});
+	it('recorta a 366 días conservando el final', () => {
+		expect(acotarRango('2000-01-01', '2026-12-31')).toEqual({
+			inicio: '2025-12-31', // 366 días contando ambos extremos
+			fin: '2026-12-31',
+			recortado: true
+		});
+	});
+});

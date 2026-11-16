@@ -21,6 +21,7 @@ Documentación completa del sistema para **entenderlo, estudiarlo, operarlo y ve
 | 11  | [Checklist de salida a producción y venta](11-checklist-salida-y-venta.md) | Lo técnico, lo comercial y lo legal antes de cobrarle al primer cliente                                           | 15 min |
 | 12  | [Historial de cambios](12-historial-de-cambios.md)                         | Qué cambiamos, por qué y dónde quedó cada cosa                                                                    | 15 min |
 | 13  | [Glosario](13-glosario.md)                                                 | Términos del negocio y técnicos                                                                                   | —      |
+| 14  | [Auditoría 2026-11](14-auditoria-2026-11.md)                               | Qué se corrigió en la auditoría y qué queda pendiente                                                             | —      |
 
 ## Mapa mental en 30 segundos
 

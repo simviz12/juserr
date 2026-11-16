@@ -106,8 +106,15 @@ export async function listarRestaurantes() {
 			.groupBy(usuarios.tenantId)
 	]);
 	const nUsuarios = new Map(usuariosPorTenant.map((u) => [u.tenantId, u.n]));
+	// Agrupar una sola vez: O(T + S) en lugar de filtrar todas las suscripciones por restaurante.
+	const subsPorTenant = new Map<number, typeof subs>();
+	for (const s of subs) {
+		const l = subsPorTenant.get(s.tenantId);
+		if (l) l.push(s);
+		else subsPorTenant.set(s.tenantId, [s]);
+	}
 	return lista.map((t) => {
-		const propias = subs.filter((s) => s.tenantId === t.id);
+		const propias = subsPorTenant.get(t.id) ?? [];
 		const core = propias.find((s) => s.modulo === CORE);
 		return {
 			...t,
