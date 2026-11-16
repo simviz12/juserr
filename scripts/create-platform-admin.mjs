@@ -1,9 +1,11 @@
 /**
  * Crea (o cambia la contraseña de) un operador de la consola /plataforma.
  *
- *   node scripts/create-platform-admin.mjs <correo> "<Nombre>" [--totp]
+ *   node scripts/create-platform-admin.mjs <correo> "<Nombre>" [--totp] [--generar]
  *
  * La contraseña se pide por la terminal (no queda en el historial del shell).
+ * Si no hay terminal interactiva, o con --generar, se genera una aleatoria
+ * y se imprime una sola vez: guárdala en tu gestor de contraseñas.
  * Con --totp genera un secreto de segundo factor e imprime el enlace
  * otpauth:// para registrarlo en la app autenticadora (Google Authenticator,
  * 1Password, Authy...). Desde entonces el login exige el código de 6 dígitos.
@@ -26,9 +28,17 @@ if (!process.env.DATABASE_URL) {
 	process.exit(1);
 }
 
-const rl = createInterface({ input: process.stdin, output: process.stdout });
-const password = (await rl.question('Contraseña (12 a 256 caracteres): ')).trim();
-rl.close();
+// Sin terminal interactiva (p. ej. el "!" de Claude Code o un CI) o con
+// --generar, se genera una contraseña fuerte y se imprime UNA sola vez.
+const generar = args.includes('--generar') || !process.stdin.isTTY;
+let password;
+if (generar) {
+	password = randomBytes(18).toString('base64url');
+} else {
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	password = (await rl.question('Contraseña (12 a 256 caracteres): ')).trim();
+	rl.close();
+}
 if (password.length < 12 || password.length > 256) {
 	console.error('La contraseña debe tener entre 12 y 256 caracteres.');
 	process.exit(1);
@@ -64,6 +74,7 @@ const [row] = await sql`
 // Cierra las sesiones abiertas de ese operador (por si era un cambio de contraseña).
 await sql`DELETE FROM platform_sesiones WHERE admin_id = ${row.id}`;
 console.log(`Operador ${email} listo. Entra en /plataforma/login.`);
+if (generar) console.log(`Contraseña (guárdala ahora, no se vuelve a mostrar): ${password}`);
 if (totp) {
 	const e = encodeURIComponent('MesaCapital');
 	console.log(
