@@ -3,6 +3,8 @@ import { turnos, gastos, cortesSemanales } from '$lib/server/schema';
 import { gte, lt, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
+import { log } from '$lib/server/log';
 import { exigirModulo } from '$lib/server/guards';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
@@ -76,7 +78,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	};
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('semanal', {
 	default: async ({ request, locals }) => {
 		exigirModulo(locals, 'finanzas-avanzadas');
 		const tid = tenantDe(locals);
@@ -114,8 +116,8 @@ export const actions: Actions = {
 						: `Corte guardado con ${diferencia > 0 ? 'sobrante' : 'faltante'} de ${cop(diferencia)} (esperado ${cop(r.efectivo)}, contado ${cop(totalReal)}).`
 			};
 		} catch (err) {
-			console.error('Error corte semanal:', err);
+			log.error('error en corte semanal', { tenantId: tenantDe(locals), err });
 			return fail(500, { error: 'Error al guardar el corte.' });
 		}
 	}
-};
+});

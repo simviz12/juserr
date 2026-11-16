@@ -1,5 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
+import { log } from '$lib/server/log';
 import {
 	catalogo,
 	ErrorNegocio,
@@ -29,7 +31,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('modulos', {
 	solicitar: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const modulo = (await request.formData()).get('modulo')?.toString() ?? '';
@@ -41,8 +43,8 @@ export const actions: Actions = {
 			};
 		} catch (e) {
 			if (e instanceof ErrorNegocio) return fail(400, { error: e.message });
-			console.error('[modulos] error al solicitar módulo:', e);
+			log.error('error al solicitar módulo', { tenantId: tid, err: e });
 			return fail(500, { error: 'No se pudo enviar la solicitud. Intenta de nuevo.' });
 		}
 	}
-};
+});

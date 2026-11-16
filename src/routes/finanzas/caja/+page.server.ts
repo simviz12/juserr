@@ -3,6 +3,7 @@ import { turnos, gastos, cierresDia } from '$lib/server/schema';
 import { gte, lt, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { esViolacionUnica } from '$lib/server/pg-errors';
 import { log } from '$lib/server/log';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
@@ -71,7 +72,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	};
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('caja', {
 	default: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const formData = await request.formData();
@@ -110,4 +111,4 @@ export const actions: Actions = {
 			message: `Caja del ${dayKey} cerrada: efectivo ${cop(r.efectivo)} · Nequi ${cop(r.transferencias)} · total ${cop(r.efectivo + r.transferencias)}.`
 		};
 	}
-};
+});

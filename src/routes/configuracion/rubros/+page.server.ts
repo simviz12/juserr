@@ -1,4 +1,5 @@
 import type { PageServerLoad, Actions } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { db } from '$lib/server/db';
 import {
 	rubrosConfig,
@@ -124,7 +125,7 @@ function parseItemForm(formData: FormData) {
 	return { nombre, precioVenta, precioCosto, unidadesControl: u } as const;
 }
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('rubros', {
 	/**
 	 * Guarda la identidad del negocio Y aplica los interruptores:
 	 *  - nombre → se muestra en el menú lateral, reportes PDF y reporte de WhatsApp.
@@ -290,4 +291,4 @@ export const actions: Actions = {
 		if (!item) return fail(404, { error: 'El plato no existe.' });
 		return { success: true, message: `"${item.nombre}" eliminado.` };
 	}
-};
+});

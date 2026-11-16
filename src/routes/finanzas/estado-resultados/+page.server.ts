@@ -3,6 +3,8 @@ import { gastos, movimientosContables } from '$lib/server/schema';
 import { and, eq } from 'drizzle-orm';
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
+import { log } from '$lib/server/log';
 import { exigirModulo } from '$lib/server/guards';
 import { canAccess } from '$lib/auth/access';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
@@ -69,7 +71,7 @@ const idPositivo = (value: FormDataEntryValue | null) => {
 	return Number.isInteger(n) && n > 0 ? n : null;
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('estado-resultados', {
 	/** Registra una devolución, descuento, otro ingreso o un gasto pagado por fuera de la caja. */
 	registrar: async ({ request, locals }) => {
 		exigirModulo(locals, 'estado-resultados');
@@ -117,7 +119,7 @@ export const actions: Actions = {
 				usuarioId: user.id
 			});
 		} catch (err) {
-			console.error('[estado-resultados] error al registrar movimiento:', err);
+			log.error('error al registrar movimiento contable', { tenantId: user.tenantId, err });
 			return fail(500, { error: 'No se pudo guardar el movimiento. Intenta de nuevo.', valores });
 		}
 
@@ -152,7 +154,7 @@ export const actions: Actions = {
 			if (anulados.length === 0)
 				return fail(404, { error: 'El movimiento no existe o ya estaba anulado.' });
 		} catch (err) {
-			console.error('[estado-resultados] error al anular movimiento:', err);
+			log.error('error al anular movimiento contable', { tenantId: user.tenantId, err });
 			return fail(500, { error: 'No se pudo anular el movimiento. Intenta de nuevo.' });
 		}
 
@@ -180,10 +182,10 @@ export const actions: Actions = {
 				.returning({ id: gastos.id });
 			if (actualizados.length === 0) return fail(404, { error: 'El gasto no existe.' });
 		} catch (err) {
-			console.error('[estado-resultados] error al categorizar gasto:', err);
+			log.error('error al categorizar gasto', { tenantId: user.tenantId, err });
 			return fail(500, { error: 'No se pudo cambiar la categoría. Intenta de nuevo.' });
 		}
 
 		return { success: true, message: 'Categoría actualizada.' };
 	}
-};
+});

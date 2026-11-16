@@ -4,6 +4,8 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import * as argon2 from '@node-rs/argon2';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
+import { log } from '$lib/server/log';
 import { isRol } from '$lib/auth/access';
 import { invalidateUserSessions } from '$lib/server/auth';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
@@ -60,7 +62,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	};
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('personal', {
 	create: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const fd = await request.formData();
@@ -96,7 +98,7 @@ export const actions: Actions = {
 				.values({ tenantId: tid, nombre, passwordHash: await argon2.hash(rawPassword), rol });
 			return { success: true, message: `Usuario ${nombre} creado.` };
 		} catch (err) {
-			console.error('[personal] error al crear usuario:', err);
+			log.error('error al crear usuario', { tenantId: tid, err });
 			return fail(500, { error: 'Error al crear el usuario.' });
 		}
 	},
@@ -141,7 +143,7 @@ export const actions: Actions = {
 			if (rawPassword || antes.rol !== rol) await invalidateUserSessions(id);
 			return { success: true, message: `Usuario ${nombre} actualizado.` };
 		} catch (err) {
-			console.error('[personal] error al actualizar usuario:', err);
+			log.error('error al actualizar usuario', { tenantId: tid, err });
 			return fail(500, { error: 'Error al actualizar el usuario.' });
 		}
 	},
@@ -172,4 +174,4 @@ export const actions: Actions = {
 			});
 		}
 	}
-};
+});

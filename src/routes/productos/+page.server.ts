@@ -3,6 +3,7 @@ import { productos, categorias, movimientosInventario } from '$lib/server/schema
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 const UNIDADES = [
@@ -78,7 +79,7 @@ async function nombreDuplicado(tid: number, nombre: string, exceptId?: number) {
 	return rows.some((r) => r.id !== exceptId);
 }
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('productos', {
 	create: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const p = await parse(await request.formData(), tid);
@@ -139,4 +140,4 @@ export const actions: Actions = {
 		}
 		return { success: true, message: `"${p.nombre}" eliminado.` };
 	}
-};
+});

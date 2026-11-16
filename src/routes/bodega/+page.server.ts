@@ -3,6 +3,7 @@ import { productos, movimientosInventario, categorias } from '$lib/server/schema
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { parseFraction } from '$lib/utils/fractions';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 import { asegurarMasa } from '$lib/features/shifts/server/products';
@@ -55,7 +56,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	};
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('bodega', {
 	default: async ({ request, locals }) => {
 		if (!locals.user) return fail(401, { error: 'No autorizado' });
 		const tid = tenantDe(locals);
@@ -133,4 +134,4 @@ export const actions: Actions = {
 					: `Conteo guardado: ${p.nombre} queda en ${fmt(nuevoStock)} ${p.unidadMedida} (${movimiento >= 0 ? '+' : ''}${fmt(movimiento)}).`
 		};
 	}
-};
+});

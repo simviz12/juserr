@@ -3,6 +3,7 @@ import { db } from '$lib/server/db';
 import { pizzaSabores, pizzaVentas } from '$lib/server/schema';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -38,7 +39,7 @@ function parse(fd: FormData) {
 	} as const;
 }
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('sabores', {
 	create: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const p = parse(await request.formData());
@@ -93,4 +94,4 @@ export const actions: Actions = {
 			});
 		}
 	}
-};
+});

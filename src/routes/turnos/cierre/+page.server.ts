@@ -9,6 +9,7 @@ import {
 } from '$lib/server/schema';
 
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { asc, eq, desc, inArray, sql } from 'drizzle-orm';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 import { closeShiftAction } from '$lib/features/shifts/server/close-shift.action';
@@ -158,6 +159,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 	};
 };
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('cierre', {
 	default: closeShiftAction
-};
+});

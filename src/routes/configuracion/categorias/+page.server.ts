@@ -3,6 +3,7 @@ import { categorias, productos } from '$lib/server/schema';
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { protegerAcciones } from '$lib/server/actions';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -27,7 +28,7 @@ async function existe(tid: number, nombre: string, exceptId?: number) {
 	return rows.some((r) => r.id !== exceptId);
 }
 
-export const actions: Actions = {
+export const actions: Actions = protegerAcciones('categorias', {
 	create: async ({ request, locals }) => {
 		const tid = tenantDe(locals);
 		const nombre = nombreDe(await request.formData());
@@ -72,4 +73,4 @@ export const actions: Actions = {
 		if (borradas.length === 0) return fail(404, { error: 'La categoría no existe.' });
 		return { success: true, message: 'Categoría eliminada.' };
 	}
-};
+});
