@@ -137,7 +137,10 @@ pnpm db:migrate          # aplica las pendientes de migrations/*.sql
 - Cada archivo se aplica en **una transacción** y queda registrado con su checksum en `_migraciones`. Nunca edites una migración ya aplicada: crea una nueva.
 - `tests/migration.test.ts` ensaya cada migración sobre una copia del esquema de producción con datos, y verifica que la base resultante sea **idéntica** a `schema.ts`.
 - `0001_multitenant.sql` convierte la base mono-restaurante: crea el restaurante #1, le asigna todos los datos existentes y le activa el Core y los add-ons por 30 días.
-- Los scripts `migrate_tables.mjs` y `scripts/migrate-*.mjs` son históricos (anteriores a `0001`); no se vuelven a usar.
+- `0000_base.sql` crea el esquema base en una base **vacía** (en una existente no hace nada): una base nueva se levanta solo con `pnpm db:migrate`.
+- `0003_integridad_y_seguridad.sql` agrega idempotencia del cierre de turno, comprobantes Nequi únicos, tipos numéricos exactos, índices, freno de login compartido y TOTP. Si encuentra insumos o cierres de caja duplicados, **no borra nada**: avisa (WARNING) y omite ese índice único.
+- El runner toma un candado (`pg_advisory_lock`) para que dos despliegues no migren a la vez, y su checksum es igual en Windows y Linux.
+- `drizzle-kit` solo se usa para inspeccionar; no generes migraciones con él (su salida va a `.drizzle/`, ignorada).
 
 > ⚠️ **Orden al desplegar `0001`:** el código nuevo necesita la base migrada, y el código viejo deja de funcionar con ella. Haz respaldo de la base, aplica la migración y despliega el código nuevo **en la misma ventana**.
 

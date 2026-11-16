@@ -31,6 +31,10 @@ export default defineConfig(
 				extraFileExtensions: ['.svelte'],
 				parser: ts.parser
 			}
+		},
+		rules: {
+			// Falso positivo con props $bindable(): asignarlas sí tiene efecto (las lee el padre).
+			'no-useless-assignment': 'off'
 		}
 	},
 	{

@@ -4,7 +4,7 @@
  *   npm run db:seed -- --tenant <código> --confirmar
  *
  * Borra TODOS los datos de ese restaurante (turnos, bodega, usuarios...) y deja
- * un usuario Jefe "Gabo" con contraseña "password123". Nunca toca otros restaurantes.
+ * un usuario Jefe "Gabo" con una contraseña aleatoria que se imprime al final. Nunca toca otros restaurantes.
  */
 import { eq } from 'drizzle-orm';
 import * as argon2 from '@node-rs/argon2';
@@ -28,7 +28,12 @@ import {
 	ventasItems,
 	movimientosContables
 } from './schema';
-import { borrarSesionesDe, conectar, restauranteObjetivo } from './scripts/tenant-cli';
+import {
+	borrarSesionesDe,
+	conectar,
+	restauranteObjetivo,
+	contrasenaAleatoria
+} from './scripts/tenant-cli';
 
 async function seed() {
 	const db = conectar();
@@ -61,7 +66,8 @@ async function seed() {
 	await db.delete(pizzaSabores).where(eq(pizzaSabores.tenantId, tid));
 	await db.delete(usuarios).where(eq(usuarios.tenantId, tid));
 
-	const defaultPassword = await argon2.hash('password123');
+	const clave = contrasenaAleatoria();
+	const defaultPassword = await argon2.hash(clave);
 	await db.insert(usuarios).values([
 		{ tenantId: tid, nombre: 'Gabo', rol: 'jefe', passwordHash: defaultPassword },
 		{ tenantId: tid, nombre: 'Empleado 1', rol: 'empleado', passwordHash: defaultPassword }
@@ -125,7 +131,7 @@ async function seed() {
 	]);
 
 	console.log(
-		`Listo: "${t.nombre}" quedó con el catálogo inicial. Usuario Jefe: Gabo / password123 (cámbiala).`
+		`Listo: "${t.nombre}" quedó con el catálogo inicial. Usuario Jefe: Gabo / ${clave} (cámbiala).`
 	);
 }
 

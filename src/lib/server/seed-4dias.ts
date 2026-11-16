@@ -23,7 +23,12 @@ import {
 } from './schema';
 import * as argon2 from '@node-rs/argon2';
 import { eq } from 'drizzle-orm';
-import { borrarSesionesDe, conectar, restauranteObjetivo } from './scripts/tenant-cli';
+import {
+	borrarSesionesDe,
+	conectar,
+	restauranteObjetivo,
+	contrasenaAleatoria
+} from './scripts/tenant-cli';
 
 const db = conectar();
 
@@ -51,7 +56,9 @@ async function simular4DiasFlujoCompleto() {
 	await db.delete(usuarios).where(eq(usuarios.tenantId, tid));
 
 	// 2. Usuarios del sistema
-	const defaultPassword = await argon2.hash('password123');
+	const clave = contrasenaAleatoria();
+	console.log(`Usuarios creados con la contraseña: ${clave}`);
+	const defaultPassword = await argon2.hash(clave);
 	const [jefe] = await db
 		.insert(usuarios)
 		.values([{ tenantId: tid, nombre: 'Gabo', rol: 'jefe', passwordHash: defaultPassword }])

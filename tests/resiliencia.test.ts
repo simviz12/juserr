@@ -5,6 +5,8 @@ import { protegerAcciones } from '../src/lib/server/actions';
 import { log } from '../src/lib/server/log';
 
 const evento = { locals: { user: { id: 1, tenantId: 7 } } } as never;
+/** Ejecuta una acción envuelta como lo haría SvelteKit (con el evento). */
+const correr = (a: unknown) => (a as (e: never) => Promise<unknown>)(evento);
 
 describe('protegerAcciones', () => {
 	it('una caída de conexión vuelve como fail(503) y no tumba la página', async () => {
@@ -14,7 +16,7 @@ describe('protegerAcciones', () => {
 				throw new TypeError('fetch failed');
 			}
 		});
-		const r = (await a.guardar(evento)) as { status: number; data: { error: string } };
+		const r = (await correr(a.guardar)) as { status: number; data: { error: string } };
 		expect(r.status).toBe(503);
 		expect(r.data.error).toMatch(/base de datos/);
 		const linea = JSON.parse(spy.mock.calls[0][0] as string);
@@ -30,7 +32,7 @@ describe('protegerAcciones', () => {
 				throw new Error('x is undefined');
 			}
 		});
-		const r = (await a.guardar(evento)) as { status: number; data: { error: string } };
+		const r = (await correr(a.guardar)) as { status: number; data: { error: string } };
 		expect(r.status).toBe(500);
 		expect(r.data.error).toMatch(/código [0-9a-f]{8}/);
 		spy.mockRestore();
@@ -40,7 +42,7 @@ describe('protegerAcciones', () => {
 		const a = protegerAcciones('prueba', {
 			ir: async () => redirect(303, '/destino')
 		});
-		await expect(a.ir(evento)).rejects.toSatisfy(isRedirect);
+		await expect(correr(a.ir)).rejects.toSatisfy(isRedirect);
 	});
 });
 

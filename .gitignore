@@ -29,3 +29,6 @@ coverage/
 
 # Datos demo locales
 scripts/.demo-manifest.json
+
+# Salida de drizzle-kit generate (las migraciones reales viven en migrations/)
+/.drizzle

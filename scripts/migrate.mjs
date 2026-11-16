@@ -8,6 +8,12 @@
  * (nombre + checksum). Un archivo ya aplicado nunca se vuelve a ejecutar; si su
  * contenido cambió después de aplicarse, el runner se detiene en lugar de
  * aplicar algo distinto a lo que corrió en producción.
+ *
+ * - Un candado (pg_advisory_lock) evita que dos despliegues simultáneos
+ *   apliquen la misma migración a la vez.
+ * - El checksum ignora la diferencia CRLF/LF: el mismo archivo da el mismo
+ *   checksum en Windows y en Linux (se aceptan también los checksums antiguos
+ *   calculados sobre el archivo con CRLF).
  */
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import { createHash } from 'node:crypto';
@@ -29,12 +35,23 @@ const archivos = readdirSync(dir)
 	.filter((f) => /^\d{4}_.+\.sql$/.test(f))
 	.sort();
 const soloEstado = process.argv.includes('--estado');
+/** Número fijo del candado de migraciones (cualquier entero, igual en todos los despliegues). */
+const CANDADO = 727_001;
+
+const sha = (t) => createHash('sha256').update(t).digest('hex');
+/** Checksums válidos de un archivo: el canónico (LF) y los de sus variantes de fin de línea. */
+function checksums(contenido) {
+	const lf = contenido.replace(/\r\n/g, '\n');
+	const crlf = lf.replace(/\n/g, '\r\n');
+	return { canonico: sha(lf), aceptados: new Set([sha(lf), sha(crlf), sha(contenido)]) };
+}
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const client = await pool.connect();
 let codigo = 0;
 
 try {
+	await client.query('SELECT pg_advisory_lock($1)', [CANDADO]);
 	await client.query(`CREATE TABLE IF NOT EXISTS _migraciones (
 		nombre text PRIMARY KEY,
 		checksum text NOT NULL,
@@ -45,11 +62,11 @@ try {
 
 	for (const archivo of archivos) {
 		const contenido = readFileSync(path.join(dir, archivo), 'utf8');
-		const checksum = createHash('sha256').update(contenido).digest('hex');
+		const { canonico: checksum, aceptados } = checksums(contenido);
 		const previa = aplicadas.get(archivo);
 
 		if (previa) {
-			if (previa !== checksum) {
+			if (!aceptados.has(previa)) {
 				throw new Error(
 					`${archivo} cambió después de aplicarse. Crea una migración nueva en vez de editarla.`
 				);
@@ -81,6 +98,7 @@ try {
 	console.error(`✗ ${err.message}`);
 	codigo = 1;
 } finally {
+	await client.query('SELECT pg_advisory_unlock($1)', [CANDADO]).catch(() => {});
 	client.release();
 	await pool.end();
 }

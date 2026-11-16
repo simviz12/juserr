@@ -207,3 +207,31 @@ describe('migraciones sobre el esquema de producción', () => {
 		expect(migrada.indices).toEqual(esperada.indices);
 	});
 });
+
+describe('base nueva desde cero (solo migrations/)', () => {
+	it('crea exactamente el esquema de src/lib/server/schema.ts', async () => {
+		const nueva = new PGlite();
+		await aplicarTodas(nueva);
+		const ref = new PGlite();
+		for (const stmt of await generateMigration(
+			generateDrizzleJson({}),
+			generateDrizzleJson(schema)
+		))
+			await ref.exec(stmt);
+		const [obtenida, esperada] = await Promise.all([huella(nueva), huella(ref)]);
+		expect(obtenida.columnas).toEqual(esperada.columnas);
+		expect(obtenida.restricciones).toEqual(esperada.restricciones);
+		expect(obtenida.indices).toEqual(esperada.indices);
+		// Y volver a correrlas no cambia nada.
+		await aplicarTodas(nueva);
+		expect(await huella(nueva)).toEqual(obtenida);
+	});
+
+	it('0000 no toca una base existente', async () => {
+		const existente = new PGlite();
+		await existente.exec('CREATE TABLE usuarios (id serial PRIMARY KEY)');
+		await existente.exec(migraciones[0].sql);
+		const r = await existente.query(`SELECT 1 FROM pg_tables WHERE tablename = 'turnos'`);
+		expect(r.rows).toHaveLength(0);
+	});
+});

@@ -1,0 +1,24 @@
+# Actualizaciones automáticas de dependencias (PRs semanales agrupados).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      svelte:
+        patterns:
+          [
+            'svelte',
+            '@sveltejs/*',
+            'svelte-check',
+            'prettier-plugin-svelte',
+            'eslint-plugin-svelte'
+          ]
+      lint-y-tipos:
+        patterns: ['eslint*', '@eslint/*', 'typescript*', 'prettier*', 'globals']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

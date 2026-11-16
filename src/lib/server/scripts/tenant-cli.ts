@@ -42,7 +42,26 @@ export async function restauranteObjetivo(db: Db, { destructivo }: { destructivo
 			`Este script BORRA datos de "${t.nombre}". Vuelve a ejecutarlo con --confirmar si es lo que quieres.`
 		);
 	}
+	if (
+		destructivo &&
+		process.env.NODE_ENV === 'production' &&
+		!process.argv.includes('--permitir-produccion')
+	) {
+		throw new Error(
+			'NODE_ENV=production: este script borra datos. Si de verdad es lo que quieres, agrega --permitir-produccion.'
+		);
+	}
 	return t;
+}
+
+/**
+ * Contraseña aleatoria para los usuarios que crean los scripts de datos (antes
+ * era "password123" para todos: una cuenta Jefe con credenciales públicas).
+ */
+export function contrasenaAleatoria(): string {
+	const bytes = new Uint8Array(12);
+	crypto.getRandomValues(bytes);
+	return Buffer.from(bytes).toString('base64url');
 }
 
 /** Cierra las sesiones de los usuarios de un restaurante (antes de borrarlos). */
