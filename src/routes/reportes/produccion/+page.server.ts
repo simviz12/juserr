@@ -2,10 +2,12 @@ import { db } from '$lib/server/db';
 import { turnos } from '$lib/server/schema';
 import { gte, lt, asc } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { exigirModulo } from '$lib/server/guards';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
+	exigirModulo(locals, 'produccion');
 	const tid = tenantDe(locals);
 	const mes = currentRange('mensual');
 	const iRaw = url.searchParams.get('inicio');

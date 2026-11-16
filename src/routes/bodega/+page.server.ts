@@ -1,31 +1,22 @@
 import { db } from '$lib/server/db';
 import { productos, movimientosInventario, categorias } from '$lib/server/schema';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { parseFraction } from '$lib/utils/fractions';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
+import { asegurarMasa } from '$lib/features/shifts/server/products';
+import { log } from '$lib/server/log';
 
-const MASA_NAMES = ['Masa', 'Masas'];
+/** Topes por registro (protegen de ceros de más al digitar). */
+const CANTIDAD_MAXIMA = 1_000_000;
+const PRECIO_MAXIMO = 10_000_000_000;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const tid = tenantDe(locals);
 
 	// El cierre de turno necesita el producto "Masa"; se crea solo si no existe.
-	const [masa] = await db
-		.select({ id: productos.id })
-		.from(productos)
-		.where(delTenant(productos, tid, inArray(productos.nombre, MASA_NAMES)))
-		.limit(1);
-	if (!masa) {
-		await db.insert(productos).values({
-			tenantId: tid,
-			nombre: 'Masa',
-			unidadMedida: 'unidad',
-			stockActual: 0,
-			precio: '0'
-		});
-	}
+	await asegurarMasa(tid);
 
 	const [lista, cats, historial] = await Promise.all([
 		db.select().from(productos).where(delTenant(productos, tid)).orderBy(asc(productos.nombre)),
@@ -75,10 +66,12 @@ export const actions: Actions = {
 		const cantidad = parseFraction(formData.get('cantidad')?.toString() ?? '');
 		const precioRaw = parseFloat(formData.get('precioTotalCompra')?.toString() ?? '0');
 		const precioTotal = Number.isFinite(precioRaw) && precioRaw > 0 ? precioRaw : 0;
+		if (precioTotal > PRECIO_MAXIMO)
+			return fail(400, { error: 'El precio de la compra no es válido.' });
 
 		if (!Number.isFinite(productoId) || productoId <= 0)
 			return fail(400, { error: 'Selecciona un insumo.' });
-		if (!Number.isFinite(cantidad) || cantidad < 0) {
+		if (!Number.isFinite(cantidad) || cantidad < 0 || cantidad > CANTIDAD_MAXIMA) {
 			return fail(400, {
 				error: 'Cantidad inválida. Usa un número o fracción (ej: 6 1/4, 2 1/2, 3/4).'
 			});
@@ -87,42 +80,47 @@ export const actions: Actions = {
 			return fail(400, { error: 'La cantidad comprada debe ser mayor a 0.' });
 
 		const [p] = await db
-			.select()
+			.select({ id: productos.id, nombre: productos.nombre, unidadMedida: productos.unidadMedida })
 			.from(productos)
 			.where(delTenant(productos, tid, eq(productos.id, productoId)));
 		if (!p) return fail(404, { error: 'El insumo no existe.' });
 
-		const stockActual = p.stockActual ?? 0;
-		const costoAnterior = Number(p.precioCosto ?? 0);
-		const nuevoStock = tipo === 'entrada' ? stockActual + cantidad : cantidad;
-		const movimiento = nuevoStock - stockActual;
-
-		// Costo promedio ponderado solo cambia con compras valorizadas
-		const nuevoCosto =
-			tipo === 'entrada' && nuevoStock > 0 && precioTotal > 0
-				? (stockActual * costoAnterior + precioTotal) / nuevoStock
-				: costoAnterior;
-
+		const entrada = tipo === 'entrada';
+		const costoUnitario = entrada && cantidad > 0 ? (precioTotal / cantidad).toFixed(2) : '0';
+		let nuevoStock: number;
+		let movimiento: number;
 		try {
-			// Atómico: stock y movimiento se guardan juntos o ninguno
-			await db.batch([
-				db
-					.update(productos)
-					.set({ stockActual: nuevoStock, precioCosto: nuevoCosto.toFixed(2) })
-					.where(delTenant(productos, tid, eq(productos.id, p.id))),
-				db.insert(movimientosInventario).values({
-					tenantId: tid,
-					productoId: p.id,
-					usuarioId: locals.user.id,
-					tipo,
-					cantidad: movimiento,
-					costoTotal: tipo === 'entrada' ? precioTotal.toString() : '0',
-					costoUnitario:
-						tipo === 'entrada' && cantidad > 0 ? (precioTotal / cantidad).toFixed(2) : '0'
-				})
-			]);
+			// UNA sentencia: bloquea la fila, calcula sobre el stock vigente en ese
+			// instante y registra el movimiento. Antes se leía el stock, se sumaba en
+			// JS y se escribía el total: dos compras (o una compra y un cierre de
+			// turno) simultáneas se pisaban y una se perdía.
+			const r = await db.execute<{ nuevo: string; anterior: string }>(sql`
+				WITH antes AS (
+					SELECT id, coalesce(stock_actual, 0) AS stock, coalesce(precio_costo, 0) AS costo
+					FROM productos WHERE tenant_id = ${tid} AND id = ${p.id} FOR UPDATE
+				), upd AS (
+					UPDATE productos AS pr SET
+						stock_actual = CASE WHEN ${entrada} THEN antes.stock + ${cantidad}::numeric ELSE ${cantidad}::numeric END,
+						precio_costo = CASE
+							WHEN ${entrada} AND ${precioTotal}::numeric > 0 AND antes.stock + ${cantidad}::numeric > 0
+								THEN round((antes.stock * antes.costo + ${precioTotal}::numeric) / (antes.stock + ${cantidad}::numeric), 2)
+							ELSE antes.costo END
+					FROM antes WHERE pr.id = antes.id
+					RETURNING pr.stock_actual AS nuevo, antes.stock AS anterior
+				), mov AS (
+					INSERT INTO movimientos_inventario
+						(tenant_id, producto_id, usuario_id, tipo, cantidad, costo_total, costo_unitario)
+					SELECT ${tid}, ${p.id}, ${locals.user.id}, ${tipo}, upd.nuevo - upd.anterior,
+						${entrada ? precioTotal.toString() : '0'}::numeric, ${costoUnitario}::numeric
+					FROM upd
+				)
+				SELECT nuevo, anterior FROM upd`);
+			const fila = r.rows[0];
+			if (!fila) return fail(404, { error: 'El insumo no existe.' });
+			nuevoStock = Number(fila.nuevo);
+			movimiento = nuevoStock - Number(fila.anterior);
 		} catch (err) {
-			console.error('[bodega] error al actualizar inventario:', err);
+			log.error('error al actualizar inventario', { tenantId: tid, productoId: p.id, err });
 			return fail(500, { error: 'Error interno al actualizar el inventario.' });
 		}
 

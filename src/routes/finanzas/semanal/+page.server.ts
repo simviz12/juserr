@@ -3,6 +3,7 @@ import { turnos, gastos, cortesSemanales } from '$lib/server/schema';
 import { gte, lt, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { exigirModulo } from '$lib/server/guards';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
@@ -35,6 +36,7 @@ async function esperado(tid: number, desde: string, hasta: string) {
 }
 
 export const load: PageServerLoad = async ({ url, locals }) => {
+	exigirModulo(locals, 'finanzas-avanzadas');
 	const tid = tenantDe(locals);
 	const semana = currentRange('semanal');
 	const dRaw = url.searchParams.get('desde');
@@ -76,6 +78,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
+		exigirModulo(locals, 'finanzas-avanzadas');
 		const tid = tenantDe(locals);
 		const formData = await request.formData();
 		const desde = formData.get('rangoInicio')?.toString() ?? '';

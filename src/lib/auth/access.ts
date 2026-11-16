@@ -48,6 +48,20 @@ export function normalizeRol(value: unknown): Rol {
 	return isRol(v) ? v : 'cajero';
 }
 
+/**
+ * Ruta tal como la enruta SvelteKit (decodificada). `url.pathname` conserva los
+ * `%xx`: comparar prefijos sobre ella permitía saltarse los controles con
+ * `/pl%61taforma` o `/finanzas/re%73umen`. Misma regla que `decode_pathname`
+ * de SvelteKit (respeta `%25`). Devuelve null si la ruta está mal codificada.
+ */
+export function rutaCanonica(pathname: string): string | null {
+	try {
+		return pathname.split('%25').map(decodeURI).join('%25');
+	} catch {
+		return null;
+	}
+}
+
 function matchesPrefix(path: string, prefix: string): boolean {
 	return path === prefix || path.startsWith(prefix + '/');
 }

@@ -3,6 +3,8 @@ import { turnos, gastos, cierresDia } from '$lib/server/schema';
 import { gte, lt, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { esViolacionUnica } from '$lib/server/pg-errors';
+import { log } from '$lib/server/log';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
@@ -95,7 +97,10 @@ export const actions: Actions = {
 				totalGastos: r.gastos.toString()
 			});
 		} catch (err) {
-			console.error(err);
+			// Dos cierres del mismo día a la vez: el índice único deja pasar solo uno.
+			if (esViolacionUnica(err, 'cierres_dia_tenant_dia_uq'))
+				return fail(409, { error: `El día ${dayKey} ya tiene un cierre de caja registrado.` });
+			log.error('error al guardar el cierre de caja', { tenantId: tid, dayKey, err });
 			return fail(500, { error: 'Error al guardar el cierre de caja.' });
 		}
 

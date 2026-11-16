@@ -1,8 +1,11 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { exigirAdminPlataforma } from '$lib/server/guards';
+import { log } from '$lib/server/log';
 import { catalogo, crearRestaurante, ErrorNegocio } from '$lib/billing/server';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	exigirAdminPlataforma(locals);
 	const cat = await catalogo();
 	return {
 		modulos: cat
@@ -18,6 +21,7 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
+		const admin = exigirAdminPlataforma(locals);
 		const fd = await request.formData();
 		const txt = (k: string, max = 120) => fd.get(k)?.toString().trim().slice(0, max) ?? '';
 		const limiteRaw = txt('limite_usuarios', 5);
@@ -52,10 +56,10 @@ export const actions: Actions = {
 
 		let id: number;
 		try {
-			id = await crearRestaurante(locals.platformAdmin!.id, datos);
+			id = await crearRestaurante(admin.id, datos);
 		} catch (e) {
 			if (e instanceof ErrorNegocio) return fail(400, { error: e.message, valores });
-			console.error('[plataforma] error al crear restaurante:', e);
+			log.error('error al crear restaurante', { adminId: admin.id, err: e });
 			return fail(500, { error: 'No se pudo crear el restaurante.', valores });
 		}
 		redirect(303, `/plataforma/restaurantes/${id}?creado=1`);

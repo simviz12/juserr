@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { cortesSemanales, gastos } from '$lib/server/schema';
 import { gte, lt, asc } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { exigirModulo } from '$lib/server/guards';
 import { getFinanceDashboard } from '$lib/features/finance/server/dashboard.service';
 import { businessDayKey, currentRange } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
@@ -9,6 +10,7 @@ import { getBusinessConfig } from '$lib/features/business/server/config';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
+	exigirModulo(locals, 'finanzas-avanzadas');
 	const tid = tenantDe(locals);
 	const raw = url.searchParams.get('mes');
 	const mes =

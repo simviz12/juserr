@@ -1,6 +1,8 @@
 import { error, fail } from '@sveltejs/kit';
 import { desc, eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
+import { exigirAdminPlataforma } from '$lib/server/guards';
+import { log } from '$lib/server/log';
 import { db } from '$lib/server/db';
 import { auditoriaPlataforma, tenants } from '$lib/server/schema';
 import {
@@ -29,7 +31,8 @@ function idDe(params: { id: string }): number {
 	return id;
 }
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, locals }) => {
+	exigirAdminPlataforma(locals);
 	const id = idDe(params);
 	const [t] = await db.select().from(tenants).where(eq(tenants.id, id));
 	if (!t) error(404, 'Restaurante no encontrado');
@@ -85,20 +88,25 @@ async function ejecutar(
 	e: RequestEvent,
 	fn: (adminId: number, tenantId: number, fd: FormData) => Promise<string>
 ) {
+	const admin = exigirAdminPlataforma(e.locals);
 	const tenantId = idDe(e.params);
 	const fd = await e.request.formData();
 	try {
-		return { success: true, message: await fn(e.locals.platformAdmin!.id, tenantId, fd) };
+		return { success: true, message: await fn(admin.id, tenantId, fd) };
 	} catch (err) {
 		if (err instanceof ErrorNegocio) return fail(400, { error: err.message });
-		console.error('[plataforma] error en acción:', err);
+		log.error('error en acción de plataforma', { tenantId, adminId: admin.id, err });
 		return fail(500, { error: 'No se pudo completar la acción.' });
 	}
 }
 
 const pesos = (cents: number) => '$' + Math.round(cents / 100).toLocaleString('es-CO');
-const metodoDe = (fd: FormData): MetodoPago =>
-	(fd.get('metodo')?.toString() ?? 'transferencia') as MetodoPago;
+const metodoDe = (fd: FormData): MetodoPago => {
+	const m = fd.get('metodo')?.toString() || 'transferencia';
+	if (!(METODOS_PAGO as readonly string[]).includes(m))
+		throw new ErrorNegocio('Método de pago inválido.');
+	return m as MetodoPago;
+};
 
 export const actions: Actions = {
 	pagar: (e) =>

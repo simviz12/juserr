@@ -17,7 +17,25 @@ export default defineConfig({
 			},
 
 			// Runtime fijo: Vercel no debe elegir una versión de Node que el adaptador no soporte.
-			adapter: isVercel ? vercelAdapter({ runtime: 'nodejs22.x' }) : nodeAdapter()
+			adapter: isVercel ? vercelAdapter({ runtime: 'nodejs22.x' }) : nodeAdapter(),
+
+			// Content-Security-Policy: los scripts propios llevan nonce (incluido el de
+			// app.html, vía %sveltekit.nonce%); nada de terceros salvo Google Fonts.
+			csp: {
+				mode: 'auto',
+				directives: {
+					'default-src': ['self'],
+					'script-src': ['self'],
+					'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
+					'font-src': ['self', 'https://fonts.gstatic.com'],
+					'img-src': ['self', 'data:', 'blob:'],
+					'connect-src': ['self'],
+					'object-src': ['none'],
+					'base-uri': ['self'],
+					'form-action': ['self'],
+					'frame-ancestors': ['none']
+				}
+			}
 		})
 	]
 });

@@ -71,8 +71,10 @@ export const actions: Actions = {
 		if (!nombre || !rawPassword || !rol)
 			return fail(400, { error: 'Todos los campos son obligatorios.' });
 		if (!isRol(rol)) return fail(400, { error: 'Rol inválido.' });
-		if (rawPassword.length < MIN_PASSWORD) {
-			return fail(400, { error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.` });
+		if (rawPassword.length < MIN_PASSWORD || rawPassword.length > 256) {
+			return fail(400, {
+				error: `La contraseña debe tener entre ${MIN_PASSWORD} y 256 caracteres.`
+			});
 		}
 		if (await nombreDuplicado(tid, nombre))
 			return fail(409, { error: `Ya existe un usuario llamado "${nombre}".` });
@@ -109,8 +111,10 @@ export const actions: Actions = {
 
 		if (!id || !nombre || !rol) return fail(400, { error: 'Faltan campos obligatorios.' });
 		if (!isRol(rol)) return fail(400, { error: 'Rol inválido.' });
-		if (rawPassword && rawPassword.length < MIN_PASSWORD) {
-			return fail(400, { error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.` });
+		if (rawPassword && (rawPassword.length < MIN_PASSWORD || rawPassword.length > 256)) {
+			return fail(400, {
+				error: `La contraseña debe tener entre ${MIN_PASSWORD} y 256 caracteres.`
+			});
 		}
 
 		const [antes] = await db

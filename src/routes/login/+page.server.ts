@@ -3,13 +3,15 @@ import { db } from '$lib/server/db';
 import { tenants, usuarios } from '$lib/server/schema';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { hash, verify } from '@node-rs/argon2';
-import { createSession, generateSessionToken } from '$lib/server/auth';
-import { limpiarFallos, minutosBloqueo, registrarFallo } from '$lib/server/login-throttle';
+import { createSession, generateSessionToken, SESSION_COOKIE_OPTS } from '$lib/server/auth';
+import { clavesLogin, intentoExitoso, reservarIntento } from '$lib/server/login-throttle';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Cookie (no sensible) que recuerda el código del restaurante en este dispositivo. */
 const COOKIE_CODIGO = 'restaurante';
 const UN_ANIO = 60 * 60 * 24 * 365;
+/** argon2 sobre entradas enormes es caro: se corta antes de verificar. */
+const MAX_PASSWORD = 256;
 const CREDENCIALES_INVALIDAS = 'Código de restaurante, usuario o contraseña incorrectos.';
 
 // Hash señuelo: si el restaurante o el usuario no existen se verifica igual una
@@ -36,8 +38,11 @@ export const actions: Actions = {
 			});
 		}
 
-		const claves = [`ip:${event.getClientAddress()}`, `user:${codigo}/${username.toLowerCase()}`];
-		const bloqueo = minutosBloqueo(claves);
+		if (password.length > MAX_PASSWORD)
+			return fail(400, { message: CREDENCIALES_INVALIDAS, codigo });
+
+		const claves = clavesLogin(event.getClientAddress(), `${codigo}/${username.toLowerCase()}`);
+		const bloqueo = await reservarIntento(claves);
 		if (bloqueo > 0) {
 			return fail(429, {
 				message: `Demasiados intentos fallidos. Intenta de nuevo en ${bloqueo} min.`,
@@ -58,27 +63,17 @@ export const actions: Actions = {
 			);
 
 		const valida = await verify(user?.passwordHash ?? (await hashSenuelo()), password);
-		if (!user || !valida) {
-			registrarFallo(claves);
-			return fail(400, { message: CREDENCIALES_INVALIDAS, codigo });
-		}
-		limpiarFallos(claves);
+		if (!user || !valida) return fail(400, { message: CREDENCIALES_INVALIDAS, codigo });
+		await intentoExitoso(claves);
 
 		const token = generateSessionToken();
 		await createSession(token, user.id);
 
-		const segura = import.meta.env.PROD;
-		event.cookies.set('session', token, {
-			path: '/',
-			httpOnly: true,
-			secure: segura,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 30
-		});
+		event.cookies.set('session', token, SESSION_COOKIE_OPTS);
 		event.cookies.set(COOKIE_CODIGO, codigo, {
 			path: '/login',
 			httpOnly: true,
-			secure: segura,
+			secure: import.meta.env.PROD,
 			sameSite: 'lax',
 			maxAge: UN_ANIO
 		});

@@ -9,14 +9,17 @@ import {
 	pizzaVentas,
 	transaccionesTurno,
 	cierresLinea,
-	ventasItems
+	ventasItems,
+	referenciasPago
 } from '$lib/server/schema';
 import { getLineasControl } from './lines';
 import { cerrarLinea } from '../domain/line-close';
 
 import { fail, type RequestEvent } from '@sveltejs/kit';
-import { desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
+import { log } from '$lib/server/log';
+import { esViolacionUnica } from '$lib/server/pg-errors';
 import { parseFraction } from '$lib/utils/fractions';
 import { getBusinessConfig } from '$lib/features/business/server/config';
 import {
@@ -27,9 +30,28 @@ import {
 	porcionesVendidas,
 	ventasPorSabor
 } from '../domain/close-shift';
+import { MASA_NAMES, PIZZA_PORCIONES_PATRON } from '../domain/products';
 
-const MASA_NAMES = ['Masa', 'Masas'];
+/** Tope por campo de dinero: $10.000 millones (protege de ceros de más). */
+const MONTO_MAXIMO = 10_000_000_000;
+const CLAVE_VALIDA = /^[A-Za-z0-9-]{8,64}$/;
 const cop = (n: number) => n.toLocaleString('es-CO');
+
+function yaRegistrado(turnoId: number) {
+	return {
+		success: true,
+		turnoId,
+		message: `El turno #${turnoId} ya estaba registrado (envío repetido). No se duplicó nada.`
+	};
+}
+
+async function turnoConClave(tid: number, clave: string) {
+	const [previo] = await db
+		.select({ id: turnos.id })
+		.from(turnos)
+		.where(delTenant(turnos, tid, eq(turnos.claveIdempotencia, clave)));
+	return previo?.id ?? null;
+}
 
 export async function closeShiftAction({ request, locals }: RequestEvent) {
 	if (!locals.user) return fail(401, { error: 'No autorizado' });
@@ -40,28 +62,36 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 	// ── Dinero declarado ────────────────────────────────────────────────
 	const monto = parseFloat(formData.get('monto')?.toString() || '0');
 	const nequi = parseFloat(formData.get('nequi')?.toString() || '0');
-	if (!Number.isFinite(monto) || monto < 0)
+	if (!Number.isFinite(monto) || monto < 0 || monto > MONTO_MAXIMO)
 		return fail(400, { error: 'El monto de efectivo es inválido.' });
-	if (!Number.isFinite(nequi) || nequi < 0)
+	if (!Number.isFinite(nequi) || nequi < 0 || nequi > MONTO_MAXIMO)
 		return fail(400, { error: 'El valor de Nequi es inválido.' });
+
+	// ── Idempotencia ────────────────────────────────────────────────────
+	// El formulario trae una clave única por cierre. Si llega dos veces (doble
+	// clic, reintento de red), el segundo envío no crea otro turno.
+	const claveRaw = formData.get('clave')?.toString() ?? '';
+	const clave = CLAVE_VALIDA.test(claveRaw) ? claveRaw : null;
+	if (clave) {
+		const previo = await turnoConClave(tid, clave);
+		if (previo !== null) return yaRegistrado(previo);
+	}
 
 	const descripcion = formData.get('descripcion')?.toString().slice(0, 500) || '';
 	const refNequi = formData.get('ref_nequi')?.toString().slice(0, 500) || '';
 
 	// ── Antifraude: comprobantes Nequi repetidos ───────────────────────
+	// Consulta indexada sobre TODO el historial (antes: solo los últimos 2000 turnos).
+	// La clave primaria de referencias_pago cubre además dos cierres simultáneos.
 	const refs = extractRefs(refNequi);
 	if (refs.length > 0) {
-		const previas = await db
-			.select({ referencias: transaccionesTurno.referencias })
-			.from(transaccionesTurno)
-			.where(delTenant(transaccionesTurno, tid, isNotNull(transaccionesTurno.referencias)))
-			.orderBy(desc(transaccionesTurno.id))
-			.limit(2000);
-		const usadas = new Set(previas.flatMap((p) => extractRefs(p.referencias)));
-		const repetidas = refs.filter((r) => usadas.has(r));
+		const repetidas = await db
+			.select({ referencia: referenciasPago.referencia })
+			.from(referenciasPago)
+			.where(delTenant(referenciasPago, tid, inArray(referenciasPago.referencia, refs)));
 		if (repetidas.length > 0) {
 			return fail(409, {
-				error: `El comprobante ${repetidas.map((r) => r.toUpperCase()).join(', ')} ya fue registrado en un turno anterior. Verifica el pantallazo del cliente.`
+				error: `El comprobante ${repetidas.map((r) => r.referencia.toUpperCase()).join(', ')} ya fue registrado en un turno anterior. Verifica el pantallazo del cliente.`
 			});
 		}
 	}
@@ -70,9 +100,11 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 		formData.getAll('gasto_descripcion').map(String),
 		formData.getAll('gasto_monto').map(String)
 	);
+	if (gastosParsed.some((g) => g.monto > MONTO_MAXIMO))
+		return fail(400, { error: 'Hay un gasto con un valor inválido.' });
 
 	// ── Inventario de pizzas (solo si la línea está activa) ────────────
-	const config = await getBusinessConfig(tid);
+	const config = await getBusinessConfig(tid, { estricto: true });
 	const pizzasActivas = config.habilitarPizzas ?? true;
 
 	let inventario = {
@@ -84,20 +116,27 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 		vendidas: 0
 	};
 	let porSabor: { saborId: number; ruedas: number; sobras: number; vendidas: number }[] = [];
+	let masaId: number | null = null;
+	let porcionesId: number | null = null;
 
 	if (pizzasActivas) {
 		// ANTIFRAUDE: masas iniciales y porciones de ayer se leen de la BD, nunca
 		// del formulario (antes iban en campos ocultos manipulables).
+		// Se elige UN producto de masa y UN producto de porciones (el más antiguo)
+		// y luego se actualiza por id: antes el UPDATE por nombre (ILIKE 'Pizza%')
+		// sobrescribía el stock de todos los productos que empezaran por "Pizza".
 		const [masaRows, pizzaRows, ultimoRows, sabores] = await Promise.all([
 			db
 				.select()
 				.from(productos)
 				.where(delTenant(productos, tid, inArray(productos.nombre, MASA_NAMES)))
+				.orderBy(asc(productos.id))
 				.limit(1),
 			db
 				.select()
 				.from(productos)
-				.where(delTenant(productos, tid, sql`${productos.nombre} ILIKE 'Pizza%'`))
+				.where(delTenant(productos, tid, sql`${productos.nombre} ILIKE ${PIZZA_PORCIONES_PATRON}`))
+				.orderBy(asc(productos.id))
 				.limit(1),
 			db.select().from(turnos).where(delTenant(turnos, tid)).orderBy(desc(turnos.id)).limit(1),
 			db
@@ -106,6 +145,8 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 				.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.activo, true)))
 		]);
 		const ultimoTurno = ultimoRows[0];
+		masaId = masaRows[0]?.id ?? null;
+		porcionesId = pizzaRows[0]?.id ?? null;
 		const masasIniciales = Number(masaRows[0]?.stockActual ?? 0);
 		const porcionesAyer = pizzaRows[0]
 			? Number(pizzaRows[0].stockActual ?? 0)
@@ -232,18 +273,37 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 				porcionesAyer: inventario.porcionesAyer,
 				porcionesSobrantes: inventario.porcionesSobrantes,
 				porcionesMermadas: inventario.porcionesMermadas,
-				porcionesVendidasCalculado: inventario.vendidas
+				porcionesVendidasCalculado: inventario.vendidas,
+				claveIdempotencia: clave
 			}),
-			...(pizzasActivas
+			// Comprobantes: la clave primaria rechaza uno ya usado aunque dos cierres
+			// lleguen a la vez (el lote entero se revierte).
+			...(refs.length
+				? [
+						db
+							.insert(referenciasPago)
+							.values(refs.map((referencia) => ({ tenantId: tid, referencia, turnoId: id })))
+					]
+				: []),
+			// Masas: se DESCUENTA lo usado (no se fija un valor absoluto), así una
+			// compra registrada en Bodega mientras se cerraba el turno no se pierde.
+			...(pizzasActivas && masaId !== null
 				? [
 						db
 							.update(productos)
-							.set({ stockActual: inventario.masasSobrantes })
-							.where(delTenant(productos, tid, inArray(productos.nombre, MASA_NAMES))),
+							.set({
+								stockActual: sql`greatest(${productos.stockActual} - ${inventario.masasIniciales - inventario.masasSobrantes}, 0)`
+							})
+							.where(delTenant(productos, tid, eq(productos.id, masaId)))
+					]
+				: []),
+			// Porciones en vitrina: es un conteo físico, queda en lo contado.
+			...(pizzasActivas && porcionesId !== null
+				? [
 						db
 							.update(productos)
 							.set({ stockActual: inventario.porcionesSobrantes })
-							.where(delTenant(productos, tid, sql`${productos.nombre} ILIKE 'Pizza%'`))
+							.where(delTenant(productos, tid, eq(productos.id, porcionesId)))
 					]
 				: []),
 			...(nequi > 0
@@ -305,11 +365,14 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 						)
 					]
 				: []),
-			// Líneas por inventario: stock queda en lo contado, se guarda la conciliación y el desglose
+			// Líneas por inventario: se descuenta lo consumido + mermas (delta, no
+			// valor absoluto), se guarda la conciliación y el desglose.
 			...cierres.flatMap((c) => [
 				db
 					.update(productos)
-					.set({ stockActual: c.sobrantes })
+					.set({
+						stockActual: sql`greatest(${productos.stockActual} - ${c.inicial - c.sobrantes}, 0)`
+					})
 					.where(delTenant(productos, tid, eq(productos.id, c.productoId))),
 				db.insert(cierresLinea).values({
 					tenantId: tid,
@@ -352,7 +415,17 @@ export async function closeShiftAction({ request, locals }: RequestEvent) {
 					: '')
 		};
 	} catch (err) {
-		console.error('[cierre-turno] error al registrar el cierre:', err);
+		if (clave && esViolacionUnica(err, 'turnos_tenant_clave_uq')) {
+			const previo = await turnoConClave(tid, clave);
+			if (previo !== null) return yaRegistrado(previo);
+		}
+		if (esViolacionUnica(err, 'referencias_pago_tenant_id_referencia_pk')) {
+			return fail(409, {
+				error:
+					'Uno de los comprobantes Nequi se acaba de registrar en otro turno. Verifica el pantallazo del cliente.'
+			});
+		}
+		log.error('error al registrar el cierre de turno', { tenantId: tid, err });
 		return fail(500, {
 			error: 'Error interno al registrar el cierre de turno. No se guardó nada; intenta de nuevo.'
 		});

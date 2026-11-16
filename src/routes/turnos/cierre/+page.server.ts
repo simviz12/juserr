@@ -9,82 +9,61 @@ import {
 } from '$lib/server/schema';
 
 import type { Actions, PageServerLoad } from './$types';
-import { eq, desc, inArray, sql } from 'drizzle-orm';
+import { asc, eq, desc, inArray, sql } from 'drizzle-orm';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 import { closeShiftAction } from '$lib/features/shifts/server/close-shift.action';
 import { getBusinessConfig } from '$lib/features/business/server/config';
 import { getLineasControl } from '$lib/features/shifts/server/lines';
+import { asegurarMasa } from '$lib/features/shifts/server/products';
+import { PIZZA_PORCIONES_PATRON } from '$lib/features/shifts/domain/products';
 
 const PRECIO_PORCION_DEFAULT = 7000;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const tid = tenantDe(locals);
-	// 1. Obtener producto "Masa" (o "Masas"), último turno, lista de sabores y turnos recientes en paralelo
-	// 1. Obtener producto "Masa", producto "Pizza (Porciones)", último turno, lista de sabores y turnos recientes en paralelo
-	const [masaRows, pizzaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw] = await Promise.all([
-		db
-			.select()
-			.from(productos)
-			.where(delTenant(productos, tid, inArray(productos.nombre, ['Masa', 'Masas'])))
-			.limit(1),
-		db
-			.select()
-			.from(productos)
-			.where(delTenant(productos, tid, sql`${productos.nombre} ILIKE 'Pizza%'`)),
-		db
-			.select({
-				id: turnos.id,
-				porcionesSobrantes: turnos.porcionesSobrantes
-			})
-			.from(turnos)
-			.where(delTenant(turnos, tid))
-			.orderBy(desc(turnos.id))
-			.limit(1),
-		db
-			.select()
-			.from(pizzaSabores)
-			.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.activo, true))),
-		db
-			.select({
-				id: turnos.id,
-				fecha: turnos.fecha,
-				monto: turnos.monto,
-				transferencias: turnos.transferencias,
-				descripcion: turnos.descripcion,
-				masasIniciales: turnos.masasIniciales,
-				masasSobrantes: turnos.masasSobrantes,
-				porcionesVendidas: turnos.porcionesVendidasCalculado,
-				porcionesMermadas: turnos.porcionesMermadas,
-				porcionesSobrantes: turnos.porcionesSobrantes
-			})
-			.from(turnos)
-			.where(delTenant(turnos, tid))
-			.orderBy(desc(turnos.id))
-			.limit(20)
-	]);
-
-	let masaProduct = masaRows[0];
-	if (!masaProduct) {
-		const [fallback] = await db
-			.select()
-			.from(productos)
-			.where(delTenant(productos, tid, eq(productos.nombre, 'Masas')));
-		if (fallback) {
-			masaProduct = fallback;
-		} else {
-			const [nuevo] = await db
-				.insert(productos)
-				.values({
-					tenantId: tid,
-					nombre: 'Masa',
-					unidadMedida: 'unidad',
-					stockActual: 0,
-					precio: '0'
+	// 1. Masa, porciones en vitrina, último turno, sabores, turnos recientes y
+	//    configuración: todo en paralelo (antes eran tres oleadas en serie).
+	const [masaProduct, pizzaRows, ultimosTurnoRows, sabores, ultimosTurnosRaw, rubroConfig] =
+		await Promise.all([
+			asegurarMasa(tid),
+			db
+				.select()
+				.from(productos)
+				.where(delTenant(productos, tid, sql`${productos.nombre} ILIKE ${PIZZA_PORCIONES_PATRON}`))
+				.orderBy(asc(productos.id))
+				.limit(1),
+			db
+				.select({
+					id: turnos.id,
+					porcionesSobrantes: turnos.porcionesSobrantes
 				})
-				.returning();
-			masaProduct = nuevo;
-		}
-	}
+				.from(turnos)
+				.where(delTenant(turnos, tid))
+				.orderBy(desc(turnos.id))
+				.limit(1),
+			db
+				.select()
+				.from(pizzaSabores)
+				.where(delTenant(pizzaSabores, tid, eq(pizzaSabores.activo, true))),
+			db
+				.select({
+					id: turnos.id,
+					fecha: turnos.fecha,
+					monto: turnos.monto,
+					transferencias: turnos.transferencias,
+					descripcion: turnos.descripcion,
+					masasIniciales: turnos.masasIniciales,
+					masasSobrantes: turnos.masasSobrantes,
+					porcionesVendidas: turnos.porcionesVendidasCalculado,
+					porcionesMermadas: turnos.porcionesMermadas,
+					porcionesSobrantes: turnos.porcionesSobrantes
+				})
+				.from(turnos)
+				.where(delTenant(turnos, tid))
+				.orderBy(desc(turnos.id))
+				.limit(20),
+			getBusinessConfig(tid)
+		]);
 
 	const pizzaProduct = pizzaRows[0];
 	const ultimoTurno = ultimosTurnoRows[0];
@@ -93,7 +72,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const porcionesAyer = pizzaProduct
 		? Number(pizzaProduct.stockActual || 0)
 		: ultimoTurno?.porcionesSobrantes || 0;
-	const masasActuales = masaProduct.stockActual || 0;
+	const masasActuales = masaProduct?.stockActual || 0;
 
 	const turnoIds = ultimosTurnosRaw.map((t) => t.id);
 
@@ -150,7 +129,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	});
 
-	const rubroConfig = await getBusinessConfig(tid);
 	const lineas = await getLineasControl(rubroConfig);
 
 	// Precio por porción: promedio de los sabores activos con precio; si no hay, 7.000 COP.
@@ -173,7 +151,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			fecha: t.fecha ? t.fecha.toISOString() : null
 		})),
 		rubroConfig,
-		lineas
+		lineas,
+		// Clave única de ESTE formulario: si el cierre se envía dos veces, el
+		// servidor reconoce el segundo envío y no crea otro turno.
+		clave: crypto.randomUUID()
 	};
 };
 

@@ -18,6 +18,7 @@ import { hash } from '@node-rs/argon2';
 import { businessDayKey } from '$lib/features/finance/domain/period';
 import { invalidarDerechos } from '$lib/server/tenancy';
 import { invalidateTenantSessions } from '$lib/server/auth';
+import { esCodigoPg } from '$lib/server/pg-errors';
 import { CORE } from '$lib/modules/registry';
 import {
 	esCodigoTenant,
@@ -134,8 +135,16 @@ export async function solicitarModulo(tenantId: number, usuarioId: number, modul
 				eq(solicitudesModulo.estado, 'pendiente')
 			)
 		);
-	if (ya) throw new ErrorNegocio(`Ya pediste "${m.nombre}". Te contactaremos para activarlo.`);
-	await db.insert(solicitudesModulo).values({ tenantId, modulo, solicitadoPor: usuarioId });
+	const yaPedido = () =>
+		new ErrorNegocio(`Ya pediste "${m.nombre}". Te contactaremos para activarlo.`);
+	if (ya) throw yaPedido();
+	// El índice único parcial (una pendiente por módulo) cubre el doble clic simultáneo.
+	const nueva = await db
+		.insert(solicitudesModulo)
+		.values({ tenantId, modulo, solicitadoPor: usuarioId })
+		.onConflictDoNothing()
+		.returning({ id: solicitudesModulo.id });
+	if (nueva.length === 0) throw yaPedido();
 	return m.nombre;
 }
 
@@ -160,8 +169,8 @@ export async function crearRestaurante(adminId: number, d: NuevoRestaurante): Pr
 		throw new ErrorNegocio(
 			'El código debe tener 3 a 40 caracteres: minúsculas, números y guiones.'
 		);
-	if (d.jefePassword.length < 8)
-		throw new ErrorNegocio('La contraseña del Jefe debe tener al menos 8 caracteres.');
+	if (d.jefePassword.length < 8 || d.jefePassword.length > 256)
+		throw new ErrorNegocio('La contraseña del Jefe debe tener entre 8 y 256 caracteres.');
 	if (!Number.isInteger(d.diasPrueba) || d.diasPrueba < 1 || d.diasPrueba > 90)
 		throw new ErrorNegocio('Los días de prueba deben estar entre 1 y 90.');
 	const [existe] = await db
@@ -253,31 +262,44 @@ export async function registrarPago(adminId: number, tenantId: number, p: PagoIn
 	if (!Number.isSafeInteger(recibido) || recibido < 0)
 		throw new ErrorNegocio('Monto recibido inválido.');
 
-	await db.batch([
-		db.insert(auditoriaPlataforma).values({
-			adminId,
-			tenantId,
-			accion: 'registrar-pago',
-			detalle: { recibido, calculado, detalle }
-		}),
-		...detalle.map((d) =>
-			db
-				.update(suscripcionesModulo)
-				.set({ vigenteHasta: d.hasta, updatedAt: new Date() })
-				.where(
-					and(eq(suscripcionesModulo.tenantId, tenantId), eq(suscripcionesModulo.modulo, d.modulo))
+	try {
+		await db.batch([
+			db.insert(auditoriaPlataforma).values({
+				adminId,
+				tenantId,
+				accion: 'registrar-pago',
+				detalle: { recibido, calculado, detalle }
+			}),
+			// Bloqueo optimista: solo se extiende si la vigencia sigue siendo la que se
+			// leyó. Si otro pago la cambió entretanto, 1/0 aborta TODO el lote (no queda
+			// un pago registrado sin su extensión, ni una extensión contada dos veces).
+			...detalle.map((d) => {
+				const leida = subs.find((s) => s.modulo === d.modulo)!.vigenteHasta;
+				return db.execute(sql`
+				WITH u AS (
+					UPDATE suscripciones_modulo SET vigente_hasta = ${d.hasta}, updated_at = now()
+					WHERE tenant_id = ${tenantId} AND modulo = ${d.modulo} AND vigente_hasta = ${leida}
+					RETURNING 1
 				)
-		),
-		db.insert(pagos).values({
-			tenantId,
-			montoCents: recibido,
-			detalle,
-			metodo: p.metodo,
-			referencia: p.referencia || null,
-			nota: p.nota || (recibido !== calculado ? `Valor calculado: ${calculado / 100}` : null),
-			registradoPor: adminId
-		})
-	]);
+				SELECT 1 / (SELECT count(*) FROM u)::int AS ok`);
+			}),
+			db.insert(pagos).values({
+				tenantId,
+				montoCents: recibido,
+				detalle,
+				metodo: p.metodo,
+				referencia: p.referencia || null,
+				nota: p.nota || (recibido !== calculado ? `Valor calculado: ${calculado / 100}` : null),
+				registradoPor: adminId
+			})
+		]);
+	} catch (err) {
+		if (esCodigoPg(err, '22012'))
+			throw new ErrorNegocio(
+				'Otro pago de este restaurante se registró al mismo tiempo. Recarga la página y revisa antes de volver a registrar.'
+			);
+		throw err;
+	}
 	invalidarDerechos(tenantId);
 	return { recibido, calculado, detalle };
 }
@@ -407,10 +429,13 @@ export async function cambiarEstadoRestaurante(
 ) {
 	if (!(ESTADOS_TENANT as readonly string[]).includes(estado))
 		throw new ErrorNegocio('Estado inválido.');
-	await db.update(tenants).set({ estado }).where(eq(tenants.id, tenantId));
-	await db
-		.insert(auditoriaPlataforma)
-		.values({ adminId, tenantId, accion: 'cambiar-estado', detalle: { estado } });
+	// Estado y auditoría juntos o ninguno (antes iban en dos escrituras separadas).
+	await db.batch([
+		db.update(tenants).set({ estado }).where(eq(tenants.id, tenantId)),
+		db
+			.insert(auditoriaPlataforma)
+			.values({ adminId, tenantId, accion: 'cambiar-estado', detalle: { estado } })
+	]);
 	invalidarDerechos(tenantId);
 	if (estado === 'cancelado') await invalidateTenantSessions(tenantId);
 }

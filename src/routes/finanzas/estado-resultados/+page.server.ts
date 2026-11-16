@@ -3,6 +3,7 @@ import { gastos, movimientosContables } from '$lib/server/schema';
 import { and, eq } from 'drizzle-orm';
 import { fail, type RequestEvent } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { exigirModulo } from '$lib/server/guards';
 import { canAccess } from '$lib/auth/access';
 import { delTenant, tenantDe } from '$lib/server/tenancy';
 import { businessDayKey, isValidDateKey } from '$lib/features/finance/domain/period';
@@ -30,6 +31,7 @@ const RUTA = '/finanzas/estado-resultados';
 const MONTO_MAXIMO_CENTS = 100_000_000_000 * 100;
 
 export const load: PageServerLoad = async ({ url, locals }) => {
+	exigirModulo(locals, 'estado-resultados');
 	const tid = tenantDe(locals);
 	const hoy = businessDayKey(new Date());
 	const rango = resolveRange(url.searchParams.get('inicio'), url.searchParams.get('fin'), hoy);
@@ -70,6 +72,7 @@ const idPositivo = (value: FormDataEntryValue | null) => {
 export const actions: Actions = {
 	/** Registra una devolución, descuento, otro ingreso o un gasto pagado por fuera de la caja. */
 	registrar: async ({ request, locals }) => {
+		exigirModulo(locals, 'estado-resultados');
 		const user = autorizar(locals);
 		if (!user)
 			return fail(403, { error: 'No tienes permiso para registrar movimientos contables.' });
@@ -126,6 +129,7 @@ export const actions: Actions = {
 
 	/** Anula un movimiento manual. No se borra: queda en la base con estado "anulado". */
 	anular: async ({ request, locals }) => {
+		exigirModulo(locals, 'estado-resultados');
 		const user = autorizar(locals);
 		if (!user) return fail(403, { error: 'No tienes permiso para anular movimientos contables.' });
 
@@ -157,6 +161,7 @@ export const actions: Actions = {
 
 	/** Cambia la categoría contable de un gasto de caja (vacío = clasificación automática). */
 	categorizar: async ({ request, locals }) => {
+		exigirModulo(locals, 'estado-resultados');
 		const user = autorizar(locals);
 		if (!user) return fail(403, { error: 'No tienes permiso para clasificar gastos.' });
 

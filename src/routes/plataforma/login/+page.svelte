@@ -63,6 +63,21 @@
 					class={inputClass}
 				/>
 			</div>
+			<div class="space-y-1.5">
+				<label for="codigo" class="text-sm font-medium">
+					Código de verificación <span class="text-muted-foreground">(app autenticadora)</span>
+				</label>
+				<input
+					id="codigo"
+					name="codigo"
+					inputmode="numeric"
+					autocomplete="one-time-code"
+					pattern="[0-9 ]*"
+					maxlength="7"
+					placeholder="123456"
+					class={inputClass}
+				/>
+			</div>
 			<button type="submit" disabled={enviando} class={cn(btn.base, btn.primary, 'w-full')}>
 				{#if enviando}<LoaderCircle size={15} class="animate-spin" />{/if} Ingresar
 			</button>

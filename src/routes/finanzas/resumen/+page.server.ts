@@ -8,6 +8,7 @@ import {
 } from '$lib/server/schema';
 import { sql, and, gte, lt, desc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
+import { exigirModulo } from '$lib/server/guards';
 import { businessDayKey, currentRange, isValidDateKey } from '$lib/features/finance/domain/period';
 import { toNumber } from '$lib/features/finance/domain/metrics';
 import { getBusinessConfig } from '$lib/features/business/server/config';
@@ -22,6 +23,7 @@ function mondayOf(dayKey: string): string {
 }
 
 export const load: PageServerLoad = async ({ url, locals }) => {
+	exigirModulo(locals, 'finanzas-avanzadas');
 	const tid = tenantDe(locals);
 	// Mes en curso según la jornada de negocio en Colombia (no la hora del servidor).
 	const mes = currentRange('mensual');

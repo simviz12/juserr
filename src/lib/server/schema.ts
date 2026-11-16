@@ -8,7 +8,6 @@ import {
 	timestamp,
 	numeric,
 	boolean,
-	real,
 	date,
 	index,
 	uniqueIndex,
@@ -149,7 +148,11 @@ export const solicitudesModulo = pgTable(
 		check(
 			'solicitudes_modulo_estado_check',
 			sql`${t.estado} IN ('pendiente', 'atendida', 'descartada')`
-		)
+		),
+		// Una sola solicitud pendiente por módulo (doble clic = una solicitud).
+		uniqueIndex('solicitudes_modulo_pendiente_uq')
+			.on(t.tenantId, t.modulo)
+			.where(sql`${t.estado} = 'pendiente'`)
 	]
 );
 
@@ -159,26 +162,46 @@ export const platformAdmins = pgTable('platform_admins', {
 	email: text('email').notNull().unique(),
 	nombre: text('nombre').notNull(),
 	passwordHash: text('password_hash').notNull(),
+	/** Secreto TOTP (base32). Si existe, el login exige el código de 6 dígitos. */
+	totpSecret: text('totp_secret'),
 	createdAt: timestamp('created_at').defaultNow()
 });
 
-export const platformSesiones = pgTable('platform_sesiones', {
-	id: text('id').primaryKey(),
-	adminId: integer('admin_id')
-		.notNull()
-		.references(() => platformAdmins.id),
-	expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull()
+export const platformSesiones = pgTable(
+	'platform_sesiones',
+	{
+		id: text('id').primaryKey(),
+		adminId: integer('admin_id')
+			.notNull()
+			.references(() => platformAdmins.id),
+		expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull()
+	},
+	(t) => [index('platform_sesiones_admin_idx').on(t.adminId)]
+);
+
+/**
+ * Freno de fuerza bruta compartido por todas las instancias (antes vivía en la
+ * memoria de cada proceso). Una fila por clave (ip, cuenta, ip+cuenta).
+ */
+export const intentosLogin = pgTable('intentos_login', {
+	clave: text('clave').primaryKey(),
+	fallos: integer('fallos').notNull().default(0),
+	desde: timestamp('desde', { withTimezone: true, mode: 'date' }).notNull().defaultNow()
 });
 
 /** Bitácora de acciones de la consola (quién activó/suspendió/registró qué). */
-export const auditoriaPlataforma = pgTable('auditoria_plataforma', {
-	id: serial('id').primaryKey(),
-	adminId: integer('admin_id').references(() => platformAdmins.id),
-	tenantId: integer('tenant_id').references(() => tenants.id),
-	accion: text('accion').notNull(),
-	detalle: jsonb('detalle'),
-	createdAt: timestamp('created_at').defaultNow()
-});
+export const auditoriaPlataforma = pgTable(
+	'auditoria_plataforma',
+	{
+		id: serial('id').primaryKey(),
+		adminId: integer('admin_id').references(() => platformAdmins.id),
+		tenantId: integer('tenant_id').references(() => tenants.id),
+		accion: text('accion').notNull(),
+		detalle: jsonb('detalle'),
+		createdAt: timestamp('created_at').defaultNow()
+	},
+	(t) => [index('auditoria_plataforma_tenant_idx').on(t.tenantId, t.createdAt)]
+);
 
 // ═══════════════════════════════════════════════════════════════════════
 // NEGOCIO. Toda tabla lleva tenant_id: un restaurante nunca ve datos de otro.
@@ -188,6 +211,14 @@ const tenantId = () =>
 	integer('tenant_id')
 		.notNull()
 		.references(() => tenants.id);
+
+/**
+ * Cantidades de inventario (fracciones de masa, porciones, unidades).
+ * numeric exacto en lugar de real (float4 perdía precisión con ~7 dígitos);
+ * en la app sigue llegando como number.
+ */
+const cantidadCol = (nombre: string) =>
+	numeric(nombre, { precision: 12, scale: 3, mode: 'number' });
 
 export const usuarios = pgTable(
 	'usuarios',
@@ -202,13 +233,19 @@ export const usuarios = pgTable(
 	(t) => [uniqueIndex('usuarios_tenant_nombre_uq').on(t.tenantId, sql`lower(${t.nombre})`)]
 );
 
-export const sesiones = pgTable('sesiones', {
-	id: text('id').primaryKey(),
-	userId: integer('user_id')
-		.notNull()
-		.references(() => usuarios.id),
-	expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull()
-});
+export const sesiones = pgTable(
+	'sesiones',
+	{
+		id: text('id').primaryKey(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => usuarios.id),
+		expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+		/** Inicio de la sesión: base de la caducidad absoluta (90 días). */
+		createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow()
+	},
+	(t) => [index('sesiones_user_idx').on(t.userId)]
+);
 
 export const categorias = pgTable(
 	'categorias',
@@ -228,12 +265,16 @@ export const productos = pgTable(
 		nombre: text('nombre').notNull(),
 		categoriaId: integer('categoria_id').references(() => categorias.id),
 		unidadMedida: text('unidad_medida').notNull(), // fraccion, unidad, pechuga
-		stockActual: real('stock_actual').default(0),
-		stockMinimo: real('stock_minimo').default(5),
-		precio: numeric('precio', { precision: 10, scale: 2 }).default('0'),
-		precioCosto: numeric('precio_costo', { precision: 10, scale: 2 }).default('0')
+		stockActual: cantidadCol('stock_actual').default(0),
+		stockMinimo: cantidadCol('stock_minimo').default(5),
+		precio: numeric('precio', { precision: 14, scale: 2 }).default('0'),
+		precioCosto: numeric('precio_costo', { precision: 14, scale: 2 }).default('0')
 	},
-	(t) => [index('productos_tenant_idx').on(t.tenantId)]
+	(t) => [
+		index('productos_tenant_idx').on(t.tenantId),
+		// Evita insumos duplicados (p. ej. dos "Masa" creadas en paralelo).
+		uniqueIndex('productos_tenant_nombre_uq').on(t.tenantId, sql`lower(${t.nombre})`)
+	]
 );
 
 export const movimientosInventario = pgTable(
@@ -246,33 +287,44 @@ export const movimientosInventario = pgTable(
 			.notNull(),
 		usuarioId: integer('usuario_id').references(() => usuarios.id), // Permite null por si hay movimientos antiguos
 		tipo: text('tipo').notNull(), // entrada, salida, ajuste
-		cantidad: real('cantidad').notNull(),
-		costoUnitario: numeric('costo_unitario', { precision: 10, scale: 2 }).default('0'),
-		costoTotal: numeric('costo_total', { precision: 10, scale: 2 }).default('0'),
+		cantidad: cantidadCol('cantidad').notNull(),
+		costoUnitario: numeric('costo_unitario', { precision: 14, scale: 2 }).default('0'),
+		costoTotal: numeric('costo_total', { precision: 14, scale: 2 }).default('0'),
 		fecha: timestamp('fecha').defaultNow()
 	},
-	(t) => [index('movimientos_inventario_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('movimientos_inventario_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		index('movimientos_inventario_producto_idx').on(t.productoId)
+	]
 );
 
-export const bebidas = pgTable('bebidas', {
-	id: serial('id').primaryKey(),
-	tenantId: tenantId(),
-	nombre: text('nombre').notNull(),
-	precio: numeric('precio', { precision: 10, scale: 2 }).notNull(),
-	stockActual: integer('stock_actual').default(0)
-});
+export const bebidas = pgTable(
+	'bebidas',
+	{
+		id: serial('id').primaryKey(),
+		tenantId: tenantId(),
+		nombre: text('nombre').notNull(),
+		precio: numeric('precio', { precision: 14, scale: 2 }).notNull(),
+		stockActual: integer('stock_actual').default(0)
+	},
+	(t) => [index('bebidas_tenant_idx').on(t.tenantId)]
+);
 
-export const movimientosBebidas = pgTable('movimientos_bebidas', {
-	id: serial('id').primaryKey(),
-	tenantId: tenantId(),
-	bebidaId: integer('bebida_id')
-		.references(() => bebidas.id)
-		.notNull(),
-	usuarioId: integer('usuario_id').references(() => usuarios.id),
-	tipo: text('tipo').notNull(), // entrada, salida, venta
-	cantidad: integer('cantidad').notNull(),
-	fecha: timestamp('fecha').defaultNow()
-});
+export const movimientosBebidas = pgTable(
+	'movimientos_bebidas',
+	{
+		id: serial('id').primaryKey(),
+		tenantId: tenantId(),
+		bebidaId: integer('bebida_id')
+			.references(() => bebidas.id)
+			.notNull(),
+		usuarioId: integer('usuario_id').references(() => usuarios.id),
+		tipo: text('tipo').notNull(), // entrada, salida, venta
+		cantidad: integer('cantidad').notNull(),
+		fecha: timestamp('fecha').defaultNow()
+	},
+	(t) => [index('movimientos_bebidas_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+);
 
 export const pizzaSabores = pgTable(
 	'pizza_sabores',
@@ -280,34 +332,42 @@ export const pizzaSabores = pgTable(
 		id: serial('id').primaryKey(),
 		tenantId: tenantId(),
 		nombre: text('nombre').notNull(),
-		precioPorcion: numeric('precio_porcion', { precision: 10, scale: 2 }).default('0'),
-		precioRueda: numeric('precio_rueda', { precision: 10, scale: 2 }).default('0'),
+		precioPorcion: numeric('precio_porcion', { precision: 14, scale: 2 }).default('0'),
+		precioRueda: numeric('precio_rueda', { precision: 14, scale: 2 }).default('0'),
 		activo: boolean('activo').default(true)
 	},
 	(t) => [index('pizza_sabores_tenant_idx').on(t.tenantId)]
 );
 
-export const pizzaRuedas = pgTable('pizza_ruedas', {
-	id: serial('id').primaryKey(),
-	tenantId: tenantId(),
-	saborId: integer('sabor_id')
-		.references(() => pizzaSabores.id)
-		.notNull(),
-	turnoId: integer('turno_id').references(() => turnos.id),
-	cantidad: integer('cantidad').notNull(),
-	fecha: timestamp('fecha').defaultNow()
-});
+export const pizzaRuedas = pgTable(
+	'pizza_ruedas',
+	{
+		id: serial('id').primaryKey(),
+		tenantId: tenantId(),
+		saborId: integer('sabor_id')
+			.references(() => pizzaSabores.id)
+			.notNull(),
+		turnoId: integer('turno_id').references(() => turnos.id),
+		cantidad: integer('cantidad').notNull(),
+		fecha: timestamp('fecha').defaultNow()
+	},
+	(t) => [index('pizza_ruedas_turno_idx').on(t.turnoId)]
+);
 
-export const pizzaSobras = pgTable('pizza_sobras', {
-	id: serial('id').primaryKey(),
-	tenantId: tenantId(),
-	saborId: integer('sabor_id')
-		.references(() => pizzaSabores.id)
-		.notNull(),
-	turnoId: integer('turno_id').references(() => turnos.id),
-	cantidad: real('cantidad').notNull(), // Puede sobrar media pizza
-	fecha: timestamp('fecha').defaultNow()
-});
+export const pizzaSobras = pgTable(
+	'pizza_sobras',
+	{
+		id: serial('id').primaryKey(),
+		tenantId: tenantId(),
+		saborId: integer('sabor_id')
+			.references(() => pizzaSabores.id)
+			.notNull(),
+		turnoId: integer('turno_id').references(() => turnos.id),
+		cantidad: cantidadCol('cantidad').notNull(), // Puede sobrar media pizza
+		fecha: timestamp('fecha').defaultNow()
+	},
+	(t) => [index('pizza_sobras_turno_idx').on(t.turnoId)]
+);
 
 export const pizzaVentas = pgTable(
 	'pizza_ventas',
@@ -318,10 +378,13 @@ export const pizzaVentas = pgTable(
 			.references(() => pizzaSabores.id)
 			.notNull(),
 		turnoId: integer('turno_id').references(() => turnos.id),
-		cantidadVendida: real('cantidad_vendida').notNull(),
+		cantidadVendida: cantidadCol('cantidad_vendida').notNull(),
 		fecha: timestamp('fecha').defaultNow()
 	},
-	(t) => [index('pizza_ventas_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('pizza_ventas_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		index('pizza_ventas_turno_idx').on(t.turnoId)
+	]
 );
 
 export const turnos = pgTable(
@@ -329,19 +392,26 @@ export const turnos = pgTable(
 	{
 		id: serial('id').primaryKey(),
 		tenantId: tenantId(),
-		monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
-		transferencias: numeric('transferencias', { precision: 10, scale: 2 }).default('0'), // total calculado
+		monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),
+		transferencias: numeric('transferencias', { precision: 14, scale: 2 }).default('0'), // total calculado
 		descripcion: text('descripcion'),
 		fecha: timestamp('fecha').defaultNow(),
 		// Campos para modelo de inventario
-		masasIniciales: real('masas_iniciales').default(0),
-		masasSobrantes: real('masas_sobrantes').default(0),
+		masasIniciales: cantidadCol('masas_iniciales').default(0),
+		masasSobrantes: cantidadCol('masas_sobrantes').default(0),
 		porcionesAyer: integer('porciones_ayer').default(0),
 		porcionesSobrantes: integer('porciones_sobrantes').default(0),
 		porcionesMermadas: integer('porciones_mermadas').default(0),
-		porcionesVendidasCalculado: integer('porciones_vendidas_calculado').default(0)
+		porcionesVendidasCalculado: integer('porciones_vendidas_calculado').default(0),
+		/** Token del formulario de cierre: un doble envío no crea dos turnos. */
+		claveIdempotencia: text('clave_idempotencia')
 	},
-	(t) => [index('turnos_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('turnos_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		// "Último turno del restaurante" (ORDER BY id DESC LIMIT 1).
+		index('turnos_tenant_id_idx').on(t.tenantId, t.id),
+		uniqueIndex('turnos_tenant_clave_uq').on(t.tenantId, t.claveIdempotencia)
+	]
 );
 
 // Desglose de medios de pago por turno (Nequi, Daviplata, Bold/Tarjeta)
@@ -354,11 +424,14 @@ export const transaccionesTurno = pgTable(
 			.references(() => turnos.id)
 			.notNull(),
 		plataforma: text('plataforma').notNull(), // 'nequi' | 'daviplata' | 'bold'
-		monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
+		monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),
 		referencias: text('referencias'), // Lista de referencias de pago importantes (opcional)
 		fecha: timestamp('fecha').defaultNow()
 	},
-	(t) => [index('transacciones_turno_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('transacciones_turno_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		index('transacciones_turno_turno_idx').on(t.turnoId)
+	]
 );
 
 export const gastos = pgTable(
@@ -368,12 +441,15 @@ export const gastos = pgTable(
 		tenantId: tenantId(),
 		turnoId: integer('turno_id').references(() => turnos.id),
 		descripcion: text('descripcion').notNull(),
-		monto: numeric('monto', { precision: 10, scale: 2 }).notNull(),
+		monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),
 		fecha: timestamp('fecha').defaultNow(),
 		// Categoría contable para el estado de resultados. null = se clasifica sola por el concepto.
 		categoria: text('categoria')
 	},
-	(t) => [index('gastos_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('gastos_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		index('gastos_turno_idx').on(t.turnoId)
+	]
 );
 
 export const cierresDia = pgTable(
@@ -382,12 +458,16 @@ export const cierresDia = pgTable(
 		id: serial('id').primaryKey(),
 		tenantId: tenantId(),
 		fecha: timestamp('fecha').defaultNow(),
-		totalEfectivo: numeric('total_efectivo', { precision: 10, scale: 2 }).notNull(),
-		totalTransferencias: numeric('total_transferencias', { precision: 10, scale: 2 }).default('0'),
-		totalTurnos: numeric('total_turnos', { precision: 10, scale: 2 }).default('0'),
-		totalGastos: numeric('total_gastos', { precision: 10, scale: 2 }).default('0')
+		totalEfectivo: numeric('total_efectivo', { precision: 14, scale: 2 }).notNull(),
+		totalTransferencias: numeric('total_transferencias', { precision: 14, scale: 2 }).default('0'),
+		totalTurnos: numeric('total_turnos', { precision: 14, scale: 2 }).default('0'),
+		totalGastos: numeric('total_gastos', { precision: 14, scale: 2 }).default('0')
 	},
-	(t) => [index('cierres_dia_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('cierres_dia_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		// Un solo cierre de caja por día de negocio (fecha = mediodía de ese día).
+		uniqueIndex('cierres_dia_tenant_dia_uq').on(t.tenantId, sql`((${t.fecha})::date)`)
+	]
 );
 
 export const cortesSemanales = pgTable(
@@ -396,11 +476,11 @@ export const cortesSemanales = pgTable(
 		id: serial('id').primaryKey(),
 		tenantId: tenantId(),
 		fechaCorte: timestamp('fecha_corte').defaultNow(),
-		totalCalculado: numeric('total_calculado', { precision: 10, scale: 2 }).notNull(),
-		totalReal: numeric('total_real', { precision: 10, scale: 2 }),
-		efectivoReal: numeric('efectivo_real', { precision: 10, scale: 2 }),
-		transferenciasReales: numeric('transferencias_reales', { precision: 10, scale: 2 }),
-		diferencia: numeric('diferencia', { precision: 10, scale: 2 }),
+		totalCalculado: numeric('total_calculado', { precision: 14, scale: 2 }).notNull(),
+		totalReal: numeric('total_real', { precision: 14, scale: 2 }),
+		efectivoReal: numeric('efectivo_real', { precision: 14, scale: 2 }),
+		transferenciasReales: numeric('transferencias_reales', { precision: 14, scale: 2 }),
+		diferencia: numeric('diferencia', { precision: 14, scale: 2 }),
 		rangoInicio: timestamp('rango_inicio'),
 		rangoFin: timestamp('rango_fin')
 	},
@@ -434,7 +514,7 @@ export const lineasGastronomicas = pgTable(
 		nombre: text('nombre').notNull(), // Ej: 'Parrilla & Chuzos', 'Pizzas Artesanales', 'Hamburguesas & Combos', 'Lasañas al Horno'
 		icono: text('icono').default('UtensilsCrossed'),
 		unidadPorcion: text('unidad_porcion').notNull().default('unidad'), // pincho, porcion, combo, bandeja, libra
-		precioPromedio: numeric('precio_promedio', { precision: 10, scale: 2 }).default('0'),
+		precioPromedio: numeric('precio_promedio', { precision: 14, scale: 2 }).default('0'),
 		activo: boolean('activo').default(true),
 		// Insumo que se cuenta en el cierre de turno para controlar la línea (pan, chuzo armado, porción...)
 		productoControlId: integer('producto_control_id').references(() => productos.id)
@@ -451,11 +531,11 @@ export const itemsLinea = pgTable(
 			.references(() => lineasGastronomicas.id)
 			.notNull(),
 		nombre: text('nombre').notNull(), // Ej: 'Chuzo de Pollo y Tocineta', 'Hamburguesa Clásica Artesanal', 'Lasaña Mixta Especial'
-		precioVenta: numeric('precio_venta', { precision: 10, scale: 2 }).notNull().default('0'),
-		precioCosto: numeric('precio_costo', { precision: 10, scale: 2 }).default('0'),
+		precioVenta: numeric('precio_venta', { precision: 14, scale: 2 }).notNull().default('0'),
+		precioCosto: numeric('precio_costo', { precision: 14, scale: 2 }).default('0'),
 		activo: boolean('activo').default(true),
 		// Unidades del insumo de control que consume una venta de este plato (p. ej. 1 pan)
-		unidadesControl: real('unidades_control').default(1)
+		unidadesControl: cantidadCol('unidades_control').default(1)
 	},
 	(t) => [index('items_linea_tenant_idx').on(t.tenantId)]
 );
@@ -473,10 +553,10 @@ export const cierresLinea = pgTable(
 			.references(() => lineasGastronomicas.id)
 			.notNull(),
 		productoId: integer('producto_id').references(() => productos.id),
-		inicial: real('inicial').notNull(),
-		sobrantes: real('sobrantes').notNull(),
-		mermas: real('mermas').notNull().default(0),
-		consumidas: real('consumidas').notNull(),
+		inicial: cantidadCol('inicial').notNull(),
+		sobrantes: cantidadCol('sobrantes').notNull(),
+		mermas: cantidadCol('mermas').notNull().default(0),
+		consumidas: cantidadCol('consumidas').notNull(),
 		ventaEsperada: numeric('venta_esperada', { precision: 12, scale: 2 }).notNull().default('0'),
 		desgloseCompleto: boolean('desglose_completo').default(false),
 		fecha: timestamp('fecha').defaultNow()
@@ -502,15 +582,31 @@ export const ventasItems = pgTable(
 		lineaId: integer('linea_id')
 			.references(() => lineasGastronomicas.id)
 			.notNull(),
-		cantidad: real('cantidad').notNull(),
-		precioUnitario: numeric('precio_unitario', { precision: 10, scale: 2 }).notNull(),
-		costoUnitario: numeric('costo_unitario', { precision: 10, scale: 2 }).default('0'),
+		cantidad: cantidadCol('cantidad').notNull(),
+		precioUnitario: numeric('precio_unitario', { precision: 14, scale: 2 }).notNull(),
+		costoUnitario: numeric('costo_unitario', { precision: 14, scale: 2 }).default('0'),
 		fecha: timestamp('fecha').defaultNow()
 	},
 	(t) => [
 		index('ventas_items_tenant_fecha_idx').on(t.tenantId, t.fecha),
 		index('ventas_items_turno_idx').on(t.turnoId)
 	]
+);
+
+/**
+ * Comprobantes de pago (Nequi...) ya usados por el restaurante. La clave
+ * primaria hace que un mismo comprobante no pueda registrarse en dos turnos,
+ * ni siquiera con dos cierres simultáneos.
+ */
+export const referenciasPago = pgTable(
+	'referencias_pago',
+	{
+		tenantId: tenantId(),
+		referencia: text('referencia').notNull(),
+		turnoId: integer('turno_id').references(() => turnos.id),
+		createdAt: timestamp('created_at').defaultNow()
+	},
+	(t) => [primaryKey({ columns: [t.tenantId, t.referencia] })]
 );
 
 // ── ESTADO DE RESULTADOS (movimientos contables que no pasan por la caja del turno) ──
@@ -533,7 +629,16 @@ export const movimientosContables = pgTable(
 		anuladoEn: timestamp('anulado_en'),
 		createdAt: timestamp('created_at').defaultNow()
 	},
-	(t) => [index('movimientos_contables_tenant_fecha_idx').on(t.tenantId, t.fecha)]
+	(t) => [
+		index('movimientos_contables_tenant_fecha_idx').on(t.tenantId, t.fecha),
+		// Mismas restricciones que tiene producción (creadas por el script original).
+		check(
+			'movimientos_contables_tipo_check',
+			sql`${t.tipo} IN ('devolucion', 'descuento', 'otro_ingreso', 'gasto')`
+		),
+		check('movimientos_contables_monto_check', sql`${t.monto} > 0`),
+		check('movimientos_contables_estado_check', sql`${t.estado} IN ('confirmado', 'anulado')`)
+	]
 );
 
 /**

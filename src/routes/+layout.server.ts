@@ -4,6 +4,7 @@ import { productos } from '$lib/server/schema';
 import { lte } from 'drizzle-orm';
 import { getBusinessConfig } from '$lib/features/business/server/config';
 import { delTenant } from '$lib/server/tenancy';
+import { log } from '$lib/server/log';
 
 export interface Alerta {
 	id: string;
@@ -28,7 +29,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			.where(delTenant(productos, tid, lte(productos.stockActual, productos.stockMinimo)))
 			.limit(10)
 			.catch((e) => {
-				console.error('Error cargando alertas de layout:', e);
+				log.warn('no se pudieron cargar las alertas del layout', { tenantId: tid, err: e });
 				return [];
 			})
 	]);
@@ -48,7 +49,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	}
 
 	return {
-		user: locals.user,
+		// Solo lo que la interfaz necesita (nunca el hash de la contraseña).
+		user: { id: locals.user.id, nombre: locals.user.nombre, rol: locals.user.rol },
 		alertas,
 		negocio: {
 			nombre: config.nombreNegocio,

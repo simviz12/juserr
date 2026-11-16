@@ -2,10 +2,14 @@
 // for information about these interfaces
 declare global {
 	namespace App {
-		// interface Error {}
+		interface Error {
+			message: string;
+			/** Id de correlación para buscar el error en los logs (ver handleError). */
+			errorId?: string;
+		}
 		interface Locals {
-			/** Usuario del restaurante en sesión (incluye su tenantId). */
-			user: import('$lib/server/schema').usuarios.$inferSelect | null;
+			/** Usuario del restaurante en sesión (incluye su tenantId; nunca el hash). */
+			user: import('$lib/server/auth').SessionUser | null;
 			session: import('$lib/server/schema').sesiones.$inferSelect | null;
 			/** Restaurante del usuario en sesión. */
 			tenant: import('$lib/server/tenancy').TenantInfo | null;

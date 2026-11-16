@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { exigirAdminPlataforma } from '$lib/server/guards';
 import {
 	descartarSolicitud,
 	ErrorNegocio,
@@ -9,7 +10,8 @@ import {
 import { calcularEntitlements } from '$lib/billing/domain';
 import { businessDayKey } from '$lib/features/finance/domain/period';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	exigirAdminPlataforma(locals);
 	const [restaurantes, solicitudes] = await Promise.all([
 		listarRestaurantes(),
 		solicitudesPendientes()
@@ -51,10 +53,11 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	descartar: async ({ request, locals }) => {
+		const admin = exigirAdminPlataforma(locals);
 		const id = Number((await request.formData()).get('id'));
 		if (!Number.isInteger(id) || id <= 0) return fail(400, { error: 'Solicitud inválida.' });
 		try {
-			await descartarSolicitud(locals.platformAdmin!.id, id);
+			await descartarSolicitud(admin.id, id);
 			return { success: true, message: 'Solicitud descartada.' };
 		} catch (e) {
 			if (e instanceof ErrorNegocio) return fail(400, { error: e.message });

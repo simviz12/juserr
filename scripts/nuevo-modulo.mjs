@@ -151,10 +151,13 @@ escribir(
 	`src/routes/m/${codigo}/+page.server.ts`,
 	`import type { PageServerLoad } from './$types';
 import { tenantDe } from '$lib/server/tenancy';
+import { exigirModulo } from '$lib/server/guards';
 import { ultimosTurnos } from '$lib/modules/${codigo}/server/datos';
 
-// El acceso (dueño + módulo pagado) lo garantiza hooks.server.ts con el registro de módulos.
+// hooks.server.ts ya controla el acceso (dueño + módulo pagado); exigirModulo lo
+// repite aquí como defensa en profundidad. Llámalo también en cada acción.
 export const load: PageServerLoad = async ({ locals }) => {
+	exigirModulo(locals, '${codigo}');
 	const tid = tenantDe(locals);
 	const turnos = await ultimosTurnos(tid);
 	return {

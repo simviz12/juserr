@@ -283,6 +283,8 @@
 			};
 		}}
 	>
+		<!-- Clave única del envío: un doble clic no crea dos turnos. -->
+		<input type="hidden" name="clave" value={data.clave} />
 		<div class="flex min-w-0 flex-col gap-6">
 			{#if pizzasActivas}
 				<!-- 1. Inventario -->
