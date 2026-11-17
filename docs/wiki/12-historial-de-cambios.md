@@ -136,6 +136,10 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 | Hallazgos críticos abiertos                | 1                        | **0**                 |
 | Migraciones necesarias para una base nueva | 4 scripts sueltos + 0001 | **`pnpm db:migrate`** |
 
+### PDF del Estado de Resultados
+
+- Generador propio con formato de estado financiero (portada, resultado destacado, cascada vectorial, márgenes, estado contable con paréntesis y doble subrayado, lectura automática, anexo y firmas). Antes usaba la misma plantilla que los reportes de caja y se veían iguales. Pruebas en `tests/statement-pdf.test.ts`.
+
 ### Documentación
 
 - [Página 10](10-despliegue-aws.md) reorganizada: producción actual en Vercel, procedimiento de cada despliegue (respaldo con `pnpm db:respaldo`, migración, verificación, tabla de reversa), registro de despliegues y paso de Vercel a AWS sin ventana de mantenimiento.

@@ -144,7 +144,15 @@ Archivos: `modules/estado-resultados/domain/income-statement.ts`, `.../statement
 - **Movimientos manuales** (arriendo, nómina, impuestos, devoluciones, otros ingresos): se registran en el mismo informe y **se anulan** (nunca se borran).
 - **Comparativo**: contra el periodo anterior (o el mismo tramo del mes anterior) o contra el mismo periodo del año pasado; diferencia en pesos y en %. Un aumento de un gasto se pinta como desfavorable.
 - **Desglose** (drill-down): clic en cualquier línea muestra los registros que la componen.
-- **Exportación**: PDF (con detalle si son ≤150 movimientos), Excel (con hoja de detalle) y CSV en formato colombiano (`;` y coma decimal).
+- **Exportación**: PDF, Excel (con hoja de detalle) y CSV en formato colombiano (`;` y coma decimal).
+- **PDF propio, con formato de estado financiero** (`modules/estado-resultados/reports/statement-pdf.ts`), distinto del de los reportes de caja:
+  1. Portada con banda oscura: negocio, periodo, "base caja · cifras en COP" y periodo comparado.
+  2. **Resultado del periodo** destacado en verde (utilidad) o rojo (pérdida), con margen neto, variación y cifras clave.
+  3. **Cascada del resultado** dibujada en vectores: ingresos netos → costo → gastos → no operacional → impuestos → utilidad.
+  4. **Márgenes** bruto, operacional y neto en barras (con la diferencia en puntos porcentuales si hay comparativo).
+  5. **El estado en formato contable**: deducciones entre paréntesis, subtotales con filete, total con doble subrayado, comparativo en verde/rojo según sea bueno o malo.
+  6. **Lectura del resultado**: frases calculadas de las cifras (margen, costo de ventas vs. referencia 30–35 %, mayor gasto, variación frente al periodo comparado).
+  7. **Anexo** con el detalle de movimientos (si son ≤150), bases de preparación y espacio para firmas (Elaboró / Revisó y aprobó).
 - Es **gerencial y en base caja**: las compras cuentan como costo cuando se pagan, no cuando se consumen.
 
 > 📊 **Ejemplo completo con números** (datos de entrada, clasificación de cada gasto, la cascada, márgenes y tarjetas): [página 15](15-estado-de-resultados-ejemplo.md).

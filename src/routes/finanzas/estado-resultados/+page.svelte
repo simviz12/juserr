@@ -31,7 +31,6 @@
 	import { cn } from '$lib/utils/cn';
 	import { formatCOP, formatPct } from '$lib/utils/format';
 	import { exportCsv, exportExcel, safeFileName } from '$lib/utils/export';
-	import { downloadPdfReport, pdfMoney, type PdfTable } from '$lib/features/finance/reports/pdf';
 	import { fromCents, ratio } from '$lib/features/finance/domain/money';
 	import {
 		TIPOS_MOVIMIENTO,
@@ -252,96 +251,30 @@
 		}
 	}
 
-	/** El PDF incluye el detalle solo si es breve; un informe para presentar no lleva cientos de filas. */
+	/** El PDF incluye el anexo de detalle solo si es breve; un informe para presentar no lleva cientos de filas. */
 	const DETALLE_PDF_MAX = 150;
 
+	/** PDF con formato de estado financiero (distinto del de los reportes de caja). */
 	async function pdf() {
-		const conCmp = !!cmp;
-		const tabla: PdfTable = {
-			title: 'Estado de resultados',
-			head: [
-				'Concepto',
-				'Periodo',
-				'% ingresos',
-				...(conCmp ? ['Comparativo', 'Diferencia', 'Variación'] : [])
-			],
-			numeric: conCmp ? [1, 2, 3, 4, 5] : [1, 2],
-			boldRows: st.lineas.flatMap((l, i) => (esResultado(l) ? [i] : [])),
-			body: st.lineas.map((l) => {
-				const v = cmp?.variaciones[l.id];
-				return [
-					etiqueta(l),
-					pdfMoney(fromCents(l.cents)),
-					formatPct(participacion(l)),
-					...(v
-						? [
-								pdfMoney(fromCents(v.anterior)),
-								v.diferencia === 0 ? '-' : pdfMoney(fromCents(v.diferencia)),
-								difPct(v)
-							]
-						: [])
-				];
-			})
-		};
-		const detalle: PdfTable[] =
-			st.movimientos <= DETALLE_PDF_MAX
-				? st.lineas
-						.filter((l) => l.movimientos.length > 0)
-						.map((l) => ({
-							title: `Detalle · ${l.label}`,
-							head: ['Fecha', 'Concepto', 'Detalle', 'Monto'],
-							numeric: [3],
-							body: l.movimientos.map((m) => [
-								m.fecha ? dia(m.fecha.slice(0, 10)) : '-',
-								m.concepto,
-								m.detalle ?? '',
-								pdfMoney(fromCents(m.cents))
-							]),
-							foot: ['', '', 'Total', pdfMoney(fromCents(l.cents))]
-						}))
-				: [];
-
-		await downloadPdfReport({
+		const { downloadStatementPdf } =
+			await import('$lib/modules/estado-resultados/reports/statement-pdf');
+		await downloadStatementPdf({
 			fileName: baseName,
 			negocio: data.negocio,
-			title: 'Estado de resultados',
-			period: periodo,
-			kpis: [
-				{
-					label: 'Ingresos totales',
-					value: pdfMoney(fromCents(t.ingresosTotales)),
-					hint: pista(t.ingresosTotales, cmp?.totales.ingresosTotales)
-				},
-				{
-					label: 'Costos y gastos totales',
-					value: pdfMoney(fromCents(t.costosGastosTotales)),
-					hint: pista(t.costosGastosTotales, cmp?.totales.costosGastosTotales)
-				},
-				{
-					label: hayPerdida ? 'Pérdida neta' : 'Utilidad neta',
-					value: pdfMoney(fromCents(t.utilidadNeta)),
-					hint: pista(t.utilidadNeta, cmp?.totales.utilidadNeta)
-				},
-				{ label: 'Margen neto', value: formatPct(st.margenes.neto), hint: pistaMargen }
-			],
-			chart: {
-				title: periodoComparado
-					? `Comparativo: ${periodo} vs. ${periodoComparado}`
-					: 'Composición del resultado',
-				canvas: chartCanvas
-			},
-			tables: [tabla, ...detalle],
-			notes: [
-				'Los días se cuentan por jornada de negocio (de 04:00 a 04:00, hora de Colombia).',
-				'Ingresos operacionales: ventas declaradas en los cierres de turno (efectivo + transferencias).',
-				'Costo de ventas: compras de insumos registradas en Bodega más insumos pagados con la caja del turno (base caja).',
-				'Solo se incluyen registros confirmados; los movimientos anulados no cuentan.',
-				...(detalle.length === 0 && st.movimientos > 0
-					? [
-							`El detalle de los ${st.movimientos} movimientos está disponible en la exportación a Excel.`
-						]
-					: [])
-			]
+			periodo,
+			statement: st,
+			comparativo:
+				cmp && periodoComparado
+					? {
+							etiqueta: COMPARACION_LABELS[cmp.modo],
+							periodo: periodoComparado,
+							totales: cmp.totales,
+							margenes: cmp.margenes,
+							variaciones: cmp.variaciones
+						}
+					: null,
+			formatoDia: dia,
+			detalleMax: DETALLE_PDF_MAX
 		});
 	}
 </script>
