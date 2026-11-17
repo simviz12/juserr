@@ -34,6 +34,8 @@ Hoy el informe de octubre solo contiene turnos, compras de Bodega y gastos de ca
 
 La nómina y el arriendo de este cuadro son **valores de ejemplo**, no los reales del restaurante. Un margen neto de 81 % en un restaurante es una señal clara de que faltan gastos por registrar: lo normal está muy por debajo.
 
+Por eso, mientras no haya nómina ni arriendo registrados en el periodo, el PDF llama al resultado **"Resultado de caja"** (no "utilidad neta") y lo avisa en la portada.
+
 ---
 
 ## Los cuatro tipos de movimiento

@@ -145,14 +145,34 @@ Archivos: `modules/estado-resultados/domain/income-statement.ts`, `.../statement
 - **Comparativo**: contra el periodo anterior (o el mismo tramo del mes anterior) o contra el mismo periodo del año pasado; diferencia en pesos y en %. Un aumento de un gasto se pinta como desfavorable.
 - **Desglose** (drill-down): clic en cualquier línea muestra los registros que la componen.
 - **Exportación**: PDF, Excel (con hoja de detalle) y CSV en formato colombiano (`;` y coma decimal).
-- **PDF propio, con formato de estado financiero** (`modules/estado-resultados/reports/statement-pdf.ts`), distinto del de los reportes de caja:
-  1. Portada con banda oscura: negocio, periodo, "base caja · cifras en COP" y periodo comparado.
-  2. **Resultado del periodo** destacado en verde (utilidad) o rojo (pérdida), con margen neto, variación y cifras clave.
-  3. **Cascada del resultado** dibujada en vectores: ingresos netos → costo → gastos → no operacional → impuestos → utilidad.
-  4. **Márgenes** bruto, operacional y neto en barras (con la diferencia en puntos porcentuales si hay comparativo).
-  5. **El estado en formato contable**: deducciones entre paréntesis, subtotales con filete, total con doble subrayado, comparativo en verde/rojo según sea bueno o malo.
-  6. **Lectura del resultado**: frases calculadas de las cifras (margen, costo de ventas vs. referencia 30–35 %, mayor gasto, variación frente al periodo comparado).
-  7. **Anexo** con el detalle de movimientos (si son ≤150), bases de preparación y espacio para firmas (Elaboró / Revisó y aprobó).
+- **PDF propio, con formato de estado financiero** (`modules/estado-resultados/reports/statement-pdf.ts`), distinto del de los reportes de caja. Los análisis están en `domain/analisis.ts` (lógica pura, probada):
+  - **Página 1 · resumen:**
+    - Portada con **días con datos** ("9 de 17").
+    - **Avisos en ámbar** si hay días sin cierres de turno o si no se registró nómina ni arriendo.
+    - Resultado destacado. Si faltan gastos fijos se llama **"Resultado de caja"** (no "utilidad neta"), porque no descuenta esos gastos.
+    - Tres cifras de apoyo: ingresos netos, costos y gastos, y **venta por día con datos**.
+    - Cascada sin barras en cero y márgenes.
+  - **Comparación honesta:** si los dos periodos no tienen casi todos sus días con datos (≥ 90 %), la portada y la lectura comparan el **promedio de venta por día con datos**, no los totales. Así un periodo incompleto no aparece como una "caída".
+  - **Página 2 · ingresos y estado:**
+    - **Medios de pago** (efectivo / transferencias con %).
+    - **Ventas por turno**: el día o la noche según la hora del cierre; desde las 6:00 p. m. cuenta como noche.
+    - **Ventas por día**, con los días sin cierres marcados en ámbar.
+    - El estado en formato contable: paréntesis, filetes, doble subrayado y comparativo en verde o rojo.
+  - **Lectura del resultado**, ordenada por importancia:
+    1. Alertas de datos faltantes.
+    2. Gastos fijos sin registrar.
+    3. Resultado.
+    4. Comparación (por promedio diario si corresponde).
+    5. Cambios de costo o gasto **≥ 1 % de los ingresos** (los menores se omiten).
+    6. Costo de compras, aclarando que **no es costo de consumo**.
+    7. Medios de pago, turno de noche frente a día, insumos que subieron de precio y devoluciones.
+  - **Anexos:**
+    - **A.** Compras **agrupadas por insumo**: cantidad con plural correcto ("8 kilos"), total, precio promedio, primer y último precio, y variación (en rojo si subió).
+    - **B.** Gastos y deducciones.
+    - **C.** Otros ingresos.
+    - **D.** Cierres de turno con efectivo y transferencias.
+    - Las fechas van cortas en hora de Colombia ("09/11 22:30") y ninguna fila se parte entre páginas.
+  - Bases de preparación (incluye que el costo es de compras, sin ajuste de inventario) y firmas.
 - Es **gerencial y en base caja**: las compras cuentan como costo cuando se pagan, no cuando se consumen.
 
 > 📊 **Ejemplo completo con números** (datos de entrada, clasificación de cada gasto, la cascada, márgenes y tarjetas): [página 15](15-estado-de-resultados-ejemplo.md).

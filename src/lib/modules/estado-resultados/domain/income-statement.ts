@@ -271,6 +271,12 @@ export interface Movimiento {
 	detalle?: string;
 	/** Importe en centavos, siempre positivo. */
 	cents: number;
+	/** Solo turnos: desglose por medio de pago (centavos). */
+	efectivoCents?: number;
+	transferenciasCents?: number;
+	/** Solo compras de Bodega: cantidad y unidad compradas. */
+	cantidad?: number;
+	unidad?: string;
 }
 
 export interface MovimientoGasto extends Movimiento {

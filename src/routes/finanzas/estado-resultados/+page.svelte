@@ -265,6 +265,8 @@
 			fileName: baseName,
 			negocio: data.negocio,
 			periodo,
+			rango: data.rango,
+			hoy: data.hoy,
 			statement: st,
 			comparativo:
 				cmp && periodoComparado
@@ -273,7 +275,9 @@
 							periodo: periodoComparado,
 							totales: cmp.totales,
 							margenes: cmp.margenes,
-							variaciones: cmp.variaciones
+							variaciones: cmp.variaciones,
+							diasConDatos: cmp.diasConDatos,
+							diasRango: cmp.diasRango
 						}
 					: null,
 			detalleMax: DETALLE_PDF_MAX

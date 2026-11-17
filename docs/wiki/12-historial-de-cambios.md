@@ -142,6 +142,19 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 - Verificado con los datos reales de octubre de 2026 (vs. septiembre): ingresos, costos, utilidad, comparativo y número de registros coinciden con consultas SQL independientes, y cada cifra del estado aparece en el PDF.
 - **Corregido:** en el anexo del PDF y en el Excel la fecha de cada movimiento salía en UTC; un turno cerrado después de las 7:00 p. m. aparecía con el día siguiente. Ahora usa la hora de Colombia, igual que la pantalla.
 
+### PDF del Estado de Resultados — segunda versión (revisión con datos reales de noviembre)
+
+Una revisión del PDF de noviembre (1 al 17) encontró que el periodo tenía datos solo hasta el 9, que el margen de 76 % no incluía gastos fijos y que la lectura resaltaba cambios de $3.400 mientras los ingresos "caían" $12,5 M. Cambios:
+
+- **Días con datos** en la portada y **aviso** de días sin cierres; comparación por **promedio diario** cuando la cobertura difiere. Con los datos reales: $1,78 M por día en noviembre frente a $1,68 M en octubre (+5,9 %), no una caída de 44 %.
+- Sin nómina ni arriendo registrados, el resultado se llama **"Resultado de caja"**, con aviso.
+- El costo de ventas se explica como **costo de compras, no de consumo** (sin la comparación débil contra el 30 %).
+- Lectura ordenada por importancia; se omiten cambios menores al 1 % de los ingresos.
+- **Medios de pago** (41 % por transferencia en noviembre), **ventas por turno** (la noche vende +57,7 % por cierre) y **ventas por día**.
+- Compras **agrupadas por insumo** con variación de precio (queso +1,6 %, jamón +3,1 %).
+- Plurales correctos ("8 kilos"), fechas cortas ("09/11 22:30"), filas que no se parten entre páginas y cascada sin barras en cero.
+- Nuevo `domain/analisis.ts` con pruebas; el servicio entrega efectivo/transferencias y cantidad/unidad de cada movimiento.
+
 ### Documentación
 
 - [Página 17](17-registrar-movimiento.md): por qué existe "Registrar movimiento" en el Estado de Resultados, sus 4 tipos, categorías, anulación y rutina de fin de mes (y por qué la app no genera un Balance General).

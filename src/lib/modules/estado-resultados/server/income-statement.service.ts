@@ -14,6 +14,7 @@
  * (no hay borradores) y los movimientos manuales anulados se excluyen.
  */
 import { db } from '$lib/server/db';
+import { cantidadConUnidad, cobertura } from '../domain/analisis';
 import {
 	gastos,
 	movimientosContables,
@@ -131,7 +132,9 @@ async function fetchStatementInput(tid: number, range: DateRange): Promise<State
 				fecha: iso(t.fecha),
 				concepto: `Cierre de turno #${t.id}`,
 				detalle: `Efectivo ${pesos(efectivo)} · Transferencias ${pesos(transferencias)}`,
-				cents: efectivo + transferencias
+				cents: efectivo + transferencias,
+				efectivoCents: efectivo,
+				transferenciasCents: transferencias
 			};
 		})
 		.filter((m) => m.cents !== 0);
@@ -142,8 +145,10 @@ async function fetchStatementInput(tid: number, range: DateRange): Promise<State
 		refId: c.id,
 		fecha: iso(c.fecha),
 		concepto: c.producto,
-		detalle: `${c.cantidad.toLocaleString('es-CO')} ${c.unidad}`,
-		cents: toCents(c.costoTotal)
+		detalle: cantidadConUnidad(Number(c.cantidad), c.unidad),
+		cents: toCents(c.costoTotal),
+		cantidad: Number(c.cantidad),
+		unidad: c.unidad
 	}));
 
 	const gastosCaja: MovimientoGasto[] = gastosRows.map((g) => ({
@@ -198,6 +203,9 @@ export interface IncomeStatementReport {
 		totales: Statement['totales'];
 		margenes: Statement['margenes'];
 		variaciones: Record<string, Variacion>;
+		/** Días del periodo comparado con al menos un cierre de turno. */
+		diasConDatos: number;
+		diasRango: number;
 	} | null;
 }
 
@@ -229,7 +237,11 @@ export async function getIncomeStatement(
 						rango: rangoComparado,
 						totales: previo.totales,
 						margenes: previo.margenes,
-						variaciones: compararStatements(statement, previo)
+						variaciones: compararStatements(statement, previo),
+						...(() => {
+							const c = cobertura(anterior!.ventas, rangoComparado);
+							return { diasConDatos: c.diasConDatos, diasRango: c.diasRango };
+						})()
 					}
 				: null
 	};
