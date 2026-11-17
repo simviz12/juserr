@@ -19,6 +19,7 @@ import { pdfMoney, pdfText } from '$lib/features/finance/reports/pdf';
 import { fromCents, ratio } from '$lib/features/finance/domain/money';
 import {
 	aumentoEsFavorable,
+	type Movimiento,
 	type Statement,
 	type StatementLine,
 	type Variacion
@@ -38,8 +39,6 @@ export interface StatementPdfInput {
 		margenes: Statement['margenes'];
 		variaciones: Record<string, Variacion>;
 	} | null;
-	/** Formatea un YYYY-MM-DD para el anexo. */
-	formatoDia: (key: string) => string;
 	/** Máximo de movimientos para incluir el anexo de detalle. */
 	detalleMax?: number;
 }
@@ -70,6 +69,30 @@ function pct(v: number | null, digits = 1): string {
 	return `${(v * 100).toFixed(digits).replace('.', ',')}%`;
 }
 const signo = (n: number) => (n > 0 ? '+' : n < 0 ? '-' : '');
+
+const FECHA = new Intl.DateTimeFormat('es-CO', {
+	day: '2-digit',
+	month: 'short',
+	year: 'numeric',
+	timeZone: 'America/Bogota'
+});
+const FECHA_HORA = new Intl.DateTimeFormat('es-CO', {
+	day: '2-digit',
+	month: 'short',
+	year: 'numeric',
+	hour: '2-digit',
+	minute: '2-digit',
+	timeZone: 'America/Bogota'
+});
+/**
+ * Fecha del movimiento en hora de Colombia, igual que en pantalla. (Antes se
+ * cortaba el ISO en UTC: un turno de las 11:30 p. m. salía con el día siguiente.)
+ * Los manuales se guardan al mediodía de su día de negocio: se muestran sin hora.
+ */
+export function fechaMovimiento(m: Pick<Movimiento, 'fecha' | 'origen'>): string {
+	if (!m.fecha) return '-';
+	return (m.origen === 'ajuste' ? FECHA : FECHA_HORA).format(new Date(m.fecha));
+}
 
 /** Hallazgos en lenguaje sencillo, calculados de las cifras (nada inventado). */
 export function lecturaDelResultado(input: StatementPdfInput): string[] {
@@ -535,18 +558,15 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 			const padre = lineas.find((p) => p.hijos.includes(l.id));
 			font('times', 'bold', 10);
 			color(NAVY_2);
-			txt(padre ? `${padre.label} › ${l.label}` : l.label, M, y);
+			txt(padre ? `${padre.label} · ${l.label}` : l.label, M, y);
 			autoTable(doc, {
 				startY: y + 2,
 				margin: { left: M, right: M, top: 22, bottom: 20 },
 				head: [['Fecha', 'Concepto', 'Detalle', 'Monto'].map(pdfText)],
 				body: l.movimientos.map((m) =>
-					[
-						m.fecha ? input.formatoDia(m.fecha.slice(0, 10)) : '-',
-						m.concepto,
-						m.detalle ?? '',
-						pdfMoney(pesos(m.cents))
-					].map((c) => pdfText(c))
+					[fechaMovimiento(m), m.concepto, m.detalle ?? '', pdfMoney(pesos(m.cents))].map((c) =>
+						pdfText(c)
+					)
 				),
 				foot: [['', '', pdfText('Total'), pdfMoney(pesos(l.cents))]],
 				theme: 'striped',
@@ -555,7 +575,7 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 				headStyles: { fillColor: TINT, textColor: NAVY_2, fontStyle: 'bold' },
 				alternateRowStyles: { fillColor: [250, 250, 252] },
 				footStyles: { fillColor: [255, 255, 255], textColor: INK, fontStyle: 'bold' },
-				columnStyles: { 0: { cellWidth: 24 }, 3: { halign: 'right', cellWidth: 28 } },
+				columnStyles: { 0: { cellWidth: 34 }, 3: { halign: 'right', cellWidth: 28 } },
 				didParseCell: (d) => {
 					if (d.column.index === 3 && d.section !== 'body') d.cell.styles.halign = 'right';
 				}

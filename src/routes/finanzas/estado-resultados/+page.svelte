@@ -73,6 +73,8 @@
 		timeZone: 'UTC'
 	});
 	const dia = (key: string) => fechaLarga.format(new Date(key + 'T12:00:00Z'));
+	/** YYYY-MM-DD en hora de Colombia (para Excel/CSV). */
+	const fechaColombia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });
 	const rangoLabel = (r: KeyRange) =>
 		r.inicio === r.fin ? dia(r.inicio) : `${dia(r.inicio)} – ${dia(r.fin)}`;
 
@@ -224,7 +226,8 @@
 				Línea:
 					(l.nivel === 1 ? `${st.lineas.find((p) => p.id === padreDe.get(l.id))?.label} › ` : '') +
 					l.label,
-				Fecha: m.fecha ? m.fecha.slice(0, 10) : '',
+				// Fecha en hora de Colombia (antes, en UTC, un turno nocturno salía al día siguiente)
+				Fecha: m.fecha ? fechaColombia.format(new Date(m.fecha)) : '',
 				Concepto: m.concepto,
 				Detalle: m.detalle ?? '',
 				Monto: fromCents(m.cents)
@@ -273,7 +276,6 @@
 							variaciones: cmp.variaciones
 						}
 					: null,
-			formatoDia: dia,
 			detalleMax: DETALLE_PDF_MAX
 		});
 	}

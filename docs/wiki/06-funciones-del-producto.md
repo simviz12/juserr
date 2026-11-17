@@ -141,7 +141,7 @@ Archivos: `modules/estado-resultados/domain/income-statement.ts`, `.../statement
 
 - **Centavos enteros** en todo el cálculo.
 - **Clasificación automática** de gastos por palabras del concepto: "arriendo" → Arriendos, "luz/agua/gas" → Servicios, "nómina/sueldo" → Nómina, "IVA/ICA/DIAN" → Impuestos, "hielo/queso/carne" → Insumos (costo de ventas). Compara palabras completas: "gas" ≠ "gaseosa". El Jefe puede **reasignar** la categoría desde el desglose.
-- **Movimientos manuales** (arriendo, nómina, impuestos, devoluciones, otros ingresos): se registran en el mismo informe y **se anulan** (nunca se borran).
+- **Movimientos manuales** (arriendo, nómina, impuestos, devoluciones, otros ingresos): se registran en el mismo informe y **se anulan** (nunca se borran). Por qué existen y cómo usarlos: [página 17](17-registrar-movimiento.md).
 - **Comparativo**: contra el periodo anterior (o el mismo tramo del mes anterior) o contra el mismo periodo del año pasado; diferencia en pesos y en %. Un aumento de un gasto se pinta como desfavorable.
 - **Desglose** (drill-down): clic en cualquier línea muestra los registros que la componen.
 - **Exportación**: PDF, Excel (con hoja de detalle) y CSV en formato colombiano (`;` y coma decimal).

@@ -139,8 +139,12 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 ### PDF del Estado de Resultados
 
 - Generador propio con formato de estado financiero (portada, resultado destacado, cascada vectorial, márgenes, estado contable con paréntesis y doble subrayado, lectura automática, anexo y firmas). Antes usaba la misma plantilla que los reportes de caja y se veían iguales. Pruebas en `tests/statement-pdf.test.ts`.
+- Verificado con los datos reales de octubre de 2026 (vs. septiembre): ingresos, costos, utilidad, comparativo y número de registros coinciden con consultas SQL independientes, y cada cifra del estado aparece en el PDF.
+- **Corregido:** en el anexo del PDF y en el Excel la fecha de cada movimiento salía en UTC; un turno cerrado después de las 7:00 p. m. aparecía con el día siguiente. Ahora usa la hora de Colombia, igual que la pantalla.
 
 ### Documentación
+
+- [Página 17](17-registrar-movimiento.md): por qué existe "Registrar movimiento" en el Estado de Resultados, sus 4 tipos, categorías, anulación y rutina de fin de mes (y por qué la app no genera un Balance General).
 
 - [Página 10](10-despliegue-aws.md) reorganizada: producción actual en Vercel, procedimiento de cada despliegue (respaldo con `pnpm db:respaldo`, migración, verificación, tabla de reversa), registro de despliegues y paso de Vercel a AWS sin ventana de mantenimiento.
 - [Página 16](16-ejemplo-de-un-dia-completo.md): un día completo de punta a punta (Bodega, cierre de turno con pizza y hamburguesas, cuadre, caja, dashboard y Estado de Resultados).

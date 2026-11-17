@@ -65,8 +65,7 @@ function entrada(actual: StatementInput, anterior?: StatementInput): StatementPd
 					margenes: prev.margenes,
 					variaciones: compararStatements(st, prev)
 				}
-			: null,
-		formatoDia: (k) => k
+			: null
 	};
 }
 
@@ -133,5 +132,17 @@ describe('PDF del estado de resultados', () => {
 		const doc = await buildStatementPdf(entrada(vacio));
 		expect(doc.getNumberOfPages()).toBeLessThanOrEqual(2);
 		expect(lecturaDelResultado(entrada(vacio))[0]).toContain('ceros');
+	});
+});
+
+describe('fechas del anexo', () => {
+	it('usa la hora de Colombia: un turno de las 11:30 p. m. no pasa al día siguiente', async () => {
+		const { fechaMovimiento } =
+			await import('../src/lib/modules/estado-resultados/reports/statement-pdf');
+		const turno = { origen: 'turno' as const, fecha: '2026-11-06T04:30:00.000Z' }; // 5 nov 23:30 COL
+		expect(fechaMovimiento(turno)).toMatch(/^05 de nov.* 11:30/);
+		expect(fechaMovimiento({ origen: 'ajuste', fecha: '2026-11-05T17:00:00.000Z' })).toBe(
+			'05 de nov de 2026'
+		);
 	});
 });
