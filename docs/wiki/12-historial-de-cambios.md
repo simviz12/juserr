@@ -136,6 +136,10 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 | Hallazgos críticos abiertos                | 1                        | **0**                 |
 | Migraciones necesarias para una base nueva | 4 scripts sueltos + 0001 | **`pnpm db:migrate`** |
 
+### Documentación
+
+- [Página 15](15-estado-de-resultados-ejemplo.md): ejemplo completo del Estado de Resultados con los números de la prueba automática.
+
 ## Pendiente de salida a producción
 
 Estado verificado el 16-11-2026 (`pnpm db:migrate:estado` contra producción):

@@ -144,3 +144,5 @@ Archivos: `modules/estado-resultados/domain/income-statement.ts`, `.../statement
 - **Desglose** (drill-down): clic en cualquier línea muestra los registros que la componen.
 - **Exportación**: PDF (con detalle si son ≤150 movimientos), Excel (con hoja de detalle) y CSV en formato colombiano (`;` y coma decimal).
 - Es **gerencial y en base caja**: las compras cuentan como costo cuando se pagan, no cuando se consumen.
+
+> 📊 **Ejemplo completo con números** (datos de entrada, clasificación de cada gasto, la cascada, márgenes y tarjetas): [página 15](15-estado-de-resultados-ejemplo.md).
