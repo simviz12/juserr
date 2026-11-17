@@ -172,6 +172,15 @@ describe('análisis del periodo', () => {
 		expect(queso.precioFinal).toBe(toCents(38_192));
 		expect(queso.variacionPrecio).toBeCloseTo(0.0162, 3);
 		expect(harina.variacionPrecio).toBeNull(); // una sola compra
+		// Precio mínimo y máximo pagado (no solo primera y última compra)
+		const masa = comprasPorInsumo([
+			compra(1, 'Masa', 10, 'unidad', 18_000),
+			compra(3, 'Masa', 10, 'unidad', 17_000),
+			compra(5, 'Masa', 10, 'unidad', 19_000),
+			compra(9, 'Masa', 10, 'unidad', 18_000)
+		])[0];
+		expect([masa.precioMin, masa.precioMax]).toEqual([toCents(1_700), toCents(1_900)]);
+		expect(masa.variacionPrecio).toBe(0); // primera vs. última: igual
 	});
 
 	it('detecta gastos fijos sin registrar', () => {
@@ -241,6 +250,30 @@ describe('PDF del estado de resultados', () => {
 		};
 		const l = lecturaDelResultado(entrada(a, undefined, b));
 		expect(l.some((x) => x.includes('subió') || x.includes('bajó $3.400'))).toBe(false);
+	});
+
+	it('el gráfico diario marca el día más alto, el de un solo cierre y el tramo sin cierres', async () => {
+		const rango = { inicio: '2026-11-01', fin: '2026-11-17' };
+		const ventas = [
+			...Array.from({ length: 8 }, (_, i) => [
+				turno(i + 1, 16, 600_000, 300_000),
+				turno(i + 1, 22, 700_000 + i * 50_000, 400_000)
+			]).flat(),
+			turno(9, 11, 500_000, 200_000)
+		];
+		const doc = await buildStatementPdf(entrada({ ...completo(1), ventas }, rango));
+		const out = texto(doc);
+		for (const s of ['más alto', '1 solo cierre', 'sin cierres de turno', 'M', 'Nº', 'Precio mín.'])
+			expect(out, s).toContain(s);
+		expect(doc.getNumberOfPages()).toBeLessThanOrEqual(5);
+	});
+
+	it('un nombre de negocio largo no se corta', async () => {
+		const input = entrada(completo(1));
+		input.negocio = 'Restaurante Asadero y Pizzería La Gran Parrilla Familiar del Norte de Bogotá';
+		const out = texto(await buildStatementPdf(input));
+		expect(out).toContain('Bogot');
+		expect(out).toContain('Familiar');
 	});
 
 	it('fechas cortas en hora de Colombia', () => {

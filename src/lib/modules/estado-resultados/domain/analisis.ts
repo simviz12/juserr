@@ -191,6 +191,9 @@ export interface CompraInsumo {
 	/** Precio unitario de la primera y la última compra del periodo. */
 	precioInicial: number | null;
 	precioFinal: number | null;
+	/** Precio unitario más bajo y más alto pagado en el periodo. */
+	precioMin: number | null;
+	precioMax: number | null;
 	/** Variación del precio unitario (0.016 = +1,6 %), null si hubo una sola compra. */
 	variacionPrecio: number | null;
 }
@@ -217,6 +220,12 @@ export function comprasPorInsumo(compras: readonly Movimiento[]): CompraInsumo[]
 				cantidad,
 				cents,
 				precioPromedio: cantidad > 0 ? Math.round(cents / cantidad) : null,
+				precioMin: conPrecio.length
+					? Math.round(Math.min(...conPrecio.map((m) => unit(m)!)))
+					: null,
+				precioMax: conPrecio.length
+					? Math.round(Math.max(...conPrecio.map((m) => unit(m)!)))
+					: null,
 				precioInicial: ini === null ? null : Math.round(ini),
 				precioFinal: fin === null ? null : Math.round(fin),
 				variacionPrecio: conPrecio.length > 1 && ini && fin !== null ? (fin - ini) / ini : null

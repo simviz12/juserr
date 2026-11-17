@@ -154,6 +154,8 @@ Una revisión del PDF de noviembre (1 al 17) encontró que el periodo tenía dat
 - Compras **agrupadas por insumo** con variación de precio (queso +1,6 %, jamón +3,1 %).
 - Plurales correctos ("8 kilos"), fechas cortas ("09/11 22:30"), filas que no se parten entre páginas y cascada sin barras en cero.
 - Nuevo `domain/analisis.ts` con pruebas; el servicio entrega efectivo/transferencias y cantidad/unidad de cada movimiento.
+- **Ajustes tras validar el PDF real:** valores encima de cada barra diaria con el día más alto y "1 solo cierre" marcados, días sin cierres sin barra; anexos a continuación de la lectura (4 páginas); encabezado que no se cruza con nombres largos; columna "Nº"; "Precio mín. – máx." (la masa mostraba $1.800 a $1.800 cuando se pagó entre $1.700 y $1.900).
+- La prueba de migraciones "base nueva desde cero" tenía un límite de 5 s y fallaba de forma intermitente con el equipo ocupado; ahora tiene 60 s.
 
 ### Documentación
 

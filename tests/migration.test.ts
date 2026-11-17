@@ -225,7 +225,9 @@ describe('base nueva desde cero (solo migrations/)', () => {
 		// Y volver a correrlas no cambia nada.
 		await aplicarTodas(nueva);
 		expect(await huella(nueva)).toEqual(obtenida);
-	});
+		// Levanta dos Postgres en memoria y migra dos veces: con el equipo ocupado
+		// supera los 5 s por defecto de Vitest (fallaba de forma intermitente).
+	}, 60_000);
 
 	it('0000 no toca una base existente', async () => {
 		const existente = new PGlite();

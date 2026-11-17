@@ -156,7 +156,7 @@ Archivos: `modules/estado-resultados/domain/income-statement.ts`, `.../statement
   - **Página 2 · ingresos y estado:**
     - **Medios de pago** (efectivo / transferencias con %).
     - **Ventas por turno**: el día o la noche según la hora del cierre; desde las 6:00 p. m. cuenta como noche.
-    - **Ventas por día**, con los días sin cierres marcados en ámbar.
+    - **Ventas por día**: cada barra con su valor ("$2,11 M"); el día más alto en verde ("más alto"); los días con menos cierres de lo normal se marcan ("1 solo cierre"); los días sin cierres no tienen barra, solo una franja ámbar mínima y la nota "sin cierres de turno" sobre el tramo.
     - El estado en formato contable: paréntesis, filetes, doble subrayado y comparativo en verde o rojo.
   - **Lectura del resultado**, ordenada por importancia:
     1. Alertas de datos faltantes.
@@ -167,11 +167,13 @@ Archivos: `modules/estado-resultados/domain/income-statement.ts`, `.../statement
     6. Costo de compras, aclarando que **no es costo de consumo**.
     7. Medios de pago, turno de noche frente a día, insumos que subieron de precio y devoluciones.
   - **Anexos:**
-    - **A.** Compras **agrupadas por insumo**: cantidad con plural correcto ("8 kilos"), total, precio promedio, primer y último precio, y variación (en rojo si subió).
+    - **A.** Compras **agrupadas por insumo**: columna "Nº" de compras, cantidad con plural correcto ("8 kilos"), total, precio promedio, **precio mínimo y máximo pagado** (p. ej. masa $1.700 – $1.900) y "Var." (de la primera a la última compra; en rojo si subió).
     - **B.** Gastos y deducciones.
     - **C.** Otros ingresos.
     - **D.** Cierres de turno con efectivo y transferencias.
     - Las fechas van cortas en hora de Colombia ("09/11 22:30") y ninguna fila se parte entre páginas.
+  - Los anexos empiezan justo después de la lectura (no quedan páginas medio vacías); el informe completo de un mes cabe en 4 páginas.
+  - En la portada, el nombre del negocio usa el ancho que deja libre el bloque de datos de la derecha; si no cabe completo en dos líneas, los datos pasan debajo del nombre. El nombre nunca se corta.
   - Bases de preparación (incluye que el costo es de compras, sin ajuste de inventario) y firmas.
 - Es **gerencial y en base caja**: las compras cuentan como costo cuando se pagan, no cuando se consumen.
 

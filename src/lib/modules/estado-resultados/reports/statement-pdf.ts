@@ -376,34 +376,21 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 	}
 
 	// ═════════════════ 1. Portada ═════════════════
-	fill(NAVY);
-	doc.rect(0, 0, W, 50, 'F');
-	fill(GOLD);
-	doc.rect(0, 50, W, 1.2, 'F');
-
-	font('helvetica', 'bold', 8);
-	color(GOLD);
-	txt('ESTADO DE RESULTADOS', M, 15, { charSpace: 1.2 });
-	font('times', 'bold', 22);
-	doc.setTextColor(255, 255, 255);
-	const nombre = lineas(negocio, ancho * 0.6).slice(0, 2);
-	doc.text(nombre, M, 25);
-	font('helvetica', 'normal', 10);
-	color(FAINT);
-	txt(`Periodo: ${periodo}`, M, 25 + nombre.length * 8 + 1);
-
-	font('helvetica', 'normal', 7.5);
+	// El bloque de datos (derecha) se mide primero; el nombre del negocio usa el
+	// ancho que queda libre, así nunca se cruzan. Si queda muy poco (nombre o
+	// datos largos), los datos pasan debajo del nombre (apilado).
 	const generado = new Date().toLocaleString('es-CO', {
 		dateStyle: 'long',
 		timeStyle: 'short',
 		timeZone: 'America/Bogota'
 	});
 	const transcurridos = cob.diasConDatos + cob.diasSinDatos.length;
+	const AMBAR_CLARO: RGB = [251, 191, 36];
 	const derecha: [string, RGB][] = [
 		['Informe gerencial · base caja · COP', FAINT],
 		[
 			`Días con datos: ${cob.diasConDatos} de ${transcurridos}${transcurridos < cob.diasRango ? ` (de ${cob.diasRango} del rango)` : ''}`,
-			cob.diasSinDatos.length ? [251, 191, 36] : FAINT
+			cob.diasSinDatos.length ? AMBAR_CLARO : FAINT
 		],
 		...(cmp
 			? ([[`Comparado con: ${cmp.periodo} (${cmp.diasConDatos} días con datos)`, FAINT]] as [
@@ -413,14 +400,71 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 			: []),
 		[`Generado el ${generado}`, FAINT]
 	];
+	const anchoDerecha = Math.max(
+		...derecha.map(([l, c]) => {
+			font('helvetica', c === FAINT ? 'normal' : 'bold', 7.5);
+			return doc.getTextWidth(pdfText(l));
+		})
+	);
+	const GAP = 10;
+	// Se prueba de la opción más amplia a la más compacta hasta que el nombre
+	// quepa COMPLETO en 2 líneas: al lado de los datos (22 pt, 17 pt) o con
+	// los datos debajo (22, 17, 14 pt). Nunca se corta el nombre.
+	const anchoLado = ancho - anchoDerecha - GAP;
+	const opciones: { apilado: boolean; tam: number }[] = [
+		...(anchoLado >= 78
+			? [
+					{ apilado: false, tam: 22 },
+					{ apilado: false, tam: 17 }
+				]
+			: []),
+		{ apilado: true, tam: 22 },
+		{ apilado: true, tam: 17 },
+		{ apilado: true, tam: 14 }
+	];
+	let apilado = true;
+	let tamNombre = 14;
+	let nombre: string[] = [];
+	for (const o of opciones) {
+		font('times', 'bold', o.tam);
+		const ls = lineas(negocio, o.apilado ? ancho : anchoLado);
+		apilado = o.apilado;
+		tamNombre = o.tam;
+		nombre = ls;
+		if (ls.length <= 2) break;
+	}
+	// Si ni a 14 pt cabe en 2 líneas, se usan las que hagan falta: la banda crece.
+	const altoLinea = tamNombre * 0.3528 * 1.08;
+	const yNombre = 25;
+	const yPeriodo = yNombre + (nombre.length - 1) * altoLinea + 7;
+	const yDatos = apilado ? yPeriodo + 6 : 15;
+	const bandaH = apilado
+		? yDatos + (derecha.length - 1) * 4.4 + 6
+		: Math.max(50, yPeriodo + 8, 15 + (derecha.length - 1) * 4.6 + 8);
+
+	fill(NAVY);
+	doc.rect(0, 0, W, bandaH, 'F');
+	fill(GOLD);
+	doc.rect(0, bandaH, W, 1.2, 'F');
+	font('helvetica', 'bold', 8);
+	color(GOLD);
+	txt('ESTADO DE RESULTADOS', M, 15, { charSpace: 1.2 });
+	font('times', 'bold', tamNombre);
+	doc.setTextColor(255, 255, 255);
+	doc.text(nombre, M, yNombre, { lineHeightFactor: 1.08 });
+	font('helvetica', 'normal', 10);
+	color(FAINT);
+	txt(`Periodo: ${periodo}`, M, yPeriodo);
 	derecha.forEach(([l, c], i) => {
 		color(c);
 		font('helvetica', c === FAINT ? 'normal' : 'bold', 7.5);
-		txt(l, W - M, 15 + i * 4.6, { align: 'right' });
+		if (apilado) txt(l, M, yDatos + i * 4.4);
+		else txt(l, W - M, yDatos + i * 4.6, { align: 'right' });
 	});
 
 	// ═════════════════ 2. Avisos + resultado destacado ═════════════════
-	let y = 57;
+	const yInicio = bandaH + 7;
+	let y = yInicio;
 	if (cob.diasSinDatos.length)
 		y = aviso(
 			`Periodo incompleto: no hay cierres de turno ${describirHuecos(cob)}. Las cifras cubren ${cob.diasConDatos} de ${transcurridos} días${cmp ? ' y la comparación se hace por promedio diario' : ''}.`,
@@ -431,7 +475,7 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 			`Sin gastos fijos: no se registró ${ctx.faltanFijos.map((c) => NOMBRE_FIJO[c] ?? c).join(' ni ')}. El resultado es "de caja" (ventas menos compras y gastos de caja), no la utilidad real del negocio.`,
 			y
 		);
-	if (y > 57) y += 2;
+	if (y > yInicio) y += 2;
 
 	const alto = 34;
 	fill(perdida ? NEG_SOFT : POS_SOFT);
@@ -664,7 +708,8 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 	});
 	y += 26;
 
-	// 5c. Ventas por día (los días sin cierres quedan como hueco marcado)
+	// 5c. Ventas por día. Los días sin cierres NO se dibujan como barras: solo
+	// una franja ámbar mínima en la base y la nota "sin cierres" sobre el tramo.
 	const dias = ventasPorDia(ventas, input.rango, input.hoy);
 	if (dias.length > 1) {
 		font('helvetica', 'bold', 8);
@@ -672,31 +717,69 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 		txt('Ventas por día', M, y);
 		font('helvetica', 'normal', 6.8);
 		color(MUTED);
-		txt('Los días marcados en ámbar no tienen cierres de turno.', W - M, y, { align: 'right' });
-		const top = y + 4;
-		const hh = 30;
-		const maxD = Math.max(1, ...dias.map((d) => d.total));
+		txt('Franja ámbar: días sin cierres de turno.', W - M, y, { align: 'right' });
+		const top = y + 10; // espacio para el valor y la nota sobre la barra más alta
+		const hh = 24;
+		const conDatos = dias.filter((d) => d.cierres > 0);
+		const maxD = Math.max(1, ...conDatos.map((d) => d.total));
+		const iMax = dias.findIndex((d) => d.cierres > 0 && d.total === maxD);
+		// Cierres "normales" por día = el valor más frecuente
+		const frecuencia = new Map<number, number>();
+		for (const d of conDatos) frecuencia.set(d.cierres, (frecuencia.get(d.cierres) ?? 0) + 1);
+		const tipicos =
+			[...frecuencia.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0] ?? 0;
 		const s = ancho / dias.length;
-		const bw = Math.max(0.8, s * 0.7);
+		const bw = Math.max(0.8, s * 0.66);
+		const conValores = s >= 7.5; // con muchos días no caben: se muestra solo el más alto
+		const valorCorto = (c: number) => `$${(pesos(c) / 1_000_000).toFixed(2).replace('.', ',')} M`;
 		dias.forEach((d, i) => {
 			const x = M + i * s + (s - bw) / 2;
+			const cx = x + bw / 2;
 			if (d.cierres === 0) {
 				fill(WARN_SOFT);
-				doc.rect(x, top, bw, hh, 'F');
-				fill(WARN);
-				doc.rect(x, top + hh - 0.8, bw, 0.8, 'F');
+				doc.rect(x, top + hh - 1.4, bw, 1.4, 'F');
 			} else {
-				const h = (d.total / maxD) * hh;
-				fill(BAR_BASE);
-				doc.rect(x, top + hh - h, bw, h, 'F');
+				const h = Math.max(0.6, (d.total / maxD) * hh);
+				const yb = top + hh - h;
+				fill(i === iMax ? POS : BAR_BASE);
+				doc.rect(x, yb, bw, h, 'F');
+				if (conValores || i === iMax) {
+					font('helvetica', 'bold', 5.6);
+					color(i === iMax ? POS : INK);
+					txt(valorCorto(d.total), cx, yb - 1.2, { align: 'center' });
+				}
+				const nota =
+					i === iMax
+						? 'más alto'
+						: d.cierres < tipicos
+							? d.cierres === 1
+								? '1 solo cierre'
+								: `${d.cierres} cierres`
+							: '';
+				if (nota) {
+					font('helvetica', 'bold', 5.2);
+					color(i === iMax ? POS : WARN);
+					txt(nota, cx, yb - 4, { align: 'center' });
+				}
 			}
-			const cada = dias.length > 20 ? 5 : dias.length > 10 ? 2 : 1;
+			const cada = dias.length > 20 ? 5 : dias.length > 12 ? 2 : 1;
 			if (i % cada === 0 || i === dias.length - 1) {
 				font('helvetica', 'normal', 5.8);
 				color(MUTED);
-				txt(diaCorto(d.dia), x + bw / 2, top + hh + 3.5, { align: 'center' });
+				txt(diaCorto(d.dia), cx, top + hh + 3.5, { align: 'center' });
 			}
 		});
+		// Nota sobre cada tramo de días sin cierres
+		for (const tr of tramos(dias.filter((d) => d.cierres === 0).map((d) => d.dia))) {
+			const i0 = dias.findIndex((d) => d.dia === tr.desde);
+			const i1 = dias.findIndex((d) => d.dia === tr.hasta);
+			const cx = M + ((i0 + i1 + 1) / 2) * s;
+			const anchoTramo = (i1 - i0 + 1) * s;
+			font('helvetica', 'italic', 6);
+			color(WARN);
+			const texto = anchoTramo > 34 ? 'sin cierres de turno' : anchoTramo > 14 ? 'sin cierres' : '';
+			if (texto) txt(texto, cx, top + hh - 3, { align: 'center' });
+		}
 		draw(RULE);
 		doc.setLineWidth(0.15);
 		doc.line(M, top + hh, W - M, top + hh);
@@ -742,8 +825,8 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 		rowPageBreak: 'avoid',
 		styles: {
 			font: 'helvetica',
-			fontSize: 8.5,
-			cellPadding: { top: 1.7, bottom: 1.7, left: 2, right: 2 },
+			fontSize: 8,
+			cellPadding: { top: 1.25, bottom: 1.25, left: 2, right: 2 },
 			textColor: INK
 		},
 		headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
@@ -828,16 +911,16 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 		y = asegurar(y, 30);
 		y = seccion('Lectura del resultado', y);
 		lectura.forEach((l, i) => {
-			const ls = lineas(l, ancho - 10);
-			y = asegurar(y, ls.length * 4 + 2);
 			// Las alertas de datos van marcadas en ámbar
 			const esAlerta = i < (cob.diasSinDatos.length ? 1 : 0) + (sinFijos ? 1 : 0);
+			font('helvetica', esAlerta ? 'bold' : 'normal', 8);
+			const ls = lineas(l, ancho - 8);
+			y = asegurar(y, ls.length * 3.7 + 1.6);
 			fill(esAlerta ? WARN : GOLD);
 			doc.circle(M + 1.6, y - 1.1, 0.9, 'F');
-			font('helvetica', esAlerta ? 'bold' : 'normal', 8.5);
 			color(esAlerta ? WARN : INK);
 			doc.text(ls, M + 5, y);
-			y += ls.length * 4 + 2;
+			y += ls.length * 3.7 + 1.6;
 		});
 	}
 
@@ -903,23 +986,26 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 	const otros = movimientosDe(st, 'otros_ingresos');
 	const detalleMax = input.detalleMax ?? 150;
 
+	// Los anexos siguen justo después de la lectura (sin forzar página nueva).
 	if (insumos.length || gastosMovs.length || ventas.length) {
-		y = nuevaPagina();
+		y = asegurar(y + 2, 40);
 		y = seccion('Anexos', y);
 	}
 	if (insumos.length)
 		tablaAnexo(
 			'A. Compras de insumos por producto',
-			['Insumo', 'Compras', 'Cantidad', 'Total', 'Precio prom.', 'Primer y último precio', 'Var.'],
+			['Insumo', 'Nº', 'Cantidad', 'Total', 'Precio prom.', 'Precio mín. – máx.', 'Var.'],
 			insumos.map((c) => [
 				c.insumo,
 				String(c.compras),
 				cantidadConUnidad(c.cantidad, c.unidad),
 				$(c.cents),
 				c.precioPromedio === null ? '-' : `${$(c.precioPromedio)}/${pluralUnidad(c.unidad, 1)}`,
-				c.precioInicial === null || c.variacionPrecio === null
+				c.precioMin === null || c.precioMax === null
 					? '-'
-					: `${$(c.precioInicial)} a ${$(c.precioFinal!)}`,
+					: c.precioMin === c.precioMax
+						? $(c.precioMin)
+						: `${$(c.precioMin)} – ${$(c.precioMax)}`,
 				c.variacionPrecio === null ? '-' : conSigno(c.variacionPrecio)
 			]),
 			{
@@ -933,7 +1019,7 @@ export async function buildStatementPdf(input: StatementPdfInput) {
 					''
 				],
 				numericas: [1, 3, 4, 6],
-				anchos: { 0: 40, 1: 14, 5: 38, 6: 14 },
+				anchos: { 0: 40, 1: 10, 5: 36, 6: 14 },
 				resaltar: (r, col) => {
 					const v = insumos[r]?.variacionPrecio;
 					if (col !== 6 || v === null || v === undefined || Math.abs(v) < 0.005) return null;
