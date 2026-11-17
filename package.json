@@ -25,7 +25,8 @@
 		"modulo:nuevo": "node scripts/nuevo-modulo.mjs",
 		"plataforma:totp": "node scripts/plataforma-totp.mjs",
 		"prueba:restaurante": "node scripts/restaurante-prueba.mjs",
-		"usuario:restablecer": "node scripts/restablecer-clave.mjs"
+		"usuario:restablecer": "node scripts/restablecer-clave.mjs",
+		"db:respaldo": "node scripts/respaldo.mjs"
 	},
 	"devDependencies": {
 		"@electric-sql/pglite": "0.3.14",

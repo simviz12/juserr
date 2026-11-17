@@ -6,6 +6,7 @@
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm dev`                                                                  | Servidor local en `http://localhost:5173`                                                                                                                     |
 | `pnpm db:migrate:estado`                                                    | Ver qué migraciones están aplicadas y cuáles pendientes                                                                                                       |
+| `pnpm db:respaldo`                                                          | Copia todas las tablas a `../respaldos/respaldo-AAAAMMDD-HHMM.json` (solo lectura sobre la base). Úsalo antes de migrar                                       |
 | `pnpm db:migrate`                                                           | Aplicar las pendientes (cada una en una transacción)                                                                                                          |
 | `pnpm plataforma:admin <correo> "<Nombre>" [--totp]`                        | Crear un operador de la consola, o cambiarle la contraseña (la pide por la terminal y cierra sus sesiones). Con `--totp` activa el segundo factor             |
 | `pnpm plataforma:totp --listar`                                             | Ver qué operadores tienen segundo factor                                                                                                                      |
@@ -63,7 +64,8 @@
 | -------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------- |
 | **Neon PITR** (point-in-time recovery) | Incluido según el plan de Neon; restaura la base a un minuto exacto      | Errores recientes ("borré algo hace 2 horas") |
 | **Branch antes de cada migración**     | En Neon → Branches → Create branch                                       | Volver atrás si una migración sale mal        |
-| **Copia lógica semanal a S3**          | `pg_dump` programado (ver [guía de AWS](10-despliegue-aws.md#respaldos)) | Desastre, cambio de proveedor, auditoría      |
+| **Respaldo lógico inmediato**          | `pnpm db:respaldo` → JSON en `../respaldos/` (fuera del repo)            | Revisar o recuperar tablas puntuales          |
+| **Copia lógica semanal a S3**          | `pg_dump` programado (ver [página 10](10-despliegue-aws.md#7-respaldos)) | Desastre, cambio de proveedor, auditoría      |
 
 **Prueba una restauración al menos una vez por trimestre.** Un respaldo que nunca se restauró no es un respaldo.
 

@@ -1,6 +1,156 @@
-# 10. Despliegue en AWS (producción real)
+# 10. Despliegue
 
-Esta guía te lleva de cero a producción en AWS. Hay **dos rutas**:
+> **Dónde está producción hoy (nov. 2026):** la app corre en **Vercel** y la base en **Neon**. Cada `git push` a `main` despliega solo. Esta página explica:
+>
+> - **[Parte 1](#parte-1--producción-actual-vercel--neon)**: cómo funciona hoy en Vercel.
+> - **[Parte 2](#parte-2--procedimiento-de-cada-despliegue-runbook)**: el procedimiento paso a paso para cualquier despliegue, con verificación y reversa.
+> - **[Parte 3](#parte-3--aws-cuando-quieras-crecer)**: la guía para pasar a AWS cuando el negocio lo pida.
+
+---
+
+# Parte 1 — Producción actual: Vercel + Neon
+
+```
+  GitHub (simviz12/juserr)
+     │  push a main
+     ▼
+  Vercel ──► build (pnpm build con adapter-vercel, Node 22) ──► funciones serverless
+     │                                                         │ HTTPS (driver de Neon)
+     ▼                                                         ▼
+  https://<tu-app>                                       Neon Postgres (us-east-1)
+```
+
+- **El adaptador se elige solo**: en Vercel (variable `VERCEL`) se usa `adapter-vercel` con runtime `nodejs22.x`; en Docker/AWS, `adapter-node` (`vite.config.ts`).
+- **Vercel despliega aunque el CI falle.** El CI de GitHub y el build de Vercel corren en paralelo. Para que solo llegue a producción lo que pasó las pruebas:
+  1. GitHub → Settings → Branches → regla para `main`: **"Require status checks to pass"** con el check `verificar` del CI.
+  2. Trabaja en ramas y une a `main` con un pull request (Vercel crea un **preview** de cada rama para probar antes).
+- **Las migraciones NO corren solas.** Se aplican desde tu computador con `pnpm db:migrate` (Parte 2). Así ningún despliegue toca la base sin que lo decidas.
+
+### Variables en Vercel
+
+Vercel → proyecto → **Settings → Environment Variables** (entorno **Production**; para los previews usa un branch de Neon, nunca la base real):
+
+| Variable                | Obligatoria | Valor                                                                              |
+| ----------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | Sí          | Cadena de Neon de producción (`sslmode=require`)                                   |
+| `PAGO_INSTRUCCIONES`    | Sí          | Datos de pago que ve cada restaurante en `/facturacion` (pasos separados por `\|`) |
+| `SOPORTE_WHATSAPP`      | Sí          | Solo números con indicativo, p. ej. `573001234567`                                 |
+| `PLATFORM_REQUIRE_TOTP` | Recomendada | `1` cuando todos los operadores tengan el segundo factor probado                   |
+| `DB_TIMEOUT_MS`         | No          | `10000` por defecto                                                                |
+| `LOG_LEVEL`             | No          | `info` por defecto                                                                 |
+
+En Vercel **no** hacen falta `ORIGIN`, `ADDRESS_HEADER`, `XFF_DEPTH` ni los timeouts de keep-alive: la plataforma ya entrega la URL y la IP real del cliente. Esas son de `adapter-node` (Docker/AWS).
+
+> Cambiar una variable **no** afecta al despliegue que ya está corriendo: después de cambiarla, ve a **Deployments → ⋯ → Redeploy** del último despliegue de producción.
+
+### Ver logs y errores
+
+- Vercel → **Logs** (o **Deployments → el despliegue → Functions**). Cada evento del servidor es **una línea JSON** (`nivel`, `msg`, `tenantId`, `err`…).
+- Si un usuario reporta un **"Código de soporte: …"**, búscalo en Logs: aparece como `errorId` con la ruta, el restaurante, el usuario y el error completo.
+- `https://<tu-app>/health` → `{"ok":true,"db":"ok","version":"…"}`. `version` cambia en cada build: sirve para confirmar qué versión está corriendo.
+
+### Volver a la versión anterior (código)
+
+Vercel → **Deployments** → el despliegue anterior que funcionaba → **⋯ → Promote to Production** (Instant Rollback). Tarda segundos y no toca la base. Ojo: si el despliegue que quieres revertir venía con una migración, el código viejo puede no ser compatible con la base nueva; mira la tabla de reversa de la Parte 2.
+
+---
+
+# Parte 2 — Procedimiento de cada despliegue (runbook)
+
+Sirve igual para Vercel y para AWS. Sigue los pasos en orden; cada uno tiene cómo verificarlo.
+
+## Paso 0 — ¿Este despliegue trae migración?
+
+```bash
+git diff --name-only origin/main...HEAD -- migrations/
+pnpm db:migrate:estado      # contra producción: muestra las pendientes
+```
+
+| Tipo de cambio                                                                        | Ejemplos                                                  | Cómo desplegar                                              |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
+| **Sin migración**                                                                     | Pantallas, textos, lógica                                 | Merge a `main` y listo (pasos 4–6)                          |
+| **Migración compatible** (solo agrega: tablas, columnas _nullable_, índices)          | Nueva tabla de un módulo                                  | Migra **antes** y despliega cuando quieras                  |
+| **Migración incompatible** (cambia tipos, renombra o borra, el código nuevo la exige) | `0003` (`real` → `numeric`, tablas que el login necesita) | Migra y despliega **en la misma ventana**, fuera de horario |
+
+**Regla para escribir migraciones nuevas:** prefiere siempre la forma compatible (_expandir → desplegar → contraer_): primero agrega lo nuevo sin quitar lo viejo, despliega el código que usa lo nuevo y, en una migración posterior, borra lo viejo. Así nunca hay una ventana en la que el código y la base no se entienden.
+
+## Paso 1 — Antes de empezar
+
+- [ ] CI en verde en la rama (lint, tipos, 170+ pruebas, build).
+- [ ] `tests/migration.test.ts` pasa (garantiza que la migración deja la base idéntica a `schema.ts`).
+- [ ] Si es incompatible: aviso a los restaurantes y hora sin turnos abiertos (de madrugada o antes de abrir).
+
+## Paso 2 — Respaldo (siempre que haya migración)
+
+1. **Neon → Branches → Create branch** `respaldo-AAAAMMDD` desde `main` (copia instantánea, 10 segundos). Es tu punto de retorno principal.
+2. **Respaldo lógico** local, para inspeccionar o restaurar tablas puntuales:
+   ```bash
+   pnpm db:respaldo          # → ../respaldos/respaldo-AAAAMMDD-HHMM.json (fuera del repo)
+   ```
+   Contiene datos de clientes y hashes de contraseñas: no lo subas a git ni lo compartas.
+
+## Paso 3 — Migrar
+
+```bash
+pnpm db:migrate:estado
+pnpm db:migrate
+```
+
+- Cada archivo corre en una transacción: si falla, **se revierte completo** y el runner se detiene.
+- El runner toma un candado: dos migraciones simultáneas no se pisan.
+- Lee la salida: un `WARNING` (p. ej. "se omite el índice único por duplicados") significa que la migración terminó pero dejó algo para revisar a mano.
+
+> Sin `pnpm` instalado: `npx -y pnpm@12.18.0 db:migrate` o `node scripts/migrate.mjs`.
+
+## Paso 4 — Desplegar
+
+- **Vercel:** merge del PR a `main` (o `git push origin main`). En 1–3 minutos el despliegue queda "Ready".
+- **AWS:** ver [6.14](#614-despliegue-automático-github-actions--oidc-sin-llaves-guardadas) (automático) o [5.2–5.3](#52-subir-la-imagen) (Lightsail).
+
+## Paso 5 — Verificar (5 minutos)
+
+```bash
+APP=https://<tu-app>
+
+curl -s $APP/health                                   # {"ok":true,"db":"ok","version":"…"}
+curl -sI $APP/login | grep -iE "content-security|strict-transport|x-frame"
+curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" "$APP/pl%61taforma"   # 303 → /plataforma/login
+```
+
+- [ ] `/health` en verde y con la `version` nueva.
+- [ ] Entras a un restaurante real: el dashboard muestra las cifras de siempre.
+- [ ] Un cierre de turno de prueba (o en el restaurante `prueba-interna`, ver [página 9](09-operacion-diaria.md)).
+- [ ] Una compra en Bodega sube el stock.
+- [ ] Entras a `/plataforma` con correo, contraseña y código del segundo factor.
+- [ ] En los logs no aparecen líneas `"nivel":"error"` nuevas.
+
+## Paso 6 — Si algo sale mal
+
+| Qué pasó                                                       | Qué hacer                                                                                                                                                                                                                   |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| El build de Vercel falló                                       | Nada cambió en producción (sigue el despliegue anterior). Revisa el log del build, corrige y vuelve a hacer push                                                                                                            |
+| Despliegue sin migración con errores                           | **Promote to Production** del despliegue anterior (Parte 1)                                                                                                                                                                 |
+| Migración **compatible** + código con errores                  | Rollback solo del código; la base se queda (el código viejo convive con las tablas nuevas)                                                                                                                                  |
+| Migración **incompatible** + código con errores                | Primero intenta **arreglar hacia adelante** (un commit rápido). Si no se puede: Neon → restaura `main` desde el branch `respaldo-AAAAMMDD` **y** Promote del despliegue anterior. Se pierde lo escrito después del respaldo |
+| La migración falló a la mitad                                  | No hay que hacer nada en la base: se revirtió sola. Lee el error, corrige con una migración **nueva** y repite                                                                                                              |
+| `db:migrate` dice "cambió después de aplicarse"                | Alguien editó una migración ya aplicada: restaura ese archivo desde git y crea una migración nueva                                                                                                                          |
+| `/health` dice `db: error`                                     | Estado de Neon (status.neon.tech) y `DATABASE_URL` en Vercel                                                                                                                                                                |
+| Todos ven "No hay conexión con la base de datos"               | Neon no responde en `DB_TIMEOUT_MS`; revisa si la rama de Neon está suspendida (_scale to zero_) o caída                                                                                                                    |
+| La consola no deja entrar tras poner `PLATFORM_REQUIRE_TOTP=1` | El operador no tiene TOTP: `pnpm plataforma:totp --activar <correo>`, o quita la variable y vuelve a desplegar                                                                                                              |
+
+## Registro de despliegues a producción
+
+| Fecha      | Commit    | Migraciones    | Notas                                                                                                                                            |
+| ---------- | --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 16-11-2026 | `882e5cd` | `0000`, `0003` | Auditoría (Entrega 4). Respaldo previo en `respaldos/`; sin duplicados; migración y push en la misma ventana. Creado el primer operador con TOTP |
+
+> Agrega una fila por cada despliegue con migración: es tu bitácora para saber qué cambió y cuándo.
+
+---
+
+# Parte 3 — AWS (cuando quieras crecer)
+
+Hay **dos rutas**:
 
 |                                                          | **Ruta A — Rápida (Lightsail Containers)**     | **Ruta B — Profesional (ECS Fargate + ALB)**               |
 | -------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
@@ -12,9 +162,7 @@ Esta guía te lleva de cero a producción en AWS. Hay **dos rutas**:
 
 \* Estimados de referencia; confírmalos en la [calculadora de precios de AWS](https://calculator.aws/) antes de decidir.
 
-**Recomendación:** empieza con la **Ruta A** para vender ya y pasa a la **Ruta B** cuando tengas ~20 clientes o cuando un cliente grande exija más garantías. La aplicación es la misma imagen Docker en ambas rutas.
-
----
+**¿Cuándo dejar Vercel?** Cuando necesites WAF propio (restringir `/plataforma` por IP), los datos y la app en tu cuenta de AWS por contrato, o costos predecibles con mucho tráfico. Mientras tanto, Vercel + Neon es suficiente. La aplicación es la misma imagen Docker en ambas rutas de AWS.
 
 ## 0. Decisiones de arquitectura
 
@@ -66,24 +214,26 @@ Pasar a **RDS/Aurora** es posible más adelante; requiere cambiar `src/lib/serve
    - desactiva **"scale to zero"** en la rama de producción, para no tener arranques en frío;
    - configura la **retención de historial (PITR)** al máximo que permita tu plan.
 3. Copia la cadena de conexión de la rama `main` con `sslmode=require`. Esa es tu `DATABASE_URL`.
-4. Antes de la primera salida: **Branches → Create branch** `respaldo-antes-multitenant` (tu punto de retorno).
+4. Antes de cada migración: **Branches → Create branch** `respaldo-AAAAMMDD` (tu punto de retorno; ver [Paso 2](#paso-2--respaldo-siempre-que-haya-migración)).
 
-## 3. Variables de entorno de producción
+## 3. Variables de entorno de producción (AWS / Docker)
 
-| Variable                | Valor                                                                       | Por qué                                                                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`          | cadena de Neon                                                              | Conexión a la base (**secreto**)                                                                                                                   |
-| `ORIGIN`                | `https://app.mesacapital.co`                                                | SvelteKit valida el origen de los formularios (protección CSRF). **Sin esto, los formularios fallan detrás del balanceador**                       |
-| `ADDRESS_HEADER`        | `X-Forwarded-For`                                                           | IP real del cliente. **Sin esto, el freno de fuerza bruta vería a todos como la IP del balanceador y 5 errores de cualquiera bloquearían a todos** |
-| `XFF_DEPTH`             | `1`                                                                         | El balanceador agrega 1 IP. Si pones CloudFront delante, usa `2`                                                                                   |
-| `KEEP_ALIVE_TIMEOUT`    | `65` (segundos)                                                             | Debe ser **mayor** que el tiempo de inactividad del balanceador (60 s). Si no, aparecen **errores 502 intermitentes**                              |
-| `HEADERS_TIMEOUT`       | `66` (segundos)                                                             | Debe ser mayor que `KEEP_ALIVE_TIMEOUT`                                                                                                            |
-| `PAGO_INSTRUCCIONES`    | `Nequi 300 … \| Bancolombia ahorros … \| Envía el comprobante por WhatsApp` | Lo que ve el cliente en `/facturacion`                                                                                                             |
-| `SOPORTE_WHATSAPP`      | `573001234567`                                                              | Botón "Enviar comprobante por WhatsApp"                                                                                                            |
-| `NODE_ENV`              | `production`                                                                | Ya viene en la imagen                                                                                                                              |
-| `PLATFORM_REQUIRE_TOTP` | `1`                                                                         | La consola exige segundo factor a **todos** los operadores. Ponlo **después** de activar y probar el TOTP de cada uno (`pnpm plataforma:totp`)     |
-| `DB_TIMEOUT_MS`         | `10000` (opcional)                                                          | Tiempo máximo por consulta a Neon. Evita peticiones colgadas                                                                                       |
-| `LOG_LEVEL`             | `info` (opcional)                                                           | Nivel mínimo de los logs JSON (`debug`, `info`, `warn`, `error`)                                                                                   |
+Además de las de la [Parte 1](#variables-en-vercel), con `adapter-node` hacen falta las de la red:
+
+| Variable                | Valor                                                                       | Por qué                                                                                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`          | cadena de Neon                                                              | Conexión a la base (**secreto**)                                                                                                                                         |
+| `ORIGIN`                | `https://app.mesacapital.co`                                                | SvelteKit valida el origen de los formularios (protección CSRF). **Sin esto, los formularios fallan detrás del balanceador**                                             |
+| `ADDRESS_HEADER`        | `X-Forwarded-For`                                                           | IP real del cliente. **Sin esto, el freno de login vería a todos con la IP del balanceador**: el límite por IP (50 intentos) se compartiría entre todos los restaurantes |
+| `XFF_DEPTH`             | `1`                                                                         | El balanceador agrega 1 IP. Si pones CloudFront delante, usa `2`                                                                                                         |
+| `KEEP_ALIVE_TIMEOUT`    | `65` (segundos)                                                             | Debe ser **mayor** que el tiempo de inactividad del balanceador (60 s). Si no, aparecen **errores 502 intermitentes**                                                    |
+| `HEADERS_TIMEOUT`       | `66` (segundos)                                                             | Debe ser mayor que `KEEP_ALIVE_TIMEOUT`                                                                                                                                  |
+| `PAGO_INSTRUCCIONES`    | `Nequi 300 … \| Bancolombia ahorros … \| Envía el comprobante por WhatsApp` | Lo que ve el cliente en `/facturacion`                                                                                                                                   |
+| `SOPORTE_WHATSAPP`      | `573001234567`                                                              | Botón "Enviar comprobante por WhatsApp"                                                                                                                                  |
+| `NODE_ENV`              | `production`                                                                | Ya viene en la imagen. Activa HSTS y bloquea los scripts destructivos sin `--permitir-produccion`                                                                        |
+| `PLATFORM_REQUIRE_TOTP` | `1`                                                                         | La consola exige segundo factor a **todos** los operadores. Ponlo **después** de activar y probar el TOTP de cada uno (`pnpm plataforma:totp`)                           |
+| `DB_TIMEOUT_MS`         | `10000` (opcional)                                                          | Tiempo máximo por consulta a Neon. Evita peticiones colgadas                                                                                                             |
+| `LOG_LEVEL`             | `info` (opcional)                                                           | Nivel mínimo de los logs JSON (`debug`, `info`, `warn`, `error`)                                                                                                         |
 
 ## 4. Construir y probar la imagen en tu computador (ambas rutas)
 
@@ -295,7 +445,7 @@ aws ecs run-task --cluster mesacapital --launch-type FARGATE \
   --overrides '{"containerOverrides":[{"name":"app","command":["node","scripts/migrate.mjs"]}]}'
 ```
 
-Revisa el resultado en el log group (`✓ 0001_multitenant.sql aplicada`). Si falla, la migración se revierte completa.
+Revisa el resultado en el log group (`✓ NNNN_….sql aplicada`). Si falla, la migración se revierte completa. Antes, toma el respaldo del [Paso 2](#paso-2--respaldo-siempre-que-haya-migración).
 
 Para crear tu usuario de la consola, hazlo desde tu computador (`pnpm plataforma:admin … --totp`), porque pide la contraseña por la terminal. Después registra el secreto en tu app autenticadora, pruébalo con `pnpm plataforma:totp --probar` y agrega `PLATFORM_REQUIRE_TOTP=1` a la tarea.
 
@@ -315,6 +465,7 @@ Web ACL `mesacapital-waf` con:
 - **ALB**: `HTTPCode_Target_5XX_Count` > 10 en 5 minutos; `UnHealthyHostCount` ≥ 1.
 - **ECS**: CPU > 80 % y memoria > 80 % sostenidas 10 minutos.
 - **Logs**: _metric filter_ sobre `/ecs/mesacapital` que cuente líneas con `error` → alarma si pasan de 20 en 5 minutos.
+- **Errores con código de soporte:** _metric filter_ sobre `"nivel":"error"` y búsqueda por `errorId` en CloudWatch Logs Insights: `fields @timestamp, msg, tenantId, err.message | filter errorId = "…"`.
 - (Opcional) **Sentry** para ver errores con su contexto.
 
 ### 6.14 Despliegue automático (GitHub Actions + OIDC, sin llaves guardadas)
@@ -407,23 +558,22 @@ El rol `github-backup-mesacapital` solo necesita `s3:PutObject` sobre ese bucket
 
 ---
 
-## 8. Primera salida a producción (desde la versión actual en Vercel)
+## 8. Pasar de Vercel a AWS
 
-La base hoy está **sin migrar** y la versión publicada en Vercel es la antigua. El código nuevo necesita la base migrada y el antiguo deja de funcionar con ella, así que hazlo en una **ventana de mantenimiento** (de madrugada, sin turnos abiertos):
+La base **no se mueve** (sigue en Neon) y ya está migrada; solo cambia dónde corre la app. Por eso se puede hacer **sin ventana de mantenimiento**:
 
-| #   | Paso                                                                                                                         | Cómo verificar                                                                           |
-| --- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 1   | Monta la infraestructura de AWS (Ruta A o B) con la imagen nueva, **sin** apuntar el dominio todavía                         | `/health` responde a través de la URL del balanceador (con un branch de Neon de pruebas) |
-| 2   | Avisa a tus clientes de la ventana (15–30 min)                                                                               | —                                                                                        |
-| 3   | Neon → branch `respaldo-antes-multitenant`                                                                                   | Aparece en la lista de branches                                                          |
-| 4   | `pnpm db:migrate` (o la tarea de la sección 6.11) contra **producción**                                                      | `pnpm db:migrate:estado` → `✓ 0001_multitenant.sql (ya aplicada)`                        |
-| 5   | Pon en AWS el `DATABASE_URL` de producción y despliega                                                                       | `/health` → `db: ok`                                                                     |
-| 6   | DNS: `app.mesacapital.co` → AWS. Desactiva el proyecto en Vercel (o déjalo sin dominio)                                      | `nslookup app.mesacapital.co` muestra AWS                                                |
-| 7   | `pnpm plataforma:admin` contra producción                                                                                    | Entras a `/plataforma/login`                                                             |
-| 8   | Tu restaurante (código `chuzoos-gastroflow-gourmet`) entra y ve sus cifras de siempre; registra su primer pago en la consola | Dashboard igual que antes                                                                |
-| 9   | Prueba funcional rápida ([página 11](11-checklist-salida-y-venta.md))                                                        | Todo en verde                                                                            |
+| #   | Paso                                                                                                                              | Cómo verificar                                                                 |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1   | Monta la infraestructura (Ruta A o B) con la imagen del mismo commit que está en Vercel                                           | `/health` responde por la URL del balanceador con la misma `version` de código |
+| 2   | Configura las variables de la [sección 3](#3-variables-de-entorno-de-producción-aws--docker), con el `DATABASE_URL` de producción | `/health` → `db: ok`                                                           |
+| 3   | Prueba por la URL del balanceador: login de un restaurante, un cierre en `prueba-interna`, la consola                             | Todo funciona igual que en Vercel                                              |
+| 4   | Baja el TTL del registro DNS a 60 s un día antes                                                                                  | `nslookup` muestra el TTL nuevo                                                |
+| 5   | DNS: `app.mesacapital.co` → AWS                                                                                                   | `nslookup app.mesacapital.co` muestra AWS                                      |
+| 6   | Deja Vercel encendido 48 h (por si hay que volver) y luego quítale el dominio                                                     | Los logs de Vercel ya no reciben tráfico                                       |
 
-**Plan de reversa** (si algo sale mal en los pasos 4–8): en Neon restaura la rama `main` desde el branch `respaldo-antes-multitenant` (o con _Restore_ a la hora previa), vuelve a apuntar el DNS a Vercel y la versión antigua funciona como antes.
+**Reversa:** vuelve a apuntar el DNS a Vercel. Como ambos usan la misma base y el mismo código, no se pierde nada.
+
+> Desde que la app viva en AWS, el despliegue sigue la [Parte 2](#parte-2--procedimiento-de-cada-despliegue-runbook) igual que hoy; solo cambia el paso 4.
 
 ---
 
@@ -439,9 +589,9 @@ Solo si lo necesitas (p. ej. un cliente exige que los datos estén en tu cuenta 
 
 ## 10. Escalar
 
-| Señal                             | Acción                                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------------------------ |
-| CPU sostenida > 60 % con 4 tareas | Sube a 1 vCPU / 2 GB o el máximo del auto scaling                                          |
-| Más de ~6 instancias              | Mueve las cachés de sesiones, derechos y el freno de login a **ElastiCache (Redis)**       |
-| Clientes fuera de Colombia        | CloudFront delante del ALB (recuerda `XFF_DEPTH=2`)                                        |
-| Base lenta                        | Revisa en Neon las consultas lentas; los índices `(tenant_id, fecha)` cubren el uso normal |
+| Señal                                     | Acción                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| CPU sostenida > 60 % con 4 tareas         | Sube a 1 vCPU / 2 GB o el máximo del auto scaling                                                                                     |
+| Necesitas invalidación instantánea global | Mueve las cachés de sesiones (5 s) y derechos (10 s) a **ElastiCache/Upstash (Redis)**. El freno de login ya es compartido (Postgres) |
+| Clientes fuera de Colombia                | CloudFront delante del ALB (recuerda `XFF_DEPTH=2`)                                                                                   |
+| Base lenta                                | Revisa en Neon las consultas lentas; los índices `(tenant_id, fecha)` cubren el uso normal                                            |

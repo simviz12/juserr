@@ -5,7 +5,8 @@ Marca cada punto antes de cobrarle al primer cliente. Las secciones legales y tr
 ## A. Técnico (obligatorio)
 
 - [ ] CI en verde en `main` (lint, tipos, pruebas, build).
-- [ ] Infraestructura de AWS montada ([página 10](10-despliegue-aws.md)), con HTTPS y un dominio propio.
+- [ ] Producción en Vercel (o AWS) con HTTPS y un dominio propio ([página 10](10-despliegue-aws.md)); en GitHub, `main` protegida para que solo se despliegue lo que pasó el CI.
+- [ ] Último despliegue anotado en el **registro de despliegues** ([página 10, Parte 2](10-despliegue-aws.md#registro-de-despliegues-a-producción)).
 - [ ] Variables configuradas: `DATABASE_URL`, **`ORIGIN`**, **`ADDRESS_HEADER=X-Forwarded-For`**, `XFF_DEPTH`, `KEEP_ALIVE_TIMEOUT=65`, `HEADERS_TIMEOUT=66`, `PAGO_INSTRUCCIONES` y `SOPORTE_WHATSAPP`.
 - [ ] Migración aplicada (`pnpm db:migrate:estado` sin pendientes) **después** de tomar el branch de respaldo.
 - [ ] Operador de la consola creado con una contraseña fuerte (12+ caracteres) guardada en un gestor de contraseñas, **con segundo factor** (`--totp`) probado y `PLATFORM_REQUIRE_TOTP=1` configurado.
