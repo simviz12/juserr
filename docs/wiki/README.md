@@ -23,6 +23,7 @@ Documentación completa del sistema para **entenderlo, estudiarlo, operarlo y ve
 | 13  | [Glosario](13-glosario.md)                                                 | Términos del negocio y técnicos                                                                                         | —      |
 | 14  | [Auditoría 2026-11](14-auditoria-2026-11.md)                               | Qué se corrigió en la auditoría y qué queda pendiente                                                                   | —      |
 | 15  | [Estado de Resultados: ejemplo](15-estado-de-resultados-ejemplo.md)        | Un mes completo con números: de dónde sale cada cifra, márgenes y tarjetas                                              | —      |
+| 16  | [Ejemplo de un día completo](16-ejemplo-de-un-dia-completo.md)             | Bodega → cierre de turno → caja → dashboard → Estado de Resultados, con números                                         | —      |
 
 ## Mapa mental en 30 segundos
 

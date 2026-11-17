@@ -139,6 +139,7 @@ El sistema era **de un solo restaurante**: ninguna tabla sabía de quién era ca
 ### Documentación
 
 - [Página 10](10-despliegue-aws.md) reorganizada: producción actual en Vercel, procedimiento de cada despliegue (respaldo con `pnpm db:respaldo`, migración, verificación, tabla de reversa), registro de despliegues y paso de Vercel a AWS sin ventana de mantenimiento.
+- [Página 16](16-ejemplo-de-un-dia-completo.md): un día completo de punta a punta (Bodega, cierre de turno con pizza y hamburguesas, cuadre, caja, dashboard y Estado de Resultados).
 - [Página 15](15-estado-de-resultados-ejemplo.md): ejemplo completo del Estado de Resultados con los números de la prueba automática.
 
 ## Pendiente de salida a producción

@@ -1,5 +1,7 @@
 # 6. Funciones del producto (con sus fórmulas)
 
+> 🧮 **¿Prefieres verlo con números?** [Página 16](16-ejemplo-de-un-dia-completo.md): un día completo de la Bodega al Estado de Resultados. [Página 15](15-estado-de-resultados-ejemplo.md): un mes del Estado de Resultados.
+
 Cada fórmula vive en un archivo de dominio puro y tiene pruebas. Estudia la fórmula aquí y luego ábrela en el código.
 
 ## Conceptos base
